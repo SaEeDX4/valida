@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
+      Browsers request /favicon.ico automatically when no icon is declared,
+      which produces a 404 in the console. This empty data URL is a valid icon
+      declaration that tells the browser no icon file needs to be fetched, so
+      the request is never made. Nothing is suppressed or hidden.
+
+      This is a temporary A1 placeholder with no artwork. It is replaced in
+      Milestone A2 by the real Valida favicon derived from the approved logo
+      asset (03_BRAND_VISUAL_SYSTEM.md sections 16-17).
+    -->
+    <link rel="icon" href="data:," />
+    <!--
       Milestone A1 provides the runtime entry point only.
       Per-route metadata (title, description, canonical, Open Graph) is
       implemented via the shared PageMeta helper in Milestone A3/A4,

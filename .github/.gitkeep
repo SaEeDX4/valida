@@ -1,0 +1,4 @@
+# Reserved for GitHub configuration (CI workflows, issue templates).
+# Declared in the canonical repository target: 18_IMPLEMENTATION_ROADMAP.md section 24
+# and 15_DEVOPS_DEPLOYMENT.md section 18.
+# No workflows are added in Milestone A1. CI/CD is introduced with deployment (Release C).

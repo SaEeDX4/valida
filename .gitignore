@@ -1,0 +1,79 @@
+# Valida — root .gitignore
+# Governed by 15_DEVOPS_DEPLOYMENT.md sections 19, 20, 21.
+
+# ---------------------------------------------------------------------------
+# Dependencies (Doc 15 section 19 — never commit node_modules)
+# ---------------------------------------------------------------------------
+node_modules/
+
+# ---------------------------------------------------------------------------
+# Build output (Doc 15 section 20)
+# ---------------------------------------------------------------------------
+dist/
+build/
+frontend/dist/
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Secrets and environment files (Doc 15 section 21)
+# Real .env files are NEVER committed. The .env.example files ARE committed.
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+*.pem
+*.key
+*.p12
+secrets/
+*.secret
+
+# Explicitly keep the safe example files
+!.env.example
+!**/.env.example
+
+# ---------------------------------------------------------------------------
+# Private local storage / temporary uploads (Doc 15 section 21)
+# Reserved now so private files can never be committed once storage lands in B4.
+# ---------------------------------------------------------------------------
+storage/
+private-storage/
+uploads/
+tmp/
+temp/
+
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------------------------------------------------------------------------
+# Test / coverage output
+# ---------------------------------------------------------------------------
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# ---------------------------------------------------------------------------
+# Editor and OS files
+# ---------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Caches
+# ---------------------------------------------------------------------------
+.vite/
+.cache/
+.npm/

@@ -1,0 +1,12 @@
+/* Shared layout container — Doc 08 section 36, Doc 03 sections 33-34. */
+.container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.standard { max-width: var(--width-standard); }
+.wide     { max-width: var(--width-main); }
+.shell    { max-width: var(--width-shell); }
+.narrow   { max-width: var(--width-narrow); }
+.reading  { max-width: var(--width-reading); }

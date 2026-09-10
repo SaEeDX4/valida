@@ -1,0 +1,23 @@
+/* Alert — Doc 03 sections 62-63. Visible, never aggressive, never colour-only. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-hairline) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+.title { color: var(--color-text-primary); margin-block-end: var(--space-1); }
+.body  { color: var(--color-text-secondary); }
+.content { min-inline-size: 0; }
+
+.info    { border-color: var(--color-info-border);    background-color: var(--color-info-soft); }
+.success { border-color: var(--color-success-border); background-color: var(--color-success-soft); }
+.warning { border-color: var(--color-warning-border); background-color: var(--color-warning-soft); }
+.error   { border-color: var(--color-error-border);   background-color: var(--color-error-soft); }
+
+.iconInfo    { color: var(--color-info); }
+.iconSuccess { color: var(--color-success); }
+.iconWarning { color: var(--color-warning); }
+.iconError   { color: var(--color-error); }

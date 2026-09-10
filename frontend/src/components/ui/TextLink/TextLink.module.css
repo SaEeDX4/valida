@@ -1,0 +1,20 @@
+/* Link system — Doc 03 section 57. Links must look intentional.
+   Underline thickness is a local typographic detail of this component; Doc 03
+   defines no underline-thickness token and inventing one would imply other
+   components should consume it. */
+.link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-standard) var(--ease-standard);
+}
+.link:hover { color: var(--color-accent-bright); text-decoration-thickness: 2px; }
+
+/* Quiet variant for footers and metadata: still underlined on hover so the
+   affordance never depends on colour alone (Doc 03 section 62 principle). */
+.quiet { color: var(--color-text-secondary); text-decoration: none; }
+.quiet:hover { color: var(--color-text-primary); text-decoration: underline; }
+
+.external { display: inline-flex; align-items: center; gap: var(--space-1); }

@@ -1,0 +1,26 @@
+/* Skeletons — Doc 03 sections 103-104. Structure, not a full-screen spinner. */
+.skeleton {
+  background-color: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-shimmer-highlight) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer var(--duration-shimmer) linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Low-contrast surface animation is removed under reduced motion; the
+   placeholder block itself remains (Doc 03 section 104). */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }

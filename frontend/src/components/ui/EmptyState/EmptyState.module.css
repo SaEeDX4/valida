@@ -1,0 +1,15 @@
+/* Empty state — Doc 03 section 102. Intentional, concise, useful.
+   No giant illustration. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-9) var(--space-6);
+  border: var(--border-hairline) dashed var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-secondary);
+}
+.title { color: var(--color-text-primary); }
+.body  { color: var(--color-text-secondary); max-inline-size: 52ch; }
+.action { margin-block-start: var(--space-2); }

@@ -1,0 +1,37 @@
+.page { padding-block: var(--space-10) var(--space-12); }
+.notice { margin-block-end: var(--space-10); }
+.stack { display: flex; flex-direction: column; gap: var(--space-6); }
+.row { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
+.grid {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+.chip { block-size: var(--space-10); border-radius: var(--radius-xs); }
+.fieldNote { color: var(--color-text-muted); }
+/* Block rows inside a <button>, whose content model permits phrasing content
+   only. Visual hierarchy is unchanged; the elements are spans, not paragraphs. */
+.cardRow { display: block; }
+.cardRow + .cardRow { margin-block-start: var(--space-2); }
+.heroPreview {
+  display: grid;
+  gap: var(--space-9);
+  align-items: center;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .heroPreview { grid-template-columns: 6fr 5fr; }
+}

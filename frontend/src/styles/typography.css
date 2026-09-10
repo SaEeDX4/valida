@@ -1,0 +1,129 @@
+/**
+ * Valida semantic typography.
+ *
+ * Implements the semantic levels required by 08_FRONTEND_SPEC.md section 46
+ * using the fluid scale from 03_BRAND_VISUAL_SYSTEM.md section 25.
+ *
+ * These are semantic classes, not utilities: a heading element chooses the
+ * level that matches its role, so document outline and visual scale stay
+ * independent (Doc 03 section 26).
+ */
+
+.t-display,
+.t-h1,
+.t-h2,
+.t-h3,
+.t-h4 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  text-wrap: balance;
+}
+
+.t-display {
+  font-size: var(--text-display);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-display);
+}
+
+.t-h1 {
+  font-size: var(--text-h1);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-display);
+}
+
+.t-h2 {
+  font-size: var(--text-h2);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+.t-h3 {
+  font-size: var(--text-h3);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+.t-h4 {
+  font-size: var(--text-h4);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-heading);
+}
+
+.t-body-lg {
+  font-size: var(--text-body-lg);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+}
+
+.t-body {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+}
+
+.t-body-sm {
+  font-size: var(--text-body-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-text-secondary);
+}
+
+.t-caption {
+  font-size: var(--text-caption);
+  line-height: var(--leading-snug);
+  color: var(--color-text-muted);
+}
+
+.t-label {
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-label);
+  color: var(--color-text-primary);
+}
+
+.t-nav {
+  font-size: var(--text-body-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  letter-spacing: var(--tracking-label);
+}
+
+.t-button {
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  letter-spacing: var(--tracking-label);
+}
+
+/* Metadata / technical values — tabular figures (Doc 03 section 29). */
+.t-metadata {
+  font-size: var(--text-body-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Uppercase micro-label with wider tracking (Doc 03 section 28). */
+.t-eyebrow {
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Monospace only where technically meaningful (Doc 03 section 30). */
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0;
+}
+
+/* Reading measure — 60-72 characters (Doc 03 section 27). */
+.t-measure {
+  max-width: 68ch;
+}

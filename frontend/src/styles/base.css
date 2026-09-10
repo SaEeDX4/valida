@@ -1,0 +1,151 @@
+/**
+ * Valida global base styles.
+ *
+ * Governed by 08_FRONTEND_SPEC.md sections 48-49 (controlled defaults, no huge
+ * third-party reset library) and 03_BRAND_VISUAL_SYSTEM.md sections 77, 84, 87.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Doc 03 section 112 — scroll hijacking is prohibited; this only smooths
+     in-page anchor jumps and is disabled under reduced motion below. */
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Doc 03 section 84 — unintentional horizontal page scroll is prohibited. */
+html,
+body {
+  overflow-x: clip;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Form controls must inherit typography (Doc 08 section 48). */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+/* Long unbroken strings (job titles, emails, filenames) must not force
+   horizontal overflow — Doc 03 section 84. */
+p,
+li,
+h1,
+h2,
+h3,
+h4,
+dd,
+dt {
+  overflow-wrap: break-word;
+}
+
+/*
+ * FOCUS — Doc 03 section 87.
+ * The default outline is never removed without replacement. focus-visible
+ * gives keyboard users a high-contrast ring without ringing every mouse click.
+ */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-xs);
+}
+
+/* Browsers that do not support :focus-visible keep the standard outline. */
+@supports not selector(:focus-visible) {
+  :focus {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+::selection {
+  background-color: var(--color-selection);
+  color: var(--color-text-primary);
+}
+
+/*
+ * REDUCED MOTION — Doc 03 section 77, Doc 08 section 65.
+ * Ambient and decorative motion is removed. Functionality is unchanged and
+ * necessary state feedback is preserved.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* 0.01ms is the standard reduced-motion idiom, not a design value: it lets
+     animations complete instantly so animationend handlers still fire, which
+     `animation: none` would break. It is deliberately not tokenised. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

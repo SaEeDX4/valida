@@ -1,0 +1,143 @@
+/**
+ * Button — Doc 03 sections 53-56, Doc 08 sections 33-34.
+ * States required by Doc 03 section 116: default, hover, focus-visible,
+ * active, disabled, loading.
+ */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  position: relative;
+  border: var(--border-hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-standard) var(--ease-standard),
+    border-color var(--duration-standard) var(--ease-standard),
+    color var(--duration-standard) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+/* Restrained micro-interaction (Doc 03 section 73) — not applied when the
+   control cannot be used. */
+.button:not(:disabled):not([aria-disabled='true']):active {
+  transform: translateY(1px);
+}
+
+/* ---- sizes (Doc 03 section 56) ---- */
+.compact  { block-size: var(--control-height-compact);  padding-inline: var(--space-4); }
+.standard { block-size: var(--control-height-standard); padding-inline: var(--space-6); }
+.large    { block-size: var(--control-height-large);    padding-inline: var(--space-7); }
+
+/* ---- primary: strong electric-blue emphasis, no glow or pulse ---- */
+.primary {
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-semibold);
+}
+.primary:not(:disabled):not([aria-disabled='true']):hover {
+  background-color: var(--color-accent-bright);
+}
+.primary:not(:disabled):not([aria-disabled='true']):active {
+  background-color: var(--color-accent-deep);
+  /* The dark label fails AA on the deep active blue, so the active state
+     switches to the light label. Verified in src/styles/contrast.test.js. */
+  color: var(--color-on-accent-deep);
+}
+
+/* ---- secondary: dark surface, defined border, visibly interactive ---- */
+.secondary {
+  background-color: var(--color-surface-raised);
+  border-color: var(--color-control-border);
+  color: var(--color-text-primary);
+}
+.secondary:not(:disabled):not([aria-disabled='true']):hover {
+  background-color: var(--color-surface-hover);
+  border-color: var(--color-control-border-hover);
+}
+
+/* ---- ghost ---- */
+.ghost {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+}
+.ghost:not(:disabled):not([aria-disabled='true']):hover {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+/* ---- destructive ---- */
+.destructive {
+  background-color: transparent;
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+.destructive:not(:disabled):not([aria-disabled='true']):hover {
+  background-color: var(--color-error-soft);
+}
+
+/* ---- text: CTA that reads as a link but performs an action ---- */
+.text {
+  background-color: transparent;
+  color: var(--color-accent);
+  padding-inline: 0;
+  block-size: auto;
+}
+.text:not(:disabled):not([aria-disabled='true']):hover {
+  color: var(--color-accent-bright);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+/* ---- icon-only: square, keeps a comfortable target (Doc 03 section 88) ---- */
+.icon {
+  padding-inline: 0;
+  aspect-ratio: 1;
+  background-color: transparent;
+  border-color: var(--color-control-border);
+  color: var(--color-text-secondary);
+  min-inline-size: var(--touch-target-min);
+  min-block-size: var(--touch-target-min);
+}
+.icon:not(:disabled):not([aria-disabled='true']):hover {
+  background-color: var(--color-surface);
+  border-color: var(--color-control-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ---- loading ---- */
+/* The 2px ring below is the spinner's own geometry, not a border-system value;
+   --border-hairline governs component borders and would be invisible here. */
+.spinner {
+  inline-size: var(--icon-xs);
+  block-size: var(--icon-xs);
+  border: 2px solid currentColor;
+  border-block-start-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: spin var(--duration-slow) linear infinite;
+  flex: none;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion: the spinner stops rotating but remains a visible indicator,
+   so the loading state is never communicated by animation alone
+   (Doc 03 sections 77 and 90). */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-block-start-color: currentColor;
+    opacity: var(--opacity-muted);
+  }
+}

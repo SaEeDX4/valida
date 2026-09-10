@@ -1,0 +1,95 @@
+/**
+ * Valida Security Field — Doc 03 sections 41-44, Doc 08 sections 62-64.
+ *
+ * SVG + CSS only. No canvas, no WebGL, no animation library, no external
+ * asset (Doc 03 section 92, Doc 08 section 63).
+ */
+.wrap {
+  position: relative;
+  inline-size: 100%;
+  aspect-ratio: 1 / 1;
+  max-inline-size: 640px;
+  /* Localised illumination behind the line work rather than a glow on every
+     stroke (Doc 03 section 14). */
+  background:
+    radial-gradient(circle at 62% 34%, var(--color-glow-accent-strong), transparent 46%),
+    radial-gradient(circle at 30% 72%, var(--color-glow-accent-soft), transparent 40%);
+}
+
+.svg { inline-size: 100%; block-size: 100%; }
+
+/*
+ * Layer roles.
+ *
+ * The per-layer opacity and the SVG path geometry below are composition data
+ * for this one bespoke graphic, not reusable design-system values. They are
+ * deliberately NOT tokenised: promoting them would imply other components may
+ * consume them, which is exactly the fragmentation Doc 03 section 117 guards
+ * against. Every colour and duration here comes from tokens.css.
+ */
+.grid   { stroke: var(--color-border-subtle); stroke-width: 0.75; }
+.arc    { stroke: var(--color-silver); opacity: 0.34; }
+.shield { stroke: var(--color-silver); opacity: 0.6; }
+.vector { stroke: var(--color-accent-bright); opacity: 0.85; }
+.node   { fill: var(--color-accent-bright); }
+.nodeQuiet { fill: var(--color-silver); opacity: 0.5; }
+
+/* Ambient motion --------------------------------------------------------- */
+.drift {
+  transform-origin: 50% 50%;
+  animation: drift var(--duration-ambient-drift) var(--ease-standard) infinite alternate;
+}
+
+.driftReverse {
+  transform-origin: 50% 50%;
+  animation: drift var(--duration-ambient-drift-slow) var(--ease-standard) infinite alternate-reverse;
+}
+
+.pulse {
+  animation: pulse var(--duration-ambient-pulse) var(--ease-standard) infinite;
+}
+.pulseDelayed {
+  animation: pulse var(--duration-ambient-pulse) var(--ease-standard)
+    var(--delay-ambient-pulse) infinite;
+}
+
+@keyframes drift {
+  from { transform: rotate(-1.6deg) scale(0.996); }
+  to   { transform: rotate(1.6deg) scale(1.004); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/*
+ * Reduced motion (Doc 03 section 77): ambient movement stops and nodes settle
+ * at full opacity. The composition is unchanged, so no information is lost.
+ * The component also refuses to start motion in JS via usePrefersReducedMotion;
+ * this block is the CSS-level guarantee.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .drift,
+  .driftReverse,
+  .pulse,
+  .pulseDelayed {
+    animation: none;
+  }
+  .pulse,
+  .pulseDelayed { opacity: 1; }
+}
+
+/*
+ * Mobile simplification (Doc 03 section 44, Doc 08 section 64): fewer lines
+ * and nodes, no decorative grid. Brand identity stays recognisable — this is
+ * a re-composition, not a shrunk desktop graphic.
+ */
+.detailOnly { display: none; }
+
+/* 768px is a structural breakpoint from Doc 03 section 80. It cannot be a
+   custom property: CSS does not resolve var() inside a media query condition.
+   This is a platform limitation, not an untokenised design value. */
+@media (min-width: 768px) {
+  .detailOnly { display: inline; }
+}

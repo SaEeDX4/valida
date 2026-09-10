@@ -1,0 +1,247 @@
+/**
+ * Valida design tokens.
+ *
+ * Canonical source: 03_BRAND_VISUAL_SYSTEM.md
+ * Required entry point: 08_FRONTEND_SPEC.md section 37 — all approved visual
+ * tokens originate from src/styles/tokens.css.
+ *
+ * Naming rule (Doc 03 section 115): components consume SEMANTIC tokens.
+ * Primitive values live here; components must not hard-code raw values.
+ */
+
+:root {
+  /* -----------------------------------------------------------------------
+   * COLOR — backgrounds and surfaces (Doc 03 section 8, Doc 08 section 38)
+   * Progressive depth, Level 0 to Level 4 (Doc 03 section 12).
+   * --------------------------------------------------------------------- */
+  --color-bg-primary: #05070a;
+  --color-bg-secondary: #080c11;
+  --color-bg-tertiary: #0b1017;
+  --color-surface: #0e151d;
+  --color-surface-raised: #121b25;
+  --color-surface-hover: #16212d;
+
+  /* Text */
+  --color-text-primary: #f4f7fa;
+  --color-text-secondary: #b6c0cc;
+  --color-text-muted: #7e8997;
+  --color-silver: #c9d1da;
+
+  /* Borders — thin and subtle (Doc 03 section 37) */
+  --color-border-subtle: rgba(190, 210, 230, 0.12);
+  --color-border-medium: rgba(190, 210, 230, 0.2);
+  --color-border-strong: rgba(205, 220, 235, 0.3);
+
+  /*
+   * Interactive control boundary.
+   *
+   * WCAG 2.2 SC 1.4.11 requires the visual boundary that identifies a custom
+   * control to reach 3:1 against adjacent colours. The decorative border
+   * tokens above are intentionally subtle (Doc 03 section 37) and composite to
+   * roughly 1.8:1 over a dark surface, which is correct for a card outline but
+   * insufficient for a form field or a bordered button.
+   *
+   * These are opaque so the rendered value does not depend on whatever sits
+   * behind the control. Measured against every surface a control can sit on:
+   *   default  vs bg-primary 4.05  surface 3.69  surface-raised 3.49
+   *   hover    vs bg-primary 6.59  surface 6.00  surface-raised 5.68
+   * Enforced by src/styles/contrast.test.js.
+   *
+   * Doc 03 section 59 requires inputs to have a visible boundary, so this is
+   * that requirement made measurable, not a departure from the border system.
+   */
+  --color-control-border: #6b7079;
+  --color-control-border-hover: #8e949c;
+
+  /* Accent — a controlled minority of the composition (Doc 03 section 9) */
+  --color-accent: #328fff;
+  --color-accent-bright: #66b3ff;
+  --color-accent-deep: #1768d5;
+  --color-focus: #83c6ff;
+
+  /* Semantic — distinct from the brand accent (Doc 03 section 10) */
+  --color-success: #39c993;
+  --color-success-soft: rgba(57, 201, 147, 0.12);
+  --color-warning: #e8b34d;
+  --color-warning-soft: rgba(232, 179, 77, 0.12);
+  --color-error: #ff667c;
+  --color-error-soft: rgba(255, 102, 124, 0.12);
+  --color-info: #5ba9ff;
+  --color-info-soft: rgba(91, 169, 255, 0.12);
+
+  /* Tone borders. Paired with the -soft fills above to outline a status
+     surface. Semantic and reusable — Phase 3 status badges use the same
+     values rather than inventing a second set (Doc 03 section 117). */
+  --color-success-border: rgba(57, 201, 147, 0.35);
+  --color-warning-border: rgba(232, 179, 77, 0.35);
+  --color-error-border: rgba(255, 102, 124, 0.35);
+  --color-info-border: rgba(91, 169, 255, 0.35);
+
+  /* Luminosity (Doc 03 section 14). Soft, localised, low-opacity accent
+     light — used behind the Security Field and any future focal glow. */
+  --color-glow-accent-strong: rgba(50, 143, 255, 0.14);
+  --color-glow-accent-soft: rgba(50, 143, 255, 0.06);
+
+  /* Low-contrast highlight that sweeps a loading skeleton
+     (Doc 03 section 104). */
+  --color-shimmer-highlight: rgba(190, 210, 230, 0.06);
+
+  /* Text selection. */
+  --color-selection: rgba(50, 143, 255, 0.28);
+
+  /* Label colours used on top of an accent fill.
+     --color-on-accent sits on --color-accent (5.86:1) and --color-accent-bright
+     (8.51:1). It fails AA on --color-accent-deep (3.58:1), so the deep active
+     blue gets its own light label at 4.91:1. Both verified by
+     src/styles/contrast.test.js (Doc 03 section 86). */
+  --color-on-accent: #04121f;
+  --color-on-accent-deep: #f4f7fa;
+
+  /* -----------------------------------------------------------------------
+   * TYPOGRAPHY (Doc 03 sections 22-25, Doc 08 sections 43-47)
+   * --------------------------------------------------------------------- */
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Fluid scale — mobile minimum to desktop maximum (Doc 03 section 25) */
+  --text-display: clamp(3rem, 1.6rem + 6.2vw, 5.5rem);      /*  48 -> 88 */
+  --text-h1: clamp(2.625rem, 1.55rem + 4.7vw, 4.5rem);      /*  42 -> 72 */
+  --text-h2: clamp(2.125rem, 1.4rem + 3.2vw, 3.5rem);       /*  34 -> 56 */
+  --text-h3: clamp(1.75rem, 1.35rem + 1.75vw, 2.5rem);      /*  28 -> 40 */
+  --text-h4: clamp(1.375rem, 1.2rem + 0.75vw, 1.75rem);     /*  22 -> 28 */
+  --text-body-lg: clamp(1.125rem, 1.05rem + 0.33vw, 1.3125rem); /* 18 -> 21 */
+  --text-body: clamp(1rem, 0.96rem + 0.17vw, 1.125rem);     /*  16 -> 18 */
+  --text-body-sm: clamp(0.875rem, 0.86rem + 0.06vw, 0.9375rem); /* 14 -> 15 */
+  --text-caption: clamp(0.75rem, 0.74rem + 0.06vw, 0.8125rem);  /* 12 -> 13 */
+  --text-label: clamp(0.8125rem, 0.8rem + 0.06vw, 0.875rem);    /* 13 -> 14 */
+
+  --leading-tight: 1.05;
+  --leading-heading: 1.15;
+  --leading-snug: 1.35;
+  --leading-body: 1.65;
+
+  --tracking-display: -0.03em;
+  --tracking-heading: -0.015em;
+  --tracking-body: 0;
+  --tracking-label: 0.02em;
+  --tracking-micro: 0.14em;
+
+  /* -----------------------------------------------------------------------
+   * SPACING — 4px base unit (Doc 03 section 31, Doc 08 section 40)
+   * --------------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --space-11: 80px;
+  --space-12: 96px;
+  --space-13: 120px;
+  --space-14: 144px;
+  --space-15: 160px;
+
+  /* Section rhythm (Doc 03 section 32): mobile 64-104, desktop 96-160 */
+  --section-space-sm: clamp(4rem, 2.5rem + 6vw, 6rem);      /*  64 ->  96 */
+  --section-space-md: clamp(5rem, 2.8rem + 8vw, 7.5rem);    /*  80 -> 120 */
+  --section-space-lg: clamp(6.5rem, 3rem + 12vw, 10rem);    /* 104 -> 160 */
+
+  /* -----------------------------------------------------------------------
+   * LAYOUT (Doc 03 sections 33-34)
+   * --------------------------------------------------------------------- */
+  --width-shell: 1600px;
+  --width-main: 1360px;
+  --width-standard: 1240px;
+  --width-narrow: 960px;
+  --width-reading: 720px;
+
+  /* Fluid gutters: 20px small mobile -> 64px large desktop */
+  --gutter: clamp(1.25rem, 0.9rem + 1.6vw, 4rem);
+
+  /* -----------------------------------------------------------------------
+   * RADIUS (Doc 03 section 38, Doc 08 section 41)
+   * --------------------------------------------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* -----------------------------------------------------------------------
+   * BORDER (Doc 03 section 37)
+   * --------------------------------------------------------------------- */
+  --border-hairline: 1px;
+
+  /* -----------------------------------------------------------------------
+   * SHADOW — subtle; dark surfaces rely on border and contrast first
+   * (Doc 03 section 39)
+   * --------------------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --glow-accent: 0 0 0 1px rgba(50, 143, 255, 0.28), 0 8px 28px rgba(50, 143, 255, 0.16);
+
+  /* -----------------------------------------------------------------------
+   * MOTION (Doc 03 sections 71-72, Doc 08 section 42)
+   * --------------------------------------------------------------------- */
+  --duration-fast: 120ms;
+  --duration-standard: 180ms;
+  --duration-medium: 260ms;
+  --duration-slow: 420ms;
+  --duration-hero: 900ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Ambient motion. Doc 03 section 71 allows continuous hero motion to run
+     slower than the interaction durations above; these are the canonical
+     ambient values so no component invents its own timing. */
+  --duration-ambient-drift: 34s;
+  --duration-ambient-drift-slow: 46s;
+  --duration-ambient-pulse: 6s;
+  --delay-ambient-pulse: 2.4s;
+  --duration-shimmer: 1400ms;
+
+  /* -----------------------------------------------------------------------
+   * CONTROLS
+   * Button heights (Doc 03 section 56) and input heights (section 60).
+   * --------------------------------------------------------------------- */
+  --control-height-compact: 36px;
+  --control-height-standard: 44px;
+  --control-height-large: 50px;
+  --input-height: 48px;
+  --textarea-min-height: 128px;
+  --touch-target-min: 44px;
+
+  /* Shared state opacities. One disabled value across every control, rather
+     than each component choosing its own (Doc 03 section 117). */
+  --opacity-disabled: 0.45;
+  --opacity-muted: 0.6;
+
+  /* Focus (Doc 03 section 87) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 3px;
+
+  /* Icon sizes (Doc 03 section 50) */
+  --icon-xs: 16px;
+  --icon-sm: 18px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+  --icon-xl: 32px;
+
+  /* Layering */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-overlay: 200;
+  --z-dialog: 300;
+  --z-skiplink: 400;
+}

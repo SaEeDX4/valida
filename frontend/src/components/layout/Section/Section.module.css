@@ -1,0 +1,36 @@
+/* Section rhythm — Doc 03 section 32. Not every section shares one rhythm. */
+.section {
+  position: relative;
+  padding-block: var(--section-space-md);
+}
+
+.sm { padding-block: var(--section-space-sm); }
+.md { padding-block: var(--section-space-md); }
+.lg { padding-block: var(--section-space-lg); }
+
+.bgPrimary   { background-color: var(--color-bg-primary); }
+.bgSecondary { background-color: var(--color-bg-secondary); }
+.bgTertiary  { background-color: var(--color-bg-tertiary); }
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-block-end: var(--space-9);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+/* Short accent rule — one of the few deliberate uses of the accent colour
+   outside interactive elements (Doc 03 section 9). */
+.eyebrow::before {
+  content: "";
+  inline-size: var(--space-6);
+  block-size: 1px;
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+}

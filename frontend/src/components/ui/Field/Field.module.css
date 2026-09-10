@@ -1,0 +1,19 @@
+/* Field — Doc 03 sections 58-59, 62. Calm, precise, easy to scan. */
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.labelRow { display: flex; align-items: baseline; gap: var(--space-2); }
+
+.required { color: var(--color-accent); }
+
+.optional { color: var(--color-text-muted); font-weight: var(--weight-regular); }
+
+.description { color: var(--color-text-muted); }
+
+/* Errors are visible without becoming aggressive, and never rely on colour
+   alone — an icon accompanies the text (Doc 03 section 62). */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-error);
+}

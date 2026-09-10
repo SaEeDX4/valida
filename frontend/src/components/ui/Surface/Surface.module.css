@@ -1,0 +1,62 @@
+/**
+ * Surface — Doc 03 sections 12, 51-52.
+ * Depth comes from value difference plus a hairline border, not heavy shadow.
+ * Containment is used where it has meaning; this is not a card grid engine.
+ */
+.surface {
+  background-color: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+}
+
+.raised {
+  background-color: var(--color-surface-raised);
+}
+
+.flush {
+  padding: 0;
+}
+
+.roomy {
+  padding: var(--space-7);
+}
+
+/*
+ * Interactive card: slight lift and border brightness, no glow.
+ *
+ * Applied by Surface.jsx ONLY when the surface renders an operable element
+ * (<button> or <a>). A hover lift on a non-operable element is a dead hover
+ * card, prohibited by UX-P04 and Doc 05 section 48.
+ *
+ * Interactive surfaces use the semantic control-border tokens because their
+ * boundary identifies an actionable control and must remain sufficiently
+ * distinguishable from adjacent surfaces.
+ *
+ * Reset the operable element's own chrome so a button-backed card still looks
+ * like a card.
+ */
+.interactive {
+  inline-size: 100%;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-color: var(--color-control-border);
+  transition:
+    background-color var(--duration-standard) var(--ease-standard),
+    border-color var(--duration-standard) var(--ease-standard),
+    transform var(--duration-standard) var(--ease-standard);
+}
+
+.interactive:hover {
+  background-color: var(--color-surface-hover);
+  border-color: var(--color-control-border-hover);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive:hover {
+    transform: none;
+  }
+}

@@ -10,26 +10,28 @@ One repository. One React frontend. One Express backend. One MongoDB database
 
 ## Current state
 
-| Item | Status |
-| --- | --- |
-| Release | A — Fast Website Foundation |
-| Milestone | A1 — Repository & Runtime Foundation |
-| Frontend | Runs and builds. No routing, no design system, no pages yet. |
-| Backend | Starts and stops. No routes, no database, no API yet. |
-| Database | Not connected (Milestone B2) |
+| Item      | Status                                                               |
+| --------- | -------------------------------------------------------------------- |
+| Release   | A — Fast Website Foundation                                          |
+| Milestone | A2 — Design System & Shared UI                                       |
+| Frontend  | Design system implemented. Runs and builds. No routing or pages yet. |
+| Backend   | Starts and stops. No routes, no database, no API yet.                |
+| Database  | Not connected (Milestone B2)                                         |
 
-A1 delivers a working project foundation, not the website. Anything the
-foundation does not yet do is listed under **Not in A1** below.
+A2 delivers the Valida design system as reusable primitives, not the website.
+Running `npm run dev` shows the internal Design System Preview, which is
+replaced by the application shell in A3. Anything not yet built is listed under
+**Not yet built** below.
 
 ---
 
 ## Prerequisites
 
-| Tool | Required version | Check with |
-| --- | --- | --- |
-| Node.js | 24.x (Active LTS "Krypton") | `node -v` |
-| npm | Ships with Node 24 | `npm -v` |
-| Git | Any recent version | `git --version` |
+| Tool    | Required version            | Check with      |
+| ------- | --------------------------- | --------------- |
+| Node.js | 24.x (Active LTS "Krypton") | `node -v`       |
+| npm     | Ships with Node 24          | `npm -v`        |
+| Git     | Any recent version          | `git --version` |
 
 Node 24 is the current Active LTS (LTS since 2025-10-28, end of life
 2028-04-30). It is declared in `.nvmrc` and in the `engines` field of both
@@ -47,9 +49,16 @@ may still work but is not the supported runtime.
 valida/
 ├── frontend/          React + Vite public application
 │   ├── src/
-│   │   ├── app/
-│   │   │   └── App.jsx
+│   │   ├── app/            App + Design System Preview (A2)
+│   │   ├── components/
+│   │   │   ├── graphics/   SecurityField signature visual
+│   │   │   ├── layout/     Container, Section
+│   │   │   └── ui/         Button, Field, Alert, Surface, Icon, ...
+│   │   ├── hooks/          usePrefersReducedMotion
+│   │   ├── styles/         tokens, base, typography, utilities
+│   │   ├── test/           Vitest setup + axe helper
 │   │   └── main.jsx
+│   ├── vitest.config.js
 │   ├── .env.example
 │   ├── index.html
 │   ├── package.json
@@ -155,9 +164,17 @@ Expected output includes:
 Local:   http://localhost:5173/
 ```
 
-Open <http://localhost:5173> in a browser. You should see the heading
-**"Valida — frontend runtime foundation"**, no browser console errors, and no
-red text in the terminal.
+Open <http://localhost:5173> in a browser. You should see the **Design System
+Preview**: an internal engineering screen headed **"Valida Security Field"**,
+opening with a blue "Internal design-system preview" notice, followed by
+sections for colour, typography, buttons, form primitives, feedback states,
+surfaces and icons.
+
+There should be no browser console errors and no red text in the terminal.
+
+This preview is not the Valida website. It exists so the design system can be
+reviewed before routing and real pages exist, and Milestone A3 replaces it with
+the application shell.
 
 ---
 
@@ -165,32 +182,47 @@ red text in the terminal.
 
 ### Frontend (`frontend/`)
 
-| Command | Purpose |
-| --- | --- |
-| `npm install` | Install dependencies |
-| `npm ci` | Clean reproducible install from `package-lock.json` |
-| `npm run dev` | Vite dev server on <http://localhost:5173> |
-| `npm run build` | Production build into `frontend/dist/` |
-| `npm run preview` | Serve the built output on <http://localhost:4173> |
+| Command              | Purpose                                                 |
+| -------------------- | ------------------------------------------------------- |
+| `npm install`        | Install dependencies                                    |
+| `npm ci`             | Clean reproducible install from `package-lock.json`     |
+| `npm run dev`        | Vite dev server on <http://localhost:5173>              |
+| `npm run build`      | Production build into `frontend/dist/`                  |
+| `npm run preview`    | Serve the built output on <http://localhost:4173>       |
+| `npm test`           | Run the Vitest suite once (components + axe + contrast) |
+| `npm run test:watch` | Run the suite in watch mode                             |
 
 ### Backend (`backend/`)
 
-| Command | Purpose |
-| --- | --- |
-| `npm install` | Install dependencies |
-| `npm ci` | Clean reproducible install from `package-lock.json` |
-| `npm start` | Start the server |
+| Command       | Purpose                                                |
+| ------------- | ------------------------------------------------------ |
+| `npm install` | Install dependencies                                   |
+| `npm ci`      | Clean reproducible install from `package-lock.json`    |
+| `npm start`   | Start the server                                       |
 | `npm run dev` | Start the server with automatic restart on file change |
 
-`npm run test` is not defined yet. The canonical test stack (Vitest, React
-Testing Library, Supertest, Playwright — Document 17) is introduced in
-Milestone A2 for the frontend and B1 for the backend.
+The frontend test stack (Vitest, React Testing Library, axe-core — Document 17)
+landed in A2. The backend has no test script yet; Supertest and Vitest are
+introduced with the Express application in B1. Playwright E2E arrives in
+Release C.
 
 ---
 
-## Verifying the A1 foundation
+## Verifying the current build
 
-Run all four checks. Each should complete without an error.
+Run every check. Each should complete without an error.
+
+### A2 — design system
+
+```powershell
+cd frontend
+npm test               # expect: Test Files 8 passed, Tests 163 passed
+npm run dev            # open http://localhost:5173, review the preview, then Ctrl+C
+```
+
+### A1 foundation — regression checks, still required
+
+These verified the A1 milestone and must keep passing.
 
 ```powershell
 # 1. Frontend production build
@@ -212,6 +244,9 @@ cd ..\backend
 Remove-Item -Recurse -Force node_modules
 npm ci
 ```
+
+Also confirm no `/favicon.ico` 404 appears in the browser console — that was an
+A1 correction and must not regress.
 
 ---
 
@@ -237,28 +272,31 @@ Open DevTools (`F12`) → Console. Confirm the dev server terminal shows no buil
 error and that you opened <http://localhost:5173>, not the `dist/` files
 directly.
 
+**The site looks like a component gallery, not a website**
+That is correct for Milestone A2. `npm run dev` renders the Design System
+Preview. The real pages arrive in A3 and A4.
+
 ---
 
-## Not in A1
+## Not yet built
 
 These are scheduled, not forgotten. Each is owned by a named milestone in
 `18_IMPLEMENTATION_ROADMAP.md`.
 
-| Capability | Milestone |
-| --- | --- |
-| Design tokens, typography, shared UI components | A2 |
-| `frontend/public/` and brand assets (favicon, logo files) | A2 |
-| React Router, header, footer, layouts, 404 | A3 |
-| Home, About, Privacy, Legal pages and real copy | A4 |
-| Careers / Job Detail / Apply frontend states | A5 |
-| Accessibility, performance and SEO quality baseline | A6 |
-| `/api/v1` routing, config validation, security headers, CORS, rate limiting, logging, health and readiness endpoints | B1 |
-| MongoDB connection, Job and Application models, indexes | B2 |
-| Public Jobs API and Job provisioning script | B3 |
-| Private resume storage and file validation | B4 |
-| Application submission workflow | B5 |
-| Transactional notifications | B6 |
-| Production deployment, domain, HTTPS | C |
+| Capability                                                                                                           | Milestone |
+| -------------------------------------------------------------------------------------------------------------------- | --------- |
+| `frontend/public/`, real favicon and logo files (needs the approved logo asset)                                      | A3        |
+| React Router, header, footer, layouts, skip link, 404                                                                | A3        |
+| Home, About, Privacy, Legal pages and real copy                                                                      | A4        |
+| Careers / Job Detail / Apply frontend states                                                                         | A5        |
+| Accessibility, performance and SEO quality baseline                                                                  | A6        |
+| `/api/v1` routing, config validation, security headers, CORS, rate limiting, logging, health and readiness endpoints | B1        |
+| MongoDB connection, Job and Application models, indexes                                                              | B2        |
+| Public Jobs API and Job provisioning script                                                                          | B3        |
+| Private resume storage and file validation                                                                           | B4        |
+| Application submission workflow                                                                                      | B5        |
+| Transactional notifications                                                                                          | B6        |
+| Production deployment, domain, HTTPS                                                                                 | C         |
 
 ---
 

@@ -1,0 +1,38 @@
+/* Input visual system — Doc 03 sections 59-60. */
+.input {
+  inline-size: 100%;
+  block-size: var(--input-height);
+  padding-inline: var(--space-4);
+  background-color: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-control-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-body);
+  transition:
+    border-color var(--duration-standard) var(--ease-standard),
+    background-color var(--duration-standard) var(--ease-standard);
+}
+
+.input::placeholder { color: var(--color-text-muted); }
+
+.input:hover:not(:disabled) { border-color: var(--color-control-border-hover); }
+
+.input:focus { border-color: var(--color-accent); background-color: var(--color-surface-raised); }
+
+.input:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+  background-color: var(--color-bg-secondary);
+}
+
+/* Border change accompanies the icon + text error inside Field. */
+.invalid,
+.invalid:hover:not(:disabled) { border-color: var(--color-error); }
+
+.textarea {
+  block-size: auto;
+  min-block-size: var(--textarea-min-height);
+  padding-block: var(--space-3);
+  line-height: var(--leading-body);
+  resize: vertical;
+}

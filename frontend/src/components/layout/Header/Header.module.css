@@ -1,0 +1,97 @@
+/* Global Header — Doc 05 sections 6-19, Doc 08 section 24. */
+.header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-sticky);
+  /* Doc 05 section 7: approximately 72-80px; must not dominate the viewport. */
+  min-block-size: 72px;
+  display: flex;
+  align-items: center;
+  background-color: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+  /* Doc 05 section 8: near-black translucent surface with moderate blur. */
+  backdrop-filter: blur(12px);
+}
+
+/* Where color-mix is unsupported the header stays fully opaque rather than
+   transparent, so header text never sits on page content. */
+@supports not (background-color: color-mix(in srgb, red 50%, transparent)) {
+  .header { background-color: var(--color-bg-primary); }
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  inline-size: 100%;
+  padding-block: var(--space-3);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-7);
+}
+
+/*
+ * Responsive visibility for the two navigation modes.
+ *
+ * These toggles live on the Header rather than inside DesktopNavigation and
+ * MobileNavigation: a navigation component should render navigation, not
+ * decide at which viewport it appears. Keeping the decision here also lets
+ * each component be tested in isolation without fighting a display rule it
+ * does not own.
+ *
+ * The desktop shell is the unqualified base state and the mobile shell is the
+ * media-query override, rather than the reverse. Anything that cannot evaluate
+ * media queries then falls back to the full navigation with every link
+ * reachable, instead of to a menu button whose panel it cannot open.
+ */
+.desktopOnly { display: block; }
+.desktopCta { display: inline-flex; }
+.mobileOnly { display: none; }
+
+@media (max-width: 899.98px) {
+  .desktopOnly { display: none; }
+  .desktopCta { display: none; }
+  .mobileOnly { display: block; }
+}
+
+.navList {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-7);
+}
+
+.navLink {
+  position: relative;
+  display: inline-block;
+  padding-block: var(--space-2);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color var(--duration-standard) var(--ease-standard);
+}
+
+/* Doc 05 section 14: subtle brightness increase, restrained accent indicator. */
+.navLink:hover { color: var(--color-text-primary); }
+
+/*
+ * Active state — Doc 05 section 13. Weight and a 2px accent underline carry
+ * the state in addition to colour, so it is never colour-alone.
+ */
+.navLinkActive {
+  color: var(--color-text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.navLinkActive::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 2px;
+  background-color: var(--color-accent);
+  border-radius: var(--radius-pill);
+}

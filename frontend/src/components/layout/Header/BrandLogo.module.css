@@ -1,0 +1,23 @@
+/* BrandLogo — Doc 05 section 10, Doc 08 section 24. */
+.logoLink {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-xs);
+  text-decoration: none;
+  /* Clear space around the mark, required by the approved brand pack. */
+  padding: var(--space-1) var(--space-2);
+}
+
+.logo {
+  /* Intrinsic 1009x230 is declared on the element so the browser reserves the
+     correct box and the header does not shift as the asset loads. Height is
+     fixed and width follows, preserving the approved aspect ratio exactly. */
+  block-size: 34px;
+  inline-size: auto;
+  /* No filter, shadow, rotation or recolouring: the approved mark must not be
+     altered (brand pack rule 1). */
+}
+
+@media (min-width: 768px) {
+  .logo { block-size: 38px; }
+}

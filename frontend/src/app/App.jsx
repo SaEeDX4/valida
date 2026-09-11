@@ -1,18 +1,17 @@
-import DesignSystemPreview from './DesignSystemPreview.jsx';
+import AppRouter from '../routes/AppRouter.jsx';
 
 /**
  * Root application component.
  *
- * MILESTONE A2 SCOPE
- * A2 delivers the design system as reusable primitives. The Router,
- * PublicLayout, Header, Footer and the real pages arrive in A3/A4, at which
- * point this component becomes the router host described in Doc 08 section 14.
+ * MILESTONE A3
+ * App now hosts the real application shell and router, as Doc 08 section 14
+ * describes. It replaced the A2 Design System Preview as the entry point.
  *
- * Until then App renders the Design System Preview: an engineering surface
- * that exercises every primitive so the visual states required by
- * 18_IMPLEMENTATION_ROADMAP.md section 51 can actually be reviewed and
- * screenshotted. It is not website content and contains no company claims.
+ * The preview component and its tests remain in the repository unchanged —
+ * they are an approved A2 engineering surface and are still exercised by
+ * DesignSystemPreview.test.jsx. They are simply no longer mounted by the
+ * application, because the application now renders the real site shell.
  */
 export default function App() {
-  return <DesignSystemPreview />;
+  return <AppRouter />;
 }

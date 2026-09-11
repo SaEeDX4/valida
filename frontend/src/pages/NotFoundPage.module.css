@@ -1,0 +1,31 @@
+/* 404 — Doc 05 sections 157-162. Branded but restrained. */
+.layout {
+  display: grid;
+  gap: var(--space-9);
+  align-items: center;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .layout { grid-template-columns: 7fr 5fr; }
+}
+
+.content { display: flex; flex-direction: column; gap: var(--space-5); align-items: flex-start; }
+
+.body { color: var(--color-text-secondary); }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-block-start: var(--space-3);
+}
+
+/* Doc 05 section 160: must fit comfortably on mobile without excessive scroll,
+   so the supporting graphic is dropped on small viewports rather than pushing
+   the recovery actions below the fold. */
+.graphic { display: none; }
+
+@media (min-width: 900px) {
+  .graphic { display: block; }
+}

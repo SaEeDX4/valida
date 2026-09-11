@@ -1,0 +1,28 @@
+/*
+ * Skip link — Doc 05 section 178, Doc 08 section 28.
+ * Hidden until keyboard focus, then rendered as a real, visible control above
+ * all shell chrome.
+ */
+.skipLink {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: var(--z-skiplink);
+  display: inline-flex;
+  align-items: center;
+  block-size: var(--control-height-standard);
+  padding-inline: var(--space-5);
+  background-color: var(--color-surface-raised);
+  border: var(--border-hairline) solid var(--color-control-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  /* Moved out of view rather than display:none, so it stays focusable. */
+  transform: translateY(calc(-100% - var(--space-4)));
+  transition: transform var(--duration-standard) var(--ease-standard);
+}
+
+.skipLink:focus-visible,
+.skipLink:focus {
+  transform: translateY(0);
+}

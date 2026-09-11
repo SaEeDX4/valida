@@ -37,6 +37,7 @@ export default function Button({
   loading = false,
   disabled = false,
   href,
+  as: LinkComponent,
   iconOnly = false,
   'aria-label': ariaLabel,
   className = '',
@@ -61,6 +62,33 @@ export default function Button({
     // A navigating control is an anchor. When it is unavailable it must not
     // remain a working link, so the href is dropped and the role is kept.
     const unavailable = disabled || loading;
+
+    /*
+     * A3 integration: `as` accepts a router Link component so an in-app
+     * button-styled CTA performs client-side navigation instead of a full page
+     * reload. This mirrors the `as` prop TextLink already exposes.
+     *
+     * A router Link takes `to`, not `href`, and must never render while
+     * unavailable — a disabled Link would still navigate on click. So an
+     * unavailable control always falls back to the plain anchor branch below,
+     * which drops the href entirely.
+     */
+    if (LinkComponent && !unavailable) {
+      return (
+        <LinkComponent
+          className={classes}
+          to={href}
+          aria-busy={busy}
+          aria-label={ariaLabel}
+          onClick={onClick}
+          {...rest}
+        >
+          {spinner}
+          {children}
+        </LinkComponent>
+      );
+    }
+
     return (
       <a
         className={classes}

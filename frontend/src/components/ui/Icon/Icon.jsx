@@ -16,6 +16,10 @@ const PATHS = {
   arrowRight: <path d="M4 12h15m0 0-6-6m6 6-6 6" />,
   check: <path d="m4.5 12.5 5 5 10-11" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  // Added in A3 for the mobile navigation trigger. Doc 03 section 49 forbids
+  // mixing icon families, so it joins this set rather than arriving from a
+  // package: same 24x24 box, same stroke weight, same cap/join treatment.
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   info: (
     <>
       <circle cx="12" cy="12" r="9" />

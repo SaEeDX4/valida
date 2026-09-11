@@ -1,0 +1,43 @@
+/* Global Footer — Doc 05 sections 163-167, Doc 04 section 58. */
+.footer {
+  margin-block-start: auto;
+  padding-block: var(--space-11) var(--space-8);
+  background-color: var(--color-bg-secondary);
+  border-block-start: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+/* Doc 05 section 166: stack in intentional groups on mobile; no accordion.
+   Doc 05 section 165: larger brand area, compact navigation groups. */
+.grid {
+  display: grid;
+  gap: var(--space-9);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 720px) {
+  .grid { grid-template-columns: 2fr 1fr 1fr; gap: var(--space-10); }
+}
+
+.brand { display: flex; flex-direction: column; gap: var(--space-4); align-items: flex-start; }
+.brandMark { block-size: 30px; inline-size: auto; }
+.brandText { color: var(--color-text-secondary); max-inline-size: 38ch; }
+
+.groupHeading {
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-4);
+}
+
+.list { list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+
+.bottom {
+  margin-block-start: var(--space-10);
+  padding-block-start: var(--space-6);
+  border-block-start: var(--border-hairline) solid var(--color-border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: center;
+}
+
+.copyright { color: var(--color-text-muted); }

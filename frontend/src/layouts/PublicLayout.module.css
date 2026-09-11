@@ -1,0 +1,15 @@
+/* PublicLayout — Doc 08 section 22. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
+  /* The shell itself must never introduce horizontal overflow
+     (Doc 03 section 84, A3 quality requirements). */
+  overflow-x: clip;
+}
+
+.main { flex: 1 0 auto; }
+
+/* Removes the focus ring on the programmatic route-change focus target: the
+   heading is focused for orientation, not because the user tabbed to it. */
+.main:focus { outline: none; }

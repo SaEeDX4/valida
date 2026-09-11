@@ -4,21 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      Browsers request /favicon.ico automatically when no icon is declared,
-      which produces a 404 in the console. This empty data URL is a valid icon
-      declaration that tells the browser no icon file needs to be fetched, so
-      the request is never made. Nothing is suppressed or hidden.
-
-      This is a temporary A1 placeholder with no artwork. It is replaced in
-      Milestone A2 by the real Valida favicon derived from the approved logo
-      asset (03_BRAND_VISUAL_SYSTEM.md sections 16-17).
+      Approved Valida brand assets (frontend/public/brand/), used unmodified.
+      These replace the temporary empty data: icon from Milestone A1, which
+      existed only to stop the automatic /favicon.ico 404 before the approved
+      assets were available.
     -->
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="/brand/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/valida-app-icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/brand/valida-app-icon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/valida-app-icon-180.png" />
+    <meta name="theme-color" content="#05070a" />
     <!--
-      Milestone A1 provides the runtime entry point only.
-      Per-route metadata (title, description, canonical, Open Graph) is
-      implemented via the shared PageMeta helper in Milestone A3/A4,
-      governed by 08_FRONTEND_SPEC.md sections 126-132 and Document 06.
+      Per-route titles are set by the shared PageMeta helper using canonical
+      Document 06 copy. Descriptions, canonical URLs and Open Graph tags are
+      page-content concerns owned by A4 and need the production domain, which
+      is still AWAITING INPUT (Document 14).
     -->
     <title>Valida</title>
   </head>

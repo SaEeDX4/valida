@@ -58,12 +58,14 @@ describe('application shell', () => {
 });
 
 describe('routing', () => {
+  // A4 replaced the Home/About/Privacy/Legal placeholders with the real pages,
+  // so these now assert the canonical Document 06 H1 of each route.
   it.each([
-    ['/', 'Home'],
-    ['/about', 'About'],
-    ['/careers', 'Careers'],
-    ['/privacy', 'Privacy Notice'],
-    ['/legal', 'Legal Information'],
+    ['/', /Secure systems\./],
+    ['/about', /Building technology with security at its foundation\./],
+    ['/careers', /Careers/],
+    ['/privacy', /Privacy Notice/],
+    ['/legal', /Legal Information/],
   ])('renders %s directly (Doc 04 section 44)', (path, heading) => {
     renderAt(path);
     expect(screen.getByRole('heading', { level: 1, name: heading })).toBeTruthy();
@@ -91,7 +93,7 @@ describe('header navigation', () => {
     renderAt('/about');
     const logo = screen.getByRole('link', { name: 'Valida — Home' });
     await userEvent.click(logo);
-    expect(screen.getByRole('heading', { level: 1, name: 'Home' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Secure systems\./ })).toBeTruthy();
   });
 
   it('navigates to About and Careers from the primary navigation', async () => {
@@ -99,7 +101,9 @@ describe('header navigation', () => {
     const nav = screen.getByRole('navigation', { name: 'Primary' });
 
     await userEvent.click(within(nav).getByRole('link', { name: 'About' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'About' })).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { level: 1, name: /Building technology with security/ }),
+    ).toBeTruthy();
 
     await userEvent.click(within(nav).getByRole('link', { name: 'Careers' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Careers' })).toBeTruthy();
@@ -168,14 +172,16 @@ describe('footer', () => {
     const footer = screen.getByRole('contentinfo');
 
     await userEvent.click(within(footer).getByRole('link', { name: 'Privacy' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Privacy Notice' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Privacy Notice/ })).toBeTruthy();
   });
 
   it('navigates to About and Careers from the Company group', async () => {
     renderAt('/');
     const company = screen.getByRole('navigation', { name: 'Company' });
     await userEvent.click(within(company).getByRole('link', { name: 'About' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'About' })).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { level: 1, name: /Building technology with security/ }),
+    ).toBeTruthy();
   });
 
   it('shows the canonical brand description and dynamic copyright (Doc 06 sections 190, 194)', () => {
@@ -233,7 +239,7 @@ describe('404', () => {
     renderAt('/nope');
     const main = screen.getByRole('main');
     await userEvent.click(within(main).getByRole('link', { name: 'Go to Home' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Home' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Secure systems\./ })).toBeTruthy();
   });
 
   it('recovers to Careers', async () => {

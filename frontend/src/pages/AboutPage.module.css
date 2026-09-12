@@ -1,0 +1,112 @@
+/*
+ * About — Doc 05 sections 60-70.
+ * Quieter and more editorial than Home: no Security Field, no full-height
+ * hero, and alternating asymmetry instead of repeated cards.
+ */
+
+/* ---------------------------------------------------------------- HERO -- */
+/* Doc 05 section 64: smaller, quieter, editorial. Deliberately no large
+   graphic, so About never reads as a second copy of the Home hero. */
+.hero {
+  padding-block: var(--space-12) var(--space-10);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+.heroInner {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: 1fr;
+  max-inline-size: 62rem;
+}
+
+.heroHeading { color: var(--color-text-primary); }
+
+.heroBody {
+  color: var(--color-text-secondary);
+  max-inline-size: 60ch;
+}
+
+/* A single thin accent rule is the only ornament in the hero. */
+.heroRule {
+  inline-size: var(--space-10);
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+  border-radius: var(--radius-pill);
+}
+
+/* ---------------------------------------------------- EDITORIAL SECTIONS */
+/*
+ * Doc 05 section 66: large idea left, explanation right, or alternating
+ * asymmetry. Alternating is used so the page has rhythm rather than three
+ * identical rows.
+ */
+.editorial {
+  display: grid;
+  gap: var(--space-7);
+  grid-template-columns: 1fr;
+  padding-block: var(--space-11);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+@media (min-width: 900px) {
+  .editorial { grid-template-columns: 5fr 7fr; gap: var(--space-11); align-items: start; }
+
+  /* Every second section flips the column order, keeping the reading order in
+     the DOM unchanged so the outline stays correct for assistive technology. */
+  .editorialAlt .editorialLead { order: 2; }
+  .editorialAlt .editorialBody { order: 1; }
+  .editorialAlt { grid-template-columns: 7fr 5fr; }
+}
+
+.editorialLead { display: flex; flex-direction: column; gap: var(--space-4); }
+.editorialHeading { color: var(--color-text-primary); }
+
+.editorialBody { display: flex; flex-direction: column; gap: var(--space-5); }
+.editorialParagraph { color: var(--color-text-secondary); max-inline-size: 64ch; }
+
+/* ------------------------------------------------------------ PRINCIPLES */
+.principles {
+  display: grid;
+  gap: var(--space-8) var(--space-7);
+  grid-template-columns: 1fr;
+  margin-block-start: var(--space-9);
+}
+
+@media (min-width: 700px) { .principles { grid-template-columns: repeat(2, 1fr); } }
+
+.principle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.principleIndex {
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  padding-block-start: 0.3em;
+}
+
+.principleTitle { color: var(--color-text-primary); margin-block-end: var(--space-2); }
+.principleBody { color: var(--color-text-secondary); }
+
+/* ------------------------------------------------------------------ R&D */
+.rnd {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: 1fr;
+  max-inline-size: 58rem;
+}
+
+.rndBody { color: var(--color-text-secondary); }
+
+/* --------------------------------------------------------- CAREERS CTA -- */
+.careers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+  max-inline-size: 46rem;
+}
+
+.careersBody { color: var(--color-text-secondary); }

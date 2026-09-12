@@ -1,0 +1,8 @@
+/*
+ * Shared heading rhythm for the two legal documents (Privacy and Legal), so
+ * their spacing cannot drift apart and neither page needs an inline style.
+ */
+.heading { margin-block-end: var(--space-7); }
+
+/* Legal opens straight into a fact list, which needs a little more air. */
+.headingWide { margin-block-end: var(--space-9); }

@@ -1,0 +1,296 @@
+/*
+ * Home — 05_UX_UI_SPECIFICATION.md sections 36-58.
+ * Every value comes from the A2 token system; no new colour, radius, shadow
+ * or type family is introduced.
+ */
+
+/* ---------------------------------------------------------------- HERO -- */
+.hero {
+  position: relative;
+  /* Doc 05 section 37: roughly 75-90vh of impression without pushing the CTA
+     below the fold. min() keeps short laptop viewports usable. */
+  min-block-size: min(86vh, 52rem);
+  display: flex;
+  align-items: center;
+  padding-block: var(--space-11) var(--space-12);
+  overflow: hidden;
+}
+
+/*
+ * A single wide, very low-opacity accent wash anchored behind the visual
+ * column. Doc 03 section 14 allows localised luminosity; this is one gradient,
+ * not a glow on every element.
+ */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    60% 55% at 78% 38%,
+    var(--color-glow-accent-soft),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.heroGrid {
+  position: relative;
+  display: grid;
+  gap: var(--space-10);
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+
+/* Doc 05 section 37: text columns 1-7, Security Field columns 8-12. */
+@media (min-width: 1000px) {
+  .heroGrid {
+    grid-template-columns: repeat(12, 1fr);
+    gap: var(--space-9);
+  }
+  .heroText { grid-column: 1 / span 7; }
+  .heroVisual { grid-column: 8 / span 5; }
+}
+
+/* Tablet moves toward 5/3 with a tighter gap (Doc 05 section 38). */
+@media (min-width: 768px) and (max-width: 999.98px) {
+  .heroGrid { grid-template-columns: 5fr 3fr; gap: var(--space-8); }
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+}
+
+/* The canonical H1 is two lines; each renders as its own block so the break is
+   intentional rather than a wrapping accident. */
+.heroHeading { display: flex; flex-direction: column; }
+.heroLine { display: block; }
+
+/* The second line carries the accent, so the headline has a focal point
+   without colouring the whole thing. */
+.heroLineAccent {
+  color: var(--color-silver);
+}
+
+.heroBody { color: var(--color-text-secondary); }
+
+.ctaGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-block-start: var(--space-2);
+}
+
+/*
+ * Mobile recomposition (Doc 05 section 39): eyebrow, H1, copy, CTAs, then a
+ * simplified visual. The visual is ordered last and capped so it never pushes
+ * the CTAs off screen.
+ */
+.heroVisual {
+  inline-size: 100%;
+  max-inline-size: 22rem;
+  margin-inline: auto;
+  order: 2;
+}
+
+@media (min-width: 768px) {
+  .heroVisual { max-inline-size: none; order: 0; }
+}
+
+/* --------------------------------------------------------- POSITIONING -- */
+/* Doc 05 section 44: roughly 7/5, statement left, explanation right. */
+.positioningGrid {
+  display: grid;
+  gap: var(--space-7);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .positioningGrid {
+    grid-template-columns: 7fr 5fr;
+    gap: var(--space-11);
+    align-items: start;
+  }
+}
+
+.positioningHeading {
+  color: var(--color-text-primary);
+  margin-block-start: var(--space-5);
+}
+
+.positioningBody {
+  color: var(--color-text-secondary);
+  /* A hairline rule ties the explanation to the statement without a card. */
+  padding-inline-start: var(--space-6);
+  border-inline-start: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+@media (max-width: 899.98px) {
+  .positioningBody { padding-inline-start: 0; border-inline-start: none; }
+}
+
+/* -------------------------------------------------------- CAPABILITIES -- */
+/*
+ * Doc 05 section 47: avoid a generic 3x2 card grid. One dominant statement
+ * plus an indexed technical list. Doc 05 section 48: informational only, so
+ * there is no hover lift, no pointer cursor and no card affordance.
+ */
+.capabilityGrid {
+  display: grid;
+  gap: var(--space-9);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1000px) {
+  .capabilityGrid {
+    grid-template-columns: 5fr 7fr;
+    gap: var(--space-11);
+    align-items: start;
+  }
+  /* The statement stays in view while the list scrolls past it. */
+  .capabilityLead { position: sticky; inset-block-start: 8rem; }
+}
+
+.capabilityLead { display: flex; flex-direction: column; gap: var(--space-5); }
+.capabilityIntro { color: var(--color-text-secondary); }
+
+.capabilityList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border-block-start: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+.capabilityItem {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4) var(--space-5);
+  padding-block: var(--space-6);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+@media (min-width: 600px) {
+  .capabilityItem { grid-template-columns: 3rem 1fr; gap: var(--space-6); }
+}
+
+.capabilityIndex {
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  padding-block-start: 0.25em;
+}
+
+.capabilityTitle {
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-2);
+}
+
+.capabilityBody { color: var(--color-text-secondary); }
+
+/* ---------------------------------------------------------- PHILOSOPHY -- */
+/* Doc 05 section 51: 5-column narrative, 7-column principle structure. */
+.philosophyGrid {
+  display: grid;
+  gap: var(--space-9);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1000px) {
+  .philosophyGrid {
+    grid-template-columns: 5fr 7fr;
+    gap: var(--space-11);
+    align-items: start;
+  }
+}
+
+.philosophyNarrative { display: flex; flex-direction: column; gap: var(--space-5); }
+.philosophyBody { color: var(--color-text-secondary); }
+
+.philosophyList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.philosophyItem {
+  padding-inline-start: var(--space-6);
+  border-inline-start: 2px solid var(--color-accent-deep);
+}
+
+.philosophyTitle { color: var(--color-text-primary); margin-block-end: var(--space-2); }
+.philosophyItemBody { color: var(--color-text-secondary); max-inline-size: 56ch; }
+
+/* --------------------------------------------------- OPERATING PRINCIPLES */
+/* Doc 05 section 52: concise, not a values wall. */
+.operatingGrid {
+  display: grid;
+  gap: var(--space-7);
+  grid-template-columns: 1fr;
+  margin-block-start: var(--space-9);
+}
+
+@media (min-width: 600px) { .operatingGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) {
+  .operatingGrid { grid-template-columns: repeat(4, 1fr); gap: var(--space-6); }
+}
+
+.operatingItem {
+  padding-block-start: var(--space-5);
+  border-block-start: var(--border-hairline) solid var(--color-border-medium);
+}
+
+.operatingTitle { color: var(--color-text-primary); margin-block-end: var(--space-3); }
+.operatingBody { color: var(--color-text-secondary); }
+
+/* ------------------------------------------------------------- CAREERS -- */
+.careersGrid {
+  display: grid;
+  gap: var(--space-7);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .careersGrid {
+    grid-template-columns: 6fr 5fr;
+    gap: var(--space-11);
+    align-items: end;
+  }
+}
+
+.careersHeading { margin-block: var(--space-5); }
+.careersBody { color: var(--color-text-secondary); }
+.careersAction { display: flex; }
+
+@media (min-width: 900px) { .careersAction { justify-content: flex-end; } }
+
+/* ----------------------------------------------------------- FINAL CTA -- */
+.final {
+  position: relative;
+  text-align: start;
+  overflow: hidden;
+}
+
+.final::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    70% 120% at 50% 110%,
+    var(--color-glow-accent-soft),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.finalInner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+  max-inline-size: 48rem;
+}
+
+.finalBody { color: var(--color-text-secondary); }

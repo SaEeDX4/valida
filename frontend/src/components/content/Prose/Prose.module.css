@@ -1,0 +1,78 @@
+/*
+ * Editorial reading layout for legal documents.
+ * Doc 05 sections 146-149: narrow measure, clear hierarchy, no tiny
+ * low-contrast legal typography.
+ */
+.prose {
+  /* Doc 05 section 146 — approximately 680-800px. */
+  max-inline-size: 46rem; /* 736px */
+  margin-inline: auto;
+}
+
+.lead {
+  color: var(--color-text-secondary);
+  margin-block-end: var(--space-10);
+  padding-block-end: var(--space-8);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+.section + .section { margin-block-start: var(--space-10); }
+
+.heading {
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-5);
+  /* A short accent rule marks each section opening without adding chrome. */
+  padding-inline-start: var(--space-5);
+  border-inline-start: 2px solid var(--color-accent);
+}
+
+/*
+ * Body copy uses the standard body colour, never a muted "legal text" grey
+ * (Doc 05 sections 148-149). Contrast is governed by the A2 token gate.
+ */
+.paragraph { color: var(--color-text-secondary); }
+.paragraph + .paragraph { margin-block-start: var(--space-5); }
+
+.list {
+  list-style: none;
+  margin-block-start: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.listItem {
+  position: relative;
+  padding-inline-start: var(--space-6);
+  color: var(--color-text-secondary);
+}
+
+.listItem::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.7em;
+  inline-size: var(--space-3);
+  block-size: 1px;
+  background-color: var(--color-border-strong);
+}
+
+/* Label/value pairs, e.g. Legal company information. */
+.facts {
+  margin-block-start: var(--space-5);
+  display: grid;
+  gap: var(--space-3) var(--space-6);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 600px) {
+  .facts { grid-template-columns: minmax(12rem, auto) 1fr; }
+}
+
+.factTerm { color: var(--color-text-muted); }
+
+.factValue {
+  color: var(--color-text-primary);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

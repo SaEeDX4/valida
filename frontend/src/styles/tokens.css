@@ -214,6 +214,13 @@
    * CONTROLS
    * Button heights (Doc 03 section 56) and input heights (section 60).
    * --------------------------------------------------------------------- */
+  /*
+   * Height of the sticky global Header. Shared so a sticky page element can
+   * offset itself by the real header size instead of a guessed value that
+   * drifts when the header changes.
+   */
+  --header-block-size: 72px;
+
   --control-height-compact: 36px;
   --control-height-standard: 44px;
   --control-height-large: 50px;

@@ -1,0 +1,89 @@
+/* Job Detail — information-rich but calm. Doc 05 sections 85-96. */
+.breadcrumbs { padding-block: var(--space-7) 0; }
+.crumbList { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; color: var(--color-text-muted); }
+.crumbSep { color: var(--color-border-strong); }
+
+.hero { padding-block: var(--space-8) var(--space-9); }
+.title { color: var(--color-text-primary); overflow-wrap: anywhere; }
+.company { color: var(--color-text-muted); margin-block-start: var(--space-3); }
+
+/*
+ * Doc 05: desktop main content ~8 columns, summary/apply ~4.
+ *
+ * DOM ORDER IS THE MOBILE ORDER (Doc 05 section 92): title, key facts, Apply
+ * CTA, role content, repeated final CTA. The summary therefore comes BEFORE the
+ * content in the markup, so a small screen and a screen reader both get the
+ * canonical sequence with no duplicated facts and no aria hackery.
+ *
+ * Desktop then places the two children explicitly, putting content back on the
+ * left and the summary on the right. Only the visual arrangement changes; the
+ * document order does not.
+ */
+.layout { display: grid; gap: var(--space-9); grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 1000px) {
+  .layout { grid-template-columns: 8fr 4fr; gap: var(--space-10); }
+  .content { grid-column: 1; grid-row: 1; }
+  .summary { grid-column: 2; grid-row: 1; }
+  /*
+   * Sticky summary, desktop only. No sticky panel exists on mobile at all.
+   *
+   * The offset is the real header height plus one spacing step, so the card
+   * always comes to rest clear of the sticky Header rather than sliding under
+   * it. Browser QA found the previous fixed 6.5rem left the card's upper rows —
+   * heading, Location, Work Arrangement — hidden behind the header once the
+   * card grew taller than the space available to it.
+   *
+   * The height cap subtracts the same header height plus room top and bottom,
+   * so a tall card scrolls inside itself instead of overflowing the viewport
+   * and pinning its bottom edge (which is what pushes the top out of view).
+   * overscroll-behavior keeps that inner scroll from chaining unexpectedly.
+   */
+  .summary {
+    position: sticky;
+    inset-block-start: calc(var(--header-block-size) + var(--space-6));
+    max-block-size: calc(100dvh - var(--header-block-size) - var(--space-10));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+.factList { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+.factTerm { color: var(--color-text-muted); }
+.factValue { color: var(--color-text-primary); margin: 0; overflow-wrap: anywhere; }
+
+.content { display: flex; flex-direction: column; gap: var(--space-9); }
+.contentSection { max-inline-size: 68ch; }
+.contentHeading { color: var(--color-text-primary); margin-block-end: var(--space-5); }
+.paragraph { color: var(--color-text-secondary); }
+.bulletList { list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+.bullet { position: relative; padding-inline-start: var(--space-6); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.bullet::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.7em;
+  inline-size: var(--space-3);
+  block-size: 1px;
+  background-color: var(--color-border-strong);
+}
+
+.applyPanel { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.closedBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-hairline) solid var(--color-warning-border);
+  background-color: var(--color-warning-soft);
+  border-radius: var(--radius-pill);
+  color: var(--color-warning);
+}
+
+.stateBlock { max-inline-size: 46rem; display: flex; flex-direction: column; gap: var(--space-5); align-items: flex-start; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.finalCta { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); max-inline-size: 46rem; }
+
+/* ---- added in Correction Cycle 1 (styles moved out of JSX) ---- */
+.applyPanelSpacing { margin-block-start: var(--space-6); }
+.skeletonGap { block-size: var(--space-9); }

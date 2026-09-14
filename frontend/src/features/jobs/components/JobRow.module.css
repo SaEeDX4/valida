@@ -1,0 +1,59 @@
+/* Job list row — editorial list, not a card grid (Doc 05 section 80). */
+.item { border-block-end: var(--border-hairline) solid var(--color-border-subtle); }
+.item:first-child { border-block-start: var(--border-hairline) solid var(--color-border-subtle); }
+
+/*
+ * The whole row is one link, so there is exactly one tab stop and one
+ * accessible name per role. Decorative metadata inside is never separately
+ * interactive.
+ */
+.link {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  padding-block: var(--space-7);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color var(--duration-standard) var(--ease-standard);
+}
+
+@media (min-width: 820px) {
+  .link { grid-template-columns: 1fr auto; align-items: center; gap: var(--space-7); }
+}
+
+.link:hover { background-color: var(--color-surface); }
+.link:hover .title { color: var(--color-accent-bright); }
+
+.title {
+  color: var(--color-text-primary);
+  margin-block-end: var(--space-3);
+  /* Long titles wrap instead of forcing the page sideways. */
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  color: var(--color-text-secondary);
+  list-style: none;
+}
+
+.fact { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* A thin separator dot between facts, hidden from assistive technology. */
+.fact + .fact::before {
+  content: "";
+  inline-size: 3px;
+  block-size: 3px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-border-strong);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+  white-space: nowrap;
+}

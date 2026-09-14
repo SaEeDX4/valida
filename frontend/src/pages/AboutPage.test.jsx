@@ -124,7 +124,7 @@ describe('About — interaction, meta and accessibility', () => {
     renderAbout();
     const main = screen.getByRole('main');
     await userEvent.click(within(main).getByRole('link', { name: ABOUT_CAREERS.cta }));
-    expect(screen.getByRole('heading', { level: 1, name: /Careers/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Work on technology that is built to be trusted\./ })).toBeTruthy();
   });
 
   it('has no dead links', () => {

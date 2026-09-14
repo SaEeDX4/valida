@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 /** Every route renders exactly one PageMeta, so this selector is unambiguous. */
 const DESCRIPTION_SELECTOR = 'meta[name="description"]';
+const ROBOTS_SELECTOR = 'meta[name="robots"]';
 
 /**
  * Sets per-route document metadata.
@@ -36,7 +37,7 @@ const DESCRIPTION_SELECTOR = 'meta[name="description"]';
  * fabricating a domain here would publish a URL that does not resolve. The
  * signature is ready for A6/Release C to add them once the host is chosen.
  */
-export default function PageMeta({ title, description }) {
+export default function PageMeta({ title, description, robots }) {
   useEffect(() => {
     if (title) document.title = title;
   }, [title]);
@@ -61,6 +62,34 @@ export default function PageMeta({ title, description }) {
     }
     tag.setAttribute('content', description);
   }, [description]);
+
+  /*
+   * Robots directive, owned by the mounted route exactly like the description.
+   *
+   * A5 needs "noindex, follow" for Apply — an application form has no search
+   * value and must not be indexed — and for a retained closed role, which stays
+   * reachable at its stable URL but is no longer an opportunity. Routes that
+   * pass nothing must have any previous directive removed, or a stale noindex
+   * would silently suppress an indexable page.
+   *
+   * This is the narrow extension A5 requires for state correctness. Full
+   * production SEO infrastructure remains Release C4.
+   */
+  useEffect(() => {
+    const existing = [...document.querySelectorAll(ROBOTS_SELECTOR)];
+    if (!robots) {
+      existing.forEach((tag) => tag.remove());
+      return;
+    }
+    existing.slice(1).forEach((tag) => tag.remove());
+    let tag = existing[0];
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.setAttribute('name', 'robots');
+      document.head.appendChild(tag);
+    }
+    tag.setAttribute('content', robots);
+  }, [robots]);
 
   return null;
 }

@@ -1,0 +1,38 @@
+/*
+ * Region badge + selector. Small, restrained, design-system native.
+ * Not a card, not warning styling, not a banner.
+ */
+.region {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding-block-end: var(--space-4);
+  margin-block-end: var(--space-5);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+.context { display: flex; flex-direction: column; gap: var(--space-1); min-inline-size: 0; }
+
+/* The country name is always present as text; the flag is decorative only. */
+.country { color: var(--color-text-primary); overflow-wrap: anywhere; }
+.flag { margin-inline-end: var(--space-2); }
+.caption { color: var(--color-text-muted); }
+
+.control { display: flex; align-items: center; gap: var(--space-2); margin-inline-start: auto; }
+
+.select {
+  block-size: var(--control-height-compact);
+  padding-inline: var(--space-3);
+  background-color: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-control-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  max-inline-size: 12rem;
+}
+
+.select:hover { border-color: var(--color-control-border-hover); }
+.select:focus { border-color: var(--color-accent); }
+
+/* Standalone placement, e.g. above the Careers role list. */
+.standalone { margin-block-end: var(--space-6); padding-block-end: var(--space-4); }

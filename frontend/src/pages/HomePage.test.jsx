@@ -142,7 +142,7 @@ describe('Home — interaction', () => {
     const main = screen.getByRole('main');
     const [primary] = within(main).getAllByRole('link', { name: HERO.primaryCta });
     await userEvent.click(primary);
-    expect(screen.getByRole('heading', { level: 1, name: /Careers/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Work on technology that is built to be trusted\./ })).toBeTruthy();
   });
 
   it('navigates from the hero secondary CTA to About', async () => {

@@ -52,12 +52,14 @@ describe('PageMeta — description ownership', () => {
     ['/about', () => ABOUT_META.description],
     ['/privacy', () => PRIVACY_META.description],
     ['/legal', () => LEGAL_META.description],
-  ])('leaves no stale description when navigating %s -> Careers placeholder', (path, expected) => {
+  ])('leaves no stale description when navigating %s -> a route without one', (path, expected) => {
     const first = renderAt(path);
     expect(descriptionContent()).toBe(expected());
     first.unmount();
 
-    renderAt('/careers');
+    // A5 gave /careers its own canonical description, so the no-description
+    // target is the 404 route, which publishes a title only.
+    renderAt('/this-route-does-not-exist');
     expect(descriptionTags()).toHaveLength(0);
   });
 
@@ -95,7 +97,7 @@ describe('PageMeta — description ownership', () => {
     stray.setAttribute('content', 'stale');
     document.head.appendChild(stray);
 
-    renderAt('/careers/some-slug');
+    renderAt('/no-such-route');
     expect(descriptionTags()).toHaveLength(0);
   });
 

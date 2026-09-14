@@ -4,7 +4,7 @@
   inset-block-start: 0;
   z-index: var(--z-sticky);
   /* Doc 05 section 7: approximately 72-80px; must not dominate the viewport. */
-  min-block-size: 72px;
+  min-block-size: var(--header-block-size);
   display: flex;
   align-items: center;
   background-color: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);

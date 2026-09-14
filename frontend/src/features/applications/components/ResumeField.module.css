@@ -1,0 +1,85 @@
+.field { display: flex; flex-direction: column; gap: var(--space-4); }
+.instruction { color: var(--color-text-muted); }
+
+.controls { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+
+/*
+ * The native <input type="file"> stays in the DOM, keeps its semantics and
+ * remains the single focus stop for this control. It is visually hidden rather
+ * than removed, and its focus is made visible through the adjacent label below
+ * — so there is no invisible focus stop.
+ */
+.nativeInput {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The visible control is a <label> for that input: clicking or pressing it
+ * operates the real file picker with no JavaScript, and the label carries the
+ * focus indicator on the input's behalf.
+ */
+.pickerLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  block-size: var(--control-height-standard);
+  padding-inline: var(--space-6);
+  background-color: var(--color-surface-raised);
+  border: var(--border-hairline) solid var(--color-control-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-standard) var(--ease-standard),
+    border-color var(--duration-standard) var(--ease-standard);
+}
+
+.pickerLabel:hover {
+  background-color: var(--color-surface-hover);
+  border-color: var(--color-control-border-hover);
+}
+
+/*
+ * Focus proxy. When the hidden input has keyboard focus, the visible label
+ * shows the same ring the rest of the design system uses, so a keyboard user
+ * can always see where they are.
+ */
+.nativeInput:focus-visible + .pickerLabel {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Browsers without :focus-visible support fall back to any focus. */
+@supports not selector(:focus-visible) {
+  .nativeInput:focus + .pickerLabel {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-control-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  min-inline-size: 0;
+}
+
+.fileName { color: var(--color-text-primary); overflow-wrap: anywhere; min-inline-size: 0; }
+.fileSize { color: var(--color-text-muted); white-space: nowrap; }
+.ready { color: var(--color-success); }
+.invalid { border-color: var(--color-error); }
+.error { color: var(--color-error); }

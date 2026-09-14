@@ -1,0 +1,50 @@
+/* Careers — editorial, with a clear role list. Not a job board template. */
+.hero {
+  padding-block: var(--space-12) var(--space-10);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+.heroInner { display: grid; gap: var(--space-6); max-inline-size: 62rem; }
+.heroBody { color: var(--color-text-secondary); max-inline-size: 62ch; }
+.heroRule {
+  inline-size: var(--space-10);
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+  border-radius: var(--radius-pill);
+}
+
+.contextGrid { display: grid; gap: var(--space-7); grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  .contextGrid { grid-template-columns: 5fr 7fr; gap: var(--space-11); align-items: start; }
+}
+.contextBody { display: flex; flex-direction: column; gap: var(--space-5); }
+.contextParagraph { color: var(--color-text-secondary); max-inline-size: 64ch; }
+
+.rolesHeader { display: flex; flex-direction: column; gap: var(--space-3); margin-block-end: var(--space-8); }
+.rolesIntro { color: var(--color-text-secondary); }
+.roleList { list-style: none; }
+
+/* Skeletons carry structure only — never a fake title (Doc 05 section 54). */
+.skeletonList { display: flex; flex-direction: column; }
+.skeletonRow {
+  padding-block: var(--space-7);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+.skeletonRow:first-child { border-block-start: var(--border-hairline) solid var(--color-border-subtle); }
+
+.stateBlock { max-inline-size: 46rem; }
+
+.processGrid { display: grid; gap: var(--space-7); grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  .processGrid { grid-template-columns: 5fr 7fr; gap: var(--space-11); align-items: start; }
+}
+
+.privacyNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  color: var(--color-text-muted);
+  margin-block-start: var(--space-9);
+  padding-block-start: var(--space-6);
+  border-block-start: var(--border-hairline) solid var(--color-border-subtle);
+}

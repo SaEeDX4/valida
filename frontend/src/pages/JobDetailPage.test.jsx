@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderRoute, installJobsService, resetServices, httpError, networkError, pending, testJob } from '../test/renderRoute.jsx';
 import { findAccessibilityViolations } from '../test/axe.js';
@@ -125,12 +125,27 @@ describe('Job Detail — open role', () => {
   it('sets the canonical dynamic metadata and stays indexable', async () => {
     serveJob(testJob());
     renderRoute(PATH);
-    await screen.findByRole('heading', { level: 1 });
-    expect(document.title).toBe(jobDetailTitle('Cybersecurity Specialist'));
-    expect(document.querySelector('meta[name="description"]').getAttribute('content')).toBe(
-      jobDetailDescription('Cybersecurity Specialist'),
-    );
-    expect(document.querySelector('meta[name="robots"]')).toBeNull();
+
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Cybersecurity Specialist',
+    });
+
+    await waitFor(() => {
+      expect(document.title).toBe(jobDetailTitle('Cybersecurity Specialist'));
+
+      expect(
+        document
+          .querySelector('meta[name="description"]')
+          ?.getAttribute('content'),
+      ).toBe(jobDetailDescription('Cybersecurity Specialist'));
+
+      expect(
+        document
+          .querySelector('meta[name="robots"]')
+          ?.getAttribute('content') ?? null,
+      ).toBeNull();
+    });
   });
 
   it('never renders an unpopulated template token', async () => {

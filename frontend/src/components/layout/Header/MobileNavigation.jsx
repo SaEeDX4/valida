@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import Button from '../../ui/Button/Button.jsx';
 import Icon from '../../ui/Icon/Icon.jsx';
@@ -27,6 +27,7 @@ export default function MobileNavigation() {
   const panelId = useId();
   const triggerRef = useRef(null);
   const firstLinkRef = useRef(null);
+  const restoreFocusAfterCloseRef = useRef(false);
   const location = useLocation();
 
   /**
@@ -43,10 +44,17 @@ export default function MobileNavigation() {
    * correctly stays on the trigger instead of being lost with the unmounted
    * link.
    */
-  const close = useCallback(() => {
+  const close = useCallback((restoreFocus = false) => {
+    restoreFocusAfterCloseRef.current = restoreFocus;
     setOpen(false);
-    triggerRef.current?.focus();
   }, []);
+
+  useLayoutEffect(() => {
+    if (open || !restoreFocusAfterCloseRef.current) return;
+
+    restoreFocusAfterCloseRef.current = false;
+    triggerRef.current?.focus();
+  }, [open]);
 
   /*
    * Route change closes the menu (Doc 05 section 18).
@@ -58,6 +66,7 @@ export default function MobileNavigation() {
    * therefore closes the menu explicitly as well.
    */
   useEffect(() => {
+    restoreFocusAfterCloseRef.current = false;
     setOpen(false);
   }, [location.pathname]);
 
@@ -66,8 +75,9 @@ export default function MobileNavigation() {
     if (!open) return undefined;
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         event.stopPropagation();
-        close();
+        close(true);
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -103,11 +113,17 @@ export default function MobileNavigation() {
   }, [open]);
 
   const toggle = () => {
-    setOpen((wasOpen) => {
-      // Focus returns to the trigger on close (Doc 08 section 27).
-      if (wasOpen) triggerRef.current?.focus();
-      return !wasOpen;
-    });
+    if (open) {
+      close(true);
+      return;
+    }
+
+    restoreFocusAfterCloseRef.current = false;
+    setOpen(true);
+  };
+
+  const closeForDestination = (destination) => {
+    close(location.pathname === destination);
   };
 
   return (
@@ -135,7 +151,7 @@ export default function MobileNavigation() {
                     ref={index === 0 ? firstLinkRef : undefined}
                     to={item.to}
                     end={item.end}
-                    onClick={close}
+                    onClick={() => closeForDestination(item.to)}
                     className={({ isActive }) =>
                       [styles.panelLink, 't-h4', isActive ? styles.panelLinkActive : '']
                         .filter(Boolean)
@@ -148,7 +164,7 @@ export default function MobileNavigation() {
               ))}
             </ul>
           </nav>
-          <Button as={Link} href={HEADER_CTA.to} variant="primary" size="standard" onClick={close}>
+          <Button as={Link} href={HEADER_CTA.to} variant="primary" size="standard" onClick={() => closeForDestination(HEADER_CTA.to)}>
             {HEADER_CTA.label}
           </Button>
         </div>

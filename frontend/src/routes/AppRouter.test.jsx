@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { AppRoutes } from './AppRouter.jsx';
 import { findAccessibilityViolations } from '../test/axe.js';
+import { installJobsService, resetServices, pending } from '../test/renderRoute.jsx';
 
 /**
  * Application shell and routing behaviour (Doc 18 section 59).
@@ -23,7 +24,23 @@ beforeEach(() => {
   // jsdom does not implement scrolling; the route-change handler calls it.
   window.scrollTo = vi.fn();
   document.body.style.overflow = '';
+
+  /*
+   * These tests are about ROUTE RESOLUTION, not data. Without an injected
+   * service the data-driven routes call the real apiClient, whose fetch
+   * rejects against a non-existent server AFTER the test has finished — a
+   * state update outside act(), which is what produced the React warning in
+   * the A5 baseline.
+   *
+   * A deterministic never-resolving service holds those routes in their
+   * loading state, which is all these assertions need, and removes the
+   * post-test update entirely. Per-state behaviour is covered by the Careers,
+   * Job Detail and Apply suites, which inject their own services.
+   */
+  installJobsService({ getPublishedJobs: pending, getPublishedJobBySlug: pending });
 });
+
+afterEach(() => resetServices());
 
 describe('application shell', () => {
   it('renders header, main and footer landmarks on a public route', () => {

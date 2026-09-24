@@ -31,7 +31,17 @@ import styles from './NotFoundPage.module.css';
 export default function NotFoundPage() {
   return (
     <>
-      <PageMeta title="Page Not Found | Valida" />
+      {/*
+        A6 (Doc 16 SEO): a 404 is not indexable content. A single-page app
+        serves this route with HTTP 200 from the static host, so without an
+        explicit directive a crawler could index "This page doesn't exist." as
+        a real page. noindex keeps it out of search results; follow still lets
+        crawlers reach the recovery links to Home and Careers.
+
+        This matches the Job Detail unavailable state, which already carried
+        the same directive — the application-level 404 did not.
+      */}
+      <PageMeta title="Page Not Found | Valida" robots="noindex, follow" />
       <Section spacing="lg">
         <Container width="standard">
           <div className={styles.layout}>

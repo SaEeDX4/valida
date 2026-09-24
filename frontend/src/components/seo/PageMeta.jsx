@@ -31,11 +31,13 @@ const ROBOTS_SELECTOR = 'meta[name="robots"]';
  * that does not (404, or the Careers placeholder) left the previous page's
  * description attached to the new page.
  *
- * DELIBERATELY NOT IMPLEMENTED IN A4
+ * DELIBERATELY NOT IMPLEMENTED IN RELEASE A
  * Canonical URL, og:url and og:image need the production hostname and an
  * approved social asset. Neither exists yet (Document 14 — AWAITING INPUT), so
- * fabricating a domain here would publish a URL that does not resolve. The
- * signature is ready for A6/Release C to add them once the host is chosen.
+ * fabricating a domain here would publish a URL that does not resolve. A6
+ * reviewed this and kept them out; its metadata suite asserts that no
+ * canonical link or og:url is emitted. They belong to Release C, once the host
+ * is chosen — the component's signature can take them without restructuring.
  */
 export default function PageMeta({ title, description, robots }) {
   useEffect(() => {

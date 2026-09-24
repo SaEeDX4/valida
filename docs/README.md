@@ -20,6 +20,13 @@ never evidence that the feature works.
 
 ## Status
 
-Empty at Milestone A1. The canonical documents 00-18 are currently maintained
-outside the repository. Copying them in is a documentation decision for Saeed,
-not an A1 implementation requirement.
+| Document | Purpose | Milestone |
+| --- | --- | --- |
+| [`A6_WINDOWS_QA_MATRIX.md`](A6_WINDOWS_QA_MATRIX.md) | The browser, device, screen-reader, zoom, reduced-motion and Lighthouse checks that automated tests cannot perform, with setup steps and result tables | A6 |
+
+The canonical documents 00-18 are maintained outside the repository. Copying
+them in is a documentation decision for Saeed, not an implementation
+requirement.
+
+The QA matrix records what must be checked by a person. Until it is executed it
+is a checklist, not evidence — consistent with the rule above.

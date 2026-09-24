@@ -1,0 +1,68 @@
+/*
+ * ApplyLayout — Doc 08 section 23, Doc 05 sections 107-111.
+ *
+ * The Apply page's principle is trust, clarity and completion; it is not a
+ * marketing page. This shell therefore keeps only what a candidate needs while
+ * applying: the brand, one way back, the form, and the legal links.
+ *
+ * Every value comes from the existing token system and mirrors the approved
+ * Header and Footer treatment — no new colour, border or brand styling.
+ */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
+  overflow-x: clip;
+}
+
+/*
+ * Simplified header. Deliberately NOT sticky: the ordinary site header stays
+ * pinned so its navigation is always reachable, but on Apply there is nothing
+ * to navigate to mid-form except "back", and a pinned bar would only take
+ * vertical space from the form on small screens.
+ */
+.header {
+  min-block-size: var(--header-block-size);
+  display: flex;
+  align-items: center;
+  background-color: var(--color-bg-primary);
+  border-block-end: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+.headerInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  padding-block: var(--space-3);
+}
+
+.main { flex: 1 0 auto; }
+
+/* Programmatic route-change focus target — see PublicLayout. */
+.main:focus { outline: none; }
+
+/* Reduced, legal-purpose footer: ownership and the two legal documents only. */
+.footer {
+  padding-block: var(--space-7);
+  background-color: var(--color-bg-secondary);
+  border-block-start: var(--border-hairline) solid var(--color-border-subtle);
+}
+
+.footerInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
+}
+
+.copyright { color: var(--color-text-muted); }
+
+.legalList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  list-style: none;
+}

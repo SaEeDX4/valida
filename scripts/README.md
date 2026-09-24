@@ -24,4 +24,12 @@ state must validate its input and respect the same business rules as the API.
 
 ## Status
 
-Empty at Milestone A1. No script is required by A1.
+No operational script exists yet; the planned utilities above arrive with
+Release B.
+
+Frontend build tooling is deliberately kept with the frontend package rather
+than here: the A6 quality budget gate is
+`frontend/scripts/check-quality-budgets.mjs`, run with
+`npm run verify:budgets` from `frontend/`. It measures the production build and
+changes no operational state, so it is not an operational utility in the sense
+of this directory.

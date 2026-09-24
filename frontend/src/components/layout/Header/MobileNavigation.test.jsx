@@ -97,6 +97,32 @@ describe('mobile navigation', () => {
     expect(document.activeElement).toBe(trigger());
   });
 
+  it('restores Escape focus only after the panel has unmounted', async () => {
+    renderMenu();
+    await userEvent.click(trigger());
+
+    const menuTrigger = trigger();
+    const panelId = menuTrigger.getAttribute('aria-controls');
+
+    expect(document.getElementById(panelId)).toBeTruthy();
+
+    const originalFocus = menuTrigger.focus.bind(menuTrigger);
+    const panelPresenceWhenFocusRestored = [];
+
+    const focusSpy = vi.spyOn(menuTrigger, 'focus').mockImplementation(() => {
+      panelPresenceWhenFocusRestored.push(Boolean(document.getElementById(panelId)));
+      originalFocus();
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(panelPresenceWhenFocusRestored).toEqual([false]);
+    expect(document.getElementById(panelId)).toBeNull();
+    expect(document.activeElement).toBe(menuTrigger);
+
+    focusSpy.mockRestore();
+  });
+
   it('restores focus after Escape even when focus moved deeper into the menu', async () => {
     renderMenu();
     await userEvent.click(trigger());

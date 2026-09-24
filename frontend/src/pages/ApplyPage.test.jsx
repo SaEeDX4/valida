@@ -73,9 +73,21 @@ describe('Apply — eligibility gate', () => {
   it('is marked noindex, follow', async () => {
     serveJob(testJob());
     renderRoute(PATH);
-    await screen.findByRole('heading', { level: 1 });
-    expect(document.querySelector('meta[name="robots"]').getAttribute('content')).toBe('noindex, follow');
-    expect(document.title).toBe(applyTitle('Cybersecurity Specialist'));
+
+    await screen.findByRole('heading', {
+      level: 1,
+      name: applyHeading('Cybersecurity Specialist'),
+    });
+
+    await waitFor(() => {
+      expect(
+        document
+          .querySelector('meta[name="robots"]')
+          ?.getAttribute('content'),
+      ).toBe('noindex, follow');
+
+      expect(document.title).toBe(applyTitle('Cybersecurity Specialist'));
+    });
   });
 });
 
@@ -457,7 +469,23 @@ describe('Apply — submission transport', () => {
     await user.click(button);
 
     expect(submitApplication).toHaveBeenCalledTimes(1);
-    resolveRequest({ data: {} });
+
+    /*
+     * Settling the request inside act() so the resulting state update is
+     * flushed before the test ends. Resolving it bare left React updating
+     * ApplyFlow after teardown, which is what produced the act() warning.
+     * The canonical success payload is used so the component follows its real
+     * success path rather than an artificial one.
+     */
+    await act(async () => {
+      resolveRequest({
+        data: {
+          status: 'RECEIVED',
+          job: { title: 'Cybersecurity Specialist', slug: SLUG },
+          submittedAt: '2026-09-12T12:00:00.000Z',
+        },
+      });
+    });
   });
 
   it('blocks a duplicate submission fired in the same tick, before any re-render', async () => {

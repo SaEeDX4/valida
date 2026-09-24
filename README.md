@@ -13,15 +13,32 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | Item      | Status                                                               |
 | --------- | -------------------------------------------------------------------- |
 | Release   | A — Fast Website Foundation                                          |
-| Milestone | A2 — Design System & Shared UI                                       |
-| Frontend  | Design system implemented. Runs and builds. No routing or pages yet. |
+| Milestone | A6 — Frontend Quality Baseline                                       |
+| Frontend  | Pre-backend public frontend implemented; A6 awaiting Windows/browser QA. |
 | Backend   | Starts and stops. No routes, no database, no API yet.                |
 | Database  | Not connected (Milestone B2)                                         |
 
-A2 delivers the Valida design system as reusable primitives, not the website.
-Running `npm run dev` shows the internal Design System Preview, which is
-replaced by the application shell in A3. Anything not yet built is listed under
-**Not yet built** below.
+The pre-backend public frontend is implemented: Home, About, Privacy, Legal,
+Careers, Job Detail, Apply and the 404, on the shared design system. That is an
+implementation statement, not an acceptance one — Release A is accepted only
+once A6 passes Windows/browser QA and is GPT-approved.
+
+| Status | |
+| --- | --- |
+| A6 implementation | **Automated / static verification complete** |
+| Windows / browser / NVDA / Lighthouse QA | **Not yet run** — see the QA matrix |
+| Acceptance target, after that QA and ChatGPT approval | **Ready for backend integration** |
+| Phase 1 | **Not verified** — only after Release B and Release C |
+
+The Careers, Job Detail and Apply surfaces call a real API boundary, but no
+backend exists yet, so against a running build Careers correctly shows its error
+state rather than inventing roles. Controlled development fixtures exist for UI
+review only; they are impossible to activate in a production build.
+
+Browser, device and assistive-technology checks are listed in
+[`docs/A6_WINDOWS_QA_MATRIX.md`](docs/A6_WINDOWS_QA_MATRIX.md). Anything not yet
+built is listed under **Not yet built** below, and what is built under
+**Built in Release A**.
 
 ---
 
@@ -48,15 +65,27 @@ may still work but is not the supported runtime.
 ```
 valida/
 ├── frontend/          React + Vite public application
+│   ├── scripts/            check-quality-budgets.mjs (A6 budget gate)
 │   ├── src/
-│   │   ├── app/            App + Design System Preview (A2)
+│   │   ├── app/            App root (+ retained A2 design-system preview)
 │   │   ├── components/
+│   │   │   ├── content/    Prose (Privacy / Legal reading layout)
 │   │   │   ├── graphics/   SecurityField signature visual
-│   │   │   ├── layout/     Container, Section
+│   │   │   ├── layout/     Header, Footer, SkipLink, Container, Section
+│   │   │   ├── seo/        PageMeta (title, description, robots)
 │   │   │   └── ui/         Button, Field, Alert, Surface, Icon, ...
+│   │   ├── config/         browser-safe env (VITE_* only)
+│   │   ├── dev/            DEV-only fixtures — never in a production build
+│   │   ├── features/
+│   │   │   ├── jobs/       Jobs API, regional presentation, JobRow, selector
+│   │   │   └── applications/  Applications API, validation, resume, submission
 │   │   ├── hooks/          usePrefersReducedMotion
+│   │   ├── layouts/        PublicLayout (every route except Apply), ApplyLayout (Apply)
+│   │   ├── pages/          Home, About, Careers, Job Detail, Apply, Privacy, Legal, 404
+│   │   ├── routes/         router, paths, single route-change focus handler
+│   │   ├── services/       apiClient (the only fetch), service registry
 │   │   ├── styles/         tokens, base, typography, utilities
-│   │   ├── test/           Vitest setup + axe helper
+│   │   ├── test/           Vitest setup, axe helper, A6 quality suites
 │   │   └── main.jsx
 │   ├── vitest.config.js
 │   ├── .env.example
@@ -71,7 +100,7 @@ valida/
 │   ├── .env.example
 │   └── package.json
 │
-├── docs/              repository documentation
+├── docs/              repository documentation, A6 Windows QA matrix
 ├── scripts/           controlled operational utilities
 ├── .github/           reserved for CI configuration
 ├── .gitignore
@@ -164,17 +193,33 @@ Expected output includes:
 Local:   http://localhost:5173/
 ```
 
-Open <http://localhost:5173> in a browser. You should see the **Design System
-Preview**: an internal engineering screen headed **"Valida Security Field"**,
-opening with a blue "Internal design-system preview" notice, followed by
-sections for colour, typography, buttons, form primitives, feedback states,
-surfaces and icons.
+Open <http://localhost:5173> in a browser. You should see the **Valida
+website**: the Home page with the header, the hero headline "Secure systems.
+Deliberate engineering." and the footer. Every public route is available —
+`/about`, `/careers`, `/privacy`, `/legal` — and an unknown URL shows the
+branded 404.
 
 There should be no browser console errors and no red text in the terminal.
 
-This preview is not the Valida website. It exists so the design system can be
-reviewed before routing and real pages exist, and Milestone A3 replaces it with
-the application shell.
+**Careers shows "Open roles are temporarily unavailable." — this is correct.**
+No backend exists yet (Release B), so the real API request fails and Careers
+reports the failure honestly instead of inventing roles or claiming there are
+none. Job Detail and Apply behave the same way.
+
+To review the Careers, Job Detail and Apply states before the backend exists,
+enable the controlled development fixtures in `frontend/.env`:
+
+```powershell
+VITE_ENABLE_A5_FIXTURES=true
+```
+
+then restart `npm run dev`. Scenarios are chosen with a `?a5=` query parameter
+(for example `/careers?a5=jobs-empty`) and regional views with `?region=`
+(for example `/careers?region=DE`). Every value that is not source-established
+is visibly prefixed `[DEV FIXTURE]`.
+
+Fixtures only ever run under `npm run dev`. A production build cannot include
+them, even with the flag set. Set the flag back to `false` when you finish.
 
 ---
 
@@ -191,6 +236,8 @@ the application shell.
 | `npm run preview`    | Serve the built output on <http://localhost:4173>       |
 | `npm test`           | Run the Vitest suite once (components + axe + contrast) |
 | `npm run test:watch` | Run the suite in watch mode                             |
+| `npm run verify:budgets` | Measure `dist/` against the Doc 16 budgets, fixture isolation and third-party loading (run after `build`) |
+| `npm run verify:quality` | Build, run the budget gate, then the full suite — the one-command A6 check |
 
 ### Backend (`backend/`)
 
@@ -212,13 +259,19 @@ Release C.
 
 Run every check. Each should complete without an error.
 
-### A2 — design system
+### A6 — frontend quality baseline
 
 ```powershell
 cd frontend
-npm test               # expect: Test Files 8 passed, Tests 163 passed
-npm run dev            # open http://localhost:5173, review the preview, then Ctrl+C
+npm ci
+npm run verify:quality   # expect: ALL QUALITY BUDGET CHECKS PASSED,
+                         #         Test Files 38 passed, Tests 956 passed
 ```
+
+`verify:budgets` measures the real production build. Legacy `.woff` font
+fallbacks are emitted by the font packages but never requested by a
+woff2-capable browser, so they are reported as build output and excluded from
+transfer.
 
 ### A1 foundation — regression checks, still required
 
@@ -272,9 +325,37 @@ Open DevTools (`F12`) → Console. Confirm the dev server terminal shows no buil
 error and that you opened <http://localhost:5173>, not the `dist/` files
 directly.
 
-**The site looks like a component gallery, not a website**
-That is correct for Milestone A2. `npm run dev` renders the Design System
-Preview. The real pages arrive in A3 and A4.
+**Careers says "Open roles are temporarily unavailable."**
+Correct until Release B. No backend exists, so the Jobs request fails and the
+page reports it rather than showing invented roles. To review the role states,
+use the development fixtures described under **Daily development**.
+
+**Text on the page is prefixed `[DEV FIXTURE]`**
+Development fixtures are enabled. Set `VITE_ENABLE_A5_FIXTURES=false` in
+`frontend/.env` and restart `npm run dev`. The prefix marks synthetic values that
+are not approved Valida data.
+
+**`npm run verify:budgets` reports `dist/ not found`**
+Run `npm run build` first, or use `npm run verify:quality`, which builds before
+measuring.
+
+---
+
+## Built in Release A
+
+| Capability                                                                     | Milestone |
+| ------------------------------------------------------------------------------ | --------- |
+| Repository, Node runtime, frontend and backend scaffolds                        | A1        |
+| Design system: tokens, typography, shared UI, Security Field, contrast gate     | A2        |
+| Approved brand assets, router, header, footer, skip link, 404                   | A3        |
+| Home, About, Privacy and Legal with canonical copy                              | A4        |
+| Careers, Job Detail and Apply states, API boundary, regional job presentation   | A5        |
+| Route-level accessibility, metadata, keyboard and budget quality gates; ApplyLayout | A6        |
+
+The table lists implemented capability, not accepted milestones. Release A is
+complete only once A6 is GPT-approved after Windows and browser QA. Its
+acceptance target is **ready for backend integration**; it is **not**
+Phase 1 verification.
 
 ---
 
@@ -285,11 +366,6 @@ These are scheduled, not forgotten. Each is owned by a named milestone in
 
 | Capability                                                                                                           | Milestone |
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
-| `frontend/public/`, real favicon and logo files (needs the approved logo asset)                                      | A3        |
-| React Router, header, footer, layouts, skip link, 404                                                                | A3        |
-| Home, About, Privacy, Legal pages and real copy                                                                      | A4        |
-| Careers / Job Detail / Apply frontend states                                                                         | A5        |
-| Accessibility, performance and SEO quality baseline                                                                  | A6        |
 | `/api/v1` routing, config validation, security headers, CORS, rate limiting, logging, health and readiness endpoints | B1        |
 | MongoDB connection, Job and Application models, indexes                                                              | B2        |
 | Public Jobs API and Job provisioning script                                                                          | B3        |
@@ -297,6 +373,11 @@ These are scheduled, not forgotten. Each is owned by a named milestone in
 | Application submission workflow                                                                                      | B5        |
 | Transactional notifications                                                                                          | B6        |
 | Production deployment, domain, HTTPS                                                                                 | C         |
+| Production SEO: canonical host, sitemap, robots.txt, JobPosting data (need the production domain and real Jobs)      | C         |
+
+Awaiting input rather than scheduled: the production API origin, real approved
+Job content and per-market compensation, a corporate contact mechanism, and a
+smaller approved transparent logo export.
 
 ---
 

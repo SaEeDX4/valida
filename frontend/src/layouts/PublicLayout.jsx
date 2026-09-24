@@ -2,7 +2,6 @@ import { Outlet } from 'react-router';
 import SkipLink from '../components/layout/SkipLink/SkipLink.jsx';
 import Header from '../components/layout/Header/Header.jsx';
 import Footer from '../components/layout/Footer/Footer.jsx';
-import RouteChangeHandler from '../routes/RouteChangeHandler.jsx';
 import styles from './PublicLayout.module.css';
 
 /**
@@ -15,17 +14,15 @@ import styles from './PublicLayout.module.css';
  * 28-29. tabIndex={-1} makes it programmatically focusable so both the skip
  * link and the route-change handler can move focus here.
  *
- * NOTE ON ApplyLayout: Doc 08 section 23 defines a simplified ApplyLayout for
- * the Apply route. It is deliberately NOT built in A3 — Doc 18 section 57
- * lists only PublicLayout, and the layout exists to reduce distraction during
- * application completion, which has no content until A5. The Apply route
- * therefore renders inside PublicLayout for now. Tracked as an explicit
- * deferral to A5.
+ * SCOPE: every Phase 1 route EXCEPT Apply. The Apply route uses the separate
+ * ApplyLayout (Doc 08 section 23), which removes the marketing navigation and
+ * full footer during application completion. Both shells keep the same
+ * SkipLink and #main-content target; route-change focus handling is a single
+ * instance mounted above both layouts in AppRoutes.
  */
 export default function PublicLayout() {
   return (
     <div className={styles.shell}>
-      <RouteChangeHandler />
       <SkipLink />
       <Header />
       <main id="main-content" tabIndex={-1} className={styles.main}>

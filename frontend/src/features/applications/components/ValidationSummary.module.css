@@ -1,4 +1,5 @@
 /* Validation summary — scoped styles, no inline presentation. */
+
 .list {
   margin-block-start: var(--space-3);
   display: flex;
@@ -7,9 +8,22 @@
   list-style: none;
 }
 
-.link { color: var(--color-error); }
-.link:hover { color: var(--color-text-primary); }
+.link {
+  color: var(--color-error);
+}
 
-/* Programmatic focus target: no outline of its own, since focus is moved here
-   for orientation rather than because the user tabbed to it. */
-.summary:focus { outline: none; }
+.link:hover {
+  color: var(--color-text-primary);
+}
+
+/*
+ * Programmatic focus target.
+ *
+ * Focus is moved here after an invalid submission so keyboard and assistive
+ * technology users are oriented to the validation summary. Keep that focus
+ * visibly identifiable rather than suppressing the indicator.
+ */
+.summary:focus {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 3px;
+}

@@ -24,7 +24,14 @@ export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '')
   // Defence in depth: a misconfigured origin must not duplicate the prefix.
   .replace(/\/api\/v\d+$/, '');
 
-/** Public site origin, used by A4 metadata. Not fabricated. */
+/**
+ * Public site origin. RESERVED — currently unused.
+ *
+ * Intended for canonical URLs and Open Graph metadata in Release C, once the
+ * production hostname exists. Release A deliberately emits no canonical URL:
+ * without a real host, any value would point crawlers at a domain that does
+ * not resolve. No production hostname is fabricated here.
+ */
 export const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL ?? '').replace(/\/+$/, '');
 
 /**

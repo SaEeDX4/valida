@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { loadConfig, LOCAL_DEFAULT_ORIGINS } from '../src/config/env.js';
+import { inspect } from 'node:util';
+import { loadConfig, LOCAL_DEFAULT_ORIGINS, REDACTED } from '../src/config/env.js';
+
+/*
+ * From B2 the database connection string is required in every environment.
+ * The B1 cases below therefore start from a valid MONGODB_URI, so each one
+ * passes or fails only because of the variable it is actually about. The
+ * requirement itself is tested explicitly further down.
+ */
+const TEST_DATABASE = { MONGODB_URI: 'mongodb://127.0.0.1:27017/valida_test' };
+const loadWithDatabase = (env) => loadConfig({ ...TEST_DATABASE, ...env });
 
 /**
  * Configuration validation — Doc 15 section 50.
@@ -7,7 +17,7 @@ import { loadConfig, LOCAL_DEFAULT_ORIGINS } from '../src/config/env.js';
  */
 describe('configuration', () => {
   it('applies safe local defaults', () => {
-    const config = loadConfig({});
+    const config = loadWithDatabase({});
     expect(config.appEnv).toBe('local');
     expect(config.port).toBe(4000);
     expect(config.corsAllowedOrigins).toEqual(LOCAL_DEFAULT_ORIGINS);
@@ -15,6 +25,7 @@ describe('configuration', () => {
     expect(config.trustProxy).toBe(false);
     expect(config.rateLimit).toEqual({ windowMs: 60_000, max: 120 });
     expect(config.jsonBodyLimit).toBe('100kb');
+    expect(config.databaseConnectTimeoutMs).toBe(10_000);
   });
 
   it.each([
@@ -29,12 +40,12 @@ describe('configuration', () => {
     ['rate limit window too small', { RATE_LIMIT_WINDOW_MS: '10' }],
     ['rate limit max zero', { RATE_LIMIT_MAX: '0' }],
   ])('rejects %s', (_label, env) => {
-    expect(() => loadConfig(env)).toThrow(/Invalid backend configuration/);
+    expect(() => loadWithDatabase(env)).toThrow(/Invalid backend configuration/);
   });
 
   it('rejects a wildcard CORS origin', () => {
-    expect(() => loadConfig({ CORS_ALLOWED_ORIGINS: '*' })).toThrow(/must not contain "\*"/);
-    expect(() => loadConfig({ CORS_ALLOWED_ORIGINS: 'http://localhost:5173,*' })).toThrow(/must not contain "\*"/);
+    expect(() => loadWithDatabase({ CORS_ALLOWED_ORIGINS: '*' })).toThrow(/must not contain "\*"/);
+    expect(() => loadWithDatabase({ CORS_ALLOWED_ORIGINS: 'http://localhost:5173,*' })).toThrow(/must not contain "\*"/);
   });
 
   it.each([
@@ -45,17 +56,17 @@ describe('configuration', () => {
   ])('rejects malformed CORS origin %s', (origin) => {
     // The message is value-free by construction, so it is matched on the rule
     // wording rather than on the rejected value.
-    expect(() => loadConfig({ CORS_ALLOWED_ORIGINS: origin })).toThrow(/not a canonical origin/);
+    expect(() => loadWithDatabase({ CORS_ALLOWED_ORIGINS: origin })).toThrow(/not a canonical origin/);
   });
 
   it('requires an explicit allowlist in production', () => {
-    expect(() => loadConfig({ APP_ENV: 'production', NODE_ENV: 'production' })).toThrow(
+    expect(() => loadWithDatabase({ APP_ENV: 'production', NODE_ENV: 'production' })).toThrow(
       /CORS_ALLOWED_ORIGINS: is required when APP_ENV=production/,
     );
   });
 
   it('accepts a valid production configuration', () => {
-    const config = loadConfig({
+    const config = loadWithDatabase({
       APP_ENV: 'production',
       NODE_ENV: 'production',
       PORT: '8080',
@@ -70,7 +81,7 @@ describe('configuration', () => {
   it('names the offending variable without printing its value', () => {
     let message = '';
     try {
-      loadConfig({ PORT: 'not-a-port', CORS_ALLOWED_ORIGINS: 'https://valida.lt' });
+      loadWithDatabase({ PORT: 'not-a-port', CORS_ALLOWED_ORIGINS: 'https://valida.lt' });
     } catch (error) {
       message = error.message;
     }
@@ -78,11 +89,52 @@ describe('configuration', () => {
     expect(message).not.toMatch(/not-a-port/);
   });
 
-  it('does not require future-milestone variables', () => {
-    // Requiring MONGODB_URI before B2 would imply a database exists.
-    const config = loadConfig({});
-    expect(config).not.toHaveProperty('mongodbUri');
-    expect(() => loadConfig({ MONGODB_URI: '' })).not.toThrow();
+  it('requires MONGODB_URI from Milestone B2 onward', () => {
+    // B1 deliberately did not require it; B2 connects at startup, so a missing
+    // connection string must stop the process rather than start it half-working.
+    expect(() => loadConfig({})).toThrow(/MONGODB_URI: is required/);
+    expect(() => loadConfig({ MONGODB_URI: '' })).toThrow(/MONGODB_URI/);
+    expect(loadWithDatabase({}).mongodbUri).toBe(TEST_DATABASE.MONGODB_URI);
+  });
+
+  it('still does not require or read variables owned by later milestones', () => {
+    // Requiring storage, email or public-URL settings before B4/B6/Release C
+    // would imply those capabilities exist.
+    const config = loadWithDatabase({
+      RESUME_STORAGE_BUCKET: 'unused',
+      TRANSACTIONAL_EMAIL_API_KEY: 'unused',
+      PUBLIC_SITE_URL: 'unused',
+    });
+    const keys = Object.keys(config).join(' ').toLowerCase();
+    ['storage', 'email', 'publicsite', 'siteurl'].forEach((fragment) =>
+      expect(keys, `unexpected ${fragment} setting`).not.toContain(fragment),
+    );
+    expect(JSON.stringify(config)).not.toMatch(/unused/);
+  });
+
+  it('reports every missing production requirement in one error', () => {
+    let error;
+    try {
+      loadConfig({ APP_ENV: 'production', NODE_ENV: 'production' });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error.name).toBe('ConfigurationError');
+    expect(error.issues.map((issue) => issue.variable)).toEqual(['CORS_ALLOWED_ORIGINS', 'MONGODB_URI']);
+  });
+
+  it('never serialises the database connection string', () => {
+    const secretUri = 'mongodb+srv://admin:s3cr3t@cluster0.example.net/valida?authSource=admin';
+    const config = loadConfig({ MONGODB_URI: secretUri });
+    // The connection code still receives the real value...
+    expect(config.mongodbUri).toBe(secretUri);
+    // ...but JSON, util.inspect (console.log) and a spread copy never show it.
+    [JSON.stringify(config), inspect(config), JSON.stringify({ ...config, port: 1 })].forEach((text) => {
+      expect(text).toContain(REDACTED);
+      [/s3cr3t/, /admin:/, /cluster0/, /example\.net/].forEach((pattern) =>
+        expect(text, `leaked ${pattern}`).not.toMatch(pattern),
+      );
+    });
   });
 });
 
@@ -94,8 +146,8 @@ describe('CORS origin validation (correction cycle 2, finding 3)', () => {
    * because none of them contains a slash after the host.
    */
   const accept = (origin) =>
-    expect(loadConfig({ CORS_ALLOWED_ORIGINS: origin }).corsAllowedOrigins).toEqual([origin]);
-  const reject = (origin) => expect(() => loadConfig({ CORS_ALLOWED_ORIGINS: origin })).toThrow(
+    expect(loadWithDatabase({ CORS_ALLOWED_ORIGINS: origin }).corsAllowedOrigins).toEqual([origin]);
+  const reject = (origin) => expect(() => loadWithDatabase({ CORS_ALLOWED_ORIGINS: origin })).toThrow(
     /Invalid backend configuration/,
   );
 
@@ -111,7 +163,7 @@ describe('CORS origin validation (correction cycle 2, finding 3)', () => {
 
   it('accepts a comma-separated list', () => {
     expect(
-      loadConfig({ CORS_ALLOWED_ORIGINS: 'https://valida.lt, https://www.valida.lt' })
+      loadWithDatabase({ CORS_ALLOWED_ORIGINS: 'https://valida.lt, https://www.valida.lt' })
         .corsAllowedOrigins,
     ).toEqual(['https://valida.lt', 'https://www.valida.lt']);
   });
@@ -145,7 +197,7 @@ describe('CORS origin validation (correction cycle 2, finding 3)', () => {
     // "a, b" is the natural way to write the list in a .env file, so padding
     // around an entry is trimmed. Whitespace INSIDE an origin stays invalid.
     expect(
-      loadConfig({ CORS_ALLOWED_ORIGINS: '  https://valida.lt ,  https://www.valida.lt  ' })
+      loadWithDatabase({ CORS_ALLOWED_ORIGINS: '  https://valida.lt ,  https://www.valida.lt  ' })
         .corsAllowedOrigins,
     ).toEqual(['https://valida.lt', 'https://www.valida.lt']);
     reject('https://exa mple.com');
@@ -163,7 +215,7 @@ describe('configuration errors never contain the rejected value (finding 2)', ()
 
   const messageFor = (env) => {
     try {
-      loadConfig(env);
+      loadWithDatabase(env);
       return '';
     } catch (error) {
       return `${error.message} ${JSON.stringify(error.issues ?? [])}`;
@@ -189,7 +241,7 @@ describe('configuration errors never contain the rejected value (finding 2)', ()
   it('throws a ConfigurationError carrying only variable and rule', () => {
     let error;
     try {
-      loadConfig({ CORS_ALLOWED_ORIGINS: SECRET });
+      loadWithDatabase({ CORS_ALLOWED_ORIGINS: SECRET });
     } catch (caught) {
       error = caught;
     }

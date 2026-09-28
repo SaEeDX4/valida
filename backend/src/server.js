@@ -5,6 +5,7 @@ import { loadConfig, ConfigurationError } from './config/env.js';
 import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
+import { mongoDatabase, DatabaseConnectionError } from './db/mongoose.js';
 
 /**
  * Backend process entry point — Doc 09 section 8, Doc 15 section 50.
@@ -20,18 +21,40 @@ import { safeErrorSummary } from './lib/safeError.js';
  * a half-configured state.
  */
 
-/** Hooks each later milestone registers to close its own dependency. */
-const shutdownHooks = [];
-
 /**
- * Registers a cleanup function run during graceful shutdown.
+ * Runs `task` and settles within `ms` milliseconds whatever it does.
  *
- * B2 will register the MongoDB connection close here, B4 the storage client.
- * B1 registers nothing: there is no connection to close, and faking one would
- * report a clean database shutdown that never happened.
+ * Resolves (never rejects) with one of:
+ *   { status: 'closed' }              — the task finished;
+ *   { status: 'failed', error }       — it threw or rejected;
+ *   { status: 'timed_out' }           — it did not finish in time. The task is
+ *                                        abandoned, not cancelled: a hung
+ *                                        driver call cannot be cancelled, but it
+ *                                        can no longer hold shutdown open.
+ *
+ * The deadline timer is deliberately NOT unref'ed. A never-settling promise
+ * holds no event-loop handle, so with an unref'ed timer the process could run
+ * out of work and exit — with code 0, before the timeout fired and before the
+ * incomplete cleanup was logged or turned into exit code 1 (correction cycle
+ * 2, finding 2). The timer is cleared as soon as the task settles, so it never
+ * delays an exit that is otherwise ready.
  */
-export function onShutdown(name, handler) {
-  shutdownHooks.push({ name, handler });
+export function settleWithin(task, ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ status: 'timed_out' }), Math.max(0, ms));
+    Promise.resolve()
+      .then(task)
+      .then(
+        () => {
+          clearTimeout(timer);
+          resolve({ status: 'closed' });
+        },
+        (error) => {
+          clearTimeout(timer);
+          resolve({ status: 'failed', error });
+        },
+      );
+  });
 }
 
 /**
@@ -39,31 +62,109 @@ export function onShutdown(name, handler) {
  *
  * Returns handles instead of calling process.exit, so an integration test can
  * start and stop a real server without terminating the test runner.
+ *
+ * `database` is the connector used to reach MongoDB. It defaults to the real
+ * Mongoose connector and production never overrides it, so `npm start` always
+ * connects to the database named by MONGODB_URI. The parameter exists so the
+ * HTTP lifecycle tests can run without a MongoDB server; persistence and
+ * uniqueness are proven only by the real-database suite (tests/db).
  */
-export async function startServer({ env = process.env } = {}) {
+export async function startServer({
+  env = process.env,
+  database = mongoDatabase,
+  // Bounds the dependency cleanup after a failed startup (see below).
+  cleanupTimeoutMs = 10_000,
+  // Tests pass a capturing logger to assert what is written; production never does.
+  logger: injectedLogger,
+} = {}) {
   const config = loadConfig(env);
-  const logger = createLogger({
-    level: config.logLevel,
-    appEnv: config.appEnv,
-    isProduction: config.isProduction,
-  });
+  const logger =
+    injectedLogger ??
+    createLogger({
+      level: config.logLevel,
+      appEnv: config.appEnv,
+      isProduction: config.isProduction,
+    });
   const readiness = new Readiness();
 
-  // Configuration is the one dependency B1 genuinely satisfies. database,
-  // resumeStorage and notifications stay not_implemented until B2/B4/B6, so
-  // readiness correctly reports 503 at this baseline.
+  /*
+   * Cleanup functions run during graceful shutdown, one list per server
+   * instance. B2 registers the MongoDB close; B4 will register the storage
+   * client. A module-level list (the B1 shape) would be shared by every server
+   * started in the same process, so one instance's shutdown could close — or
+   * fail to close — another instance's dependencies.
+   */
+  const shutdownHooks = [];
+  const onShutdown = (name, handler) => {
+    shutdownHooks.push({ name, handler });
+  };
+
+  /**
+   * Runs every registered cleanup within ONE shared deadline, so a dependency
+   * whose close never settles (a hung driver, an unreachable server) cannot
+   * hold shutdown open. Each hook is still started, in order; each outcome is
+   * reported honestly and safely — a classified error, never a raw message.
+   */
+  async function runShutdownHooks(budgetMs) {
+    const deadline = Date.now() + budgetMs;
+    const outcome = { closed: [], failed: [], timedOut: [] };
+    for (const { name, handler } of shutdownHooks) {
+      const remainingMs = Math.max(0, deadline - Date.now());
+      const result = await settleWithin(handler, remainingMs);
+      if (result.status === 'closed') {
+        outcome.closed.push(name);
+        logger.info({ dependency: name }, 'dependency closed');
+      } else if (result.status === 'failed') {
+        outcome.failed.push(name);
+        logger.error({ dependency: name, err: safeErrorSummary(result.error) }, 'dependency failed to close');
+      } else {
+        outcome.timedOut.push(name);
+        logger.error({ dependency: name, timeoutMs: budgetMs }, 'dependency close timed out');
+      }
+    }
+    return outcome;
+  }
+
   readiness.set('configuration', DEPENDENCY_STATE.READY);
+
+  /*
+   * B2 — connect to MongoDB before the socket opens.
+   *
+   * Startup fails if the database is unreachable: a backend that listens
+   * without its database would accept traffic it cannot serve. connectDatabase
+   * sets the `database` readiness dependency from the real connection events
+   * and keeps it current if the connection drops later.
+   *
+   * resumeStorage (B4) and notifications (B6) remain not_implemented, so
+   * overall readiness still answers the canonical 503 "Service is not ready."
+   * Marking them ready to obtain a 200 would be a false claim.
+   */
+  await database.connect({ config, logger, readiness });
+  onShutdown('mongodb', () => database.disconnect({ logger, readiness }));
 
   const app = createApp({ config, logger, readiness });
   const server = http.createServer(app);
 
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(config.port, () => {
-      server.removeListener('error', reject);
-      resolve();
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(config.port, () => {
+        server.removeListener('error', reject);
+        resolve();
+      });
     });
-  });
+  } catch (error) {
+    /*
+     * The socket could not be bound (a port already in use, for instance).
+     * The database is already connected by now, so close it before failing:
+     * a rejected startServer must not leave an open connection behind.
+     */
+    readiness.beginShutdown();
+    // Bounded like shutdown: a hanging close must not turn a failed start
+    // into a process that never exits.
+    await runShutdownHooks(cleanupTimeoutMs);
+    throw error;
+  }
 
   // appEnv is already in the logger's base fields; repeating it here produced
   // a duplicated key in every startup line.
@@ -86,49 +187,61 @@ export async function startServer({ env = process.env } = {}) {
    * Order matters:
    *   1. mark readiness unavailable, so a load balancer stops sending new work
    *      before the socket closes and in-flight requests are cut off;
-   *   2. stop accepting connections and let open requests finish;
-   *   3. run dependency hooks (none in B1);
-   *   4. resolve, leaving the caller to decide about exiting.
+   *   2. stop accepting connections and let open requests finish — at most
+   *      `timeoutMs`, after which remaining connections are closed;
+   *   3. run dependency hooks (B2: close the MongoDB connection) — together at
+   *      most `dependencyTimeoutMs` (default: the same as `timeoutMs`);
+   *   4. resolve with an outcome, leaving the caller to decide about exiting.
    *
-   * A timeout bounds the wait so a stuck connection cannot block shutdown for
-   * ever.
+   * The whole sequence is therefore bounded by timeoutMs + dependencyTimeoutMs,
+   * whatever a connection or a dependency does. Nothing that did not finish is
+   * reported as closed: the outcome's `clean` is true only when the HTTP server
+   * closed in time and every dependency closed successfully.
+   *
+   * Calling it again while or after it runs resolves undefined and does
+   * nothing.
    */
   let shuttingDown = false;
-  async function shutdown(reason, { timeoutMs = 10_000 } = {}) {
-    if (shuttingDown) return;
+  async function shutdown(reason, { timeoutMs = 10_000, dependencyTimeoutMs = timeoutMs } = {}) {
+    if (shuttingDown) return undefined;
     shuttingDown = true;
 
     logger.info({ reason }, 'shutdown started');
     readiness.beginShutdown();
 
-    await new Promise((resolve) => {
+    const http = await new Promise((resolve) => {
       const timer = setTimeout(() => {
-        logger.warn({ timeoutMs }, 'shutdown timed out waiting for connections; closing anyway');
-        resolve();
+        logger.warn({ timeoutMs }, 'shutdown timed out waiting for connections; closing them');
+        server.closeAllConnections?.();
+        resolve('timed_out');
       }, timeoutMs);
-      timer.unref?.();
+      // Kept referenced for the same reason as in settleWithin: the deadline
+      // itself must keep the process alive until the outcome is reported. It
+      // is cleared the moment the server closes.
 
       server.close(() => {
         clearTimeout(timer);
-        resolve();
+        resolve('closed');
       });
       // Idle keep-alive sockets would otherwise hold the server open.
       server.closeIdleConnections?.();
     });
 
-    for (const { name, handler } of shutdownHooks) {
-      try {
-        await handler();
-        logger.info({ dependency: name }, 'dependency closed');
-      } catch (error) {
-        logger.error({ dependency: name, err: safeErrorSummary(error) }, 'dependency failed to close');
-      }
-    }
+    const dependencies = await runShutdownHooks(dependencyTimeoutMs);
+    const clean = http === 'closed' && dependencies.failed.length === 0 && dependencies.timedOut.length === 0;
 
-    logger.info({ reason }, 'shutdown complete');
+    if (clean) {
+      logger.info({ reason }, 'shutdown complete');
+    } else {
+      logger.error(
+        { reason, http, failed: dependencies.failed, timedOut: dependencies.timedOut },
+        'shutdown finished with incomplete cleanup',
+      );
+    }
+    return { reason, clean, http, dependencies };
   }
 
-  return { app, server, config, logger, readiness, shutdown };
+  return { app, server, config, logger, readiness, shutdown, onShutdown };
 }
 
 /**
@@ -136,18 +249,30 @@ export async function startServer({ env = process.env } = {}) {
  *
  * Kept separate from startServer so importing the module in a test neither
  * registers global signal handlers nor risks exiting the test runner.
+ *
+ * The exit code is honest: 0 only when shutdown reports a clean finish, 1 when
+ * any cleanup failed or timed out, or when a second signal arrives before
+ * shutdown has finished (the operator is forcing the exit). `processRef` exists
+ * so this can be tested without a real signal or a real exit.
  */
-export function installSignalHandlers({ shutdown, logger }) {
+export function installSignalHandlers({ shutdown, logger }, { processRef = process } = {}) {
+  let handling = false;
   const handle = (signal) => {
+    if (handling) {
+      logger.warn({ signal }, 'second signal received; exiting before shutdown finished');
+      processRef.exit(1);
+      return;
+    }
+    handling = true;
     shutdown(signal)
-      .then(() => process.exit(0))
+      .then((outcome) => processRef.exit(outcome?.clean ? 0 : 1))
       .catch((error) => {
         logger.error({ err: safeErrorSummary(error) }, 'shutdown failed');
-        process.exit(1);
+        processRef.exit(1);
       });
   };
-  process.on('SIGINT', () => handle('SIGINT'));
-  process.on('SIGTERM', () => handle('SIGTERM'));
+  processRef.on('SIGINT', () => handle('SIGINT'));
+  processRef.on('SIGTERM', () => handle('SIGTERM'));
 }
 
 /**
@@ -178,6 +303,43 @@ export function isMainModule(moduleUrl = import.meta.url, entryPath = process.ar
   }
 }
 
+/**
+ * The single line written to stderr when startup fails.
+ *
+ * Startup failures happen before a logger exists, so stderr is the only
+ * channel, and what is written depends on whether the text is safe BY
+ * CONSTRUCTION:
+ *
+ * - A ConfigurationError is. Every word comes from the fixed rule table in
+ *   config/env.js and no environment value is interpolated, so it is printed in
+ *   full and tells an operator exactly what to fix.
+ * - A DatabaseConnectionError carries only fixed text. The driver error behind
+ *   it quotes hosts and sometimes the URI with its credentials, so none of that
+ *   is printed — only which variable to check.
+ * - Anything else is an arbitrary exception whose message and stack may carry
+ *   a connection string, a credential or a filesystem path, so only the bounded
+ *   classification is printed. Never error.message, never the stack.
+ *
+ * Exported so its wording can be tested without spawning a process.
+ */
+export function formatStartupFailure(error) {
+  if (error instanceof ConfigurationError) {
+    return `[valida-backend] failed to start:\n${error.message}`;
+  }
+  if (error instanceof DatabaseConnectionError) {
+    return (
+      '[valida-backend] failed to start: the database connection could not be established. ' +
+      'Check that MONGODB_URI names a reachable MongoDB server. ' +
+      'Detail is withheld because it may contain configuration values or credentials.'
+    );
+  }
+  const { type, code } = safeErrorSummary(error);
+  return (
+    `[valida-backend] failed to start: ${type}${code ? ` (${code})` : ''}. ` +
+    'Detail is withheld because it may contain configuration values or credentials.'
+  );
+}
+
 /*
  * Only run when executed directly, never when imported by a test.
  * Importing this module must have no side effect beyond defining functions.
@@ -187,27 +349,7 @@ if (isMainModule()) {
     const started = await startServer();
     installSignalHandlers(started);
   } catch (error) {
-    /*
-     * Startup failed before a logger existed, so stderr is the only channel.
-     * What is written depends on whether the message is safe BY CONSTRUCTION.
-     *
-     * A ConfigurationError is: every word of it comes from the fixed rule table
-     * in config/env.js and no environment value is ever interpolated, so it can
-     * be printed in full and tells an operator exactly what to fix.
-     *
-     * Anything else is an arbitrary exception whose message and stack may carry
-     * a connection string, a credential or a filesystem path, so only the
-     * bounded classification is printed. Never error.message, never the stack.
-     */
-    if (error instanceof ConfigurationError) {
-      console.error(`[valida-backend] failed to start:\n${error.message}`);
-    } else {
-      const { type, code } = safeErrorSummary(error);
-      console.error(
-        `[valida-backend] failed to start: ${type}${code ? ` (${code})` : ''}. ` +
-          'Detail is withheld because it may contain configuration values or credentials.',
-      );
-    }
+    console.error(formatStartupFailure(error));
     process.exit(1);
   }
 }

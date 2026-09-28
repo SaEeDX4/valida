@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { buildApp, buildReadyApp } from './helpers.js';
+import { buildApp, buildReadyApp, buildConnectedApp } from './helpers.js';
 import { Readiness, DEPENDENCY_STATE } from '../src/modules/health/readiness.js';
 
 describe('GET /api/v1/health', () => {
@@ -72,7 +72,8 @@ describe('GET /api/v1/health', () => {
 });
 
 describe('GET /api/v1/health/ready', () => {
-  it('returns 503 at the B1 baseline, because three dependencies do not exist yet', async () => {
+  it('returns 503 when only configuration is ready', async () => {
+    // The state before the database connects, or after it is lost.
     const response = await request(buildApp()).get('/api/v1/health/ready');
     expect(response.status).toBe(503);
     expect(response.body.success).toBe(false);
@@ -82,12 +83,26 @@ describe('GET /api/v1/health/ready', () => {
     expect(response.body.meta.requestId).toBeTruthy();
   });
 
+  it('still returns the canonical 503 with the database connected, because B4 and B6 are unimplemented', async () => {
+    // The state a running B2 server reaches. Resume storage and notifications
+    // are required and do not exist yet, so claiming ready would be false.
+    const response = await request(buildConnectedApp()).get('/api/v1/health/ready');
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      success: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Service is not ready.' },
+      meta: { requestId: expect.any(String) },
+    });
+  });
+
   it('never names the failing dependency in the public body', async () => {
-    const response = await request(buildApp()).get('/api/v1/health/ready');
-    const body = JSON.stringify(response.body);
-    ['database', 'mongo', 'resumeStorage', 'notifications', 'configuration', 'not_implemented'].forEach(
-      (leak) => expect(body.toLowerCase()).not.toContain(leak.toLowerCase()),
-    );
+    for (const app of [buildApp(), buildConnectedApp()]) {
+      const response = await request(app).get('/api/v1/health/ready');
+      const body = JSON.stringify(response.body);
+      ['database', 'mongo', 'resumeStorage', 'notifications', 'configuration', 'not_implemented'].forEach(
+        (leak) => expect(body.toLowerCase()).not.toContain(leak.toLowerCase()),
+      );
+    }
   });
 
   it('returns 200 ready only when every required dependency is ready', async () => {

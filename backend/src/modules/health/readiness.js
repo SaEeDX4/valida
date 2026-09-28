@@ -5,15 +5,16 @@
  * private resume storage adapter initialised and the transactional email
  * integration configured.
  *
- * B1 implements only the first. The rest do not exist yet — so they are
- * registered as REQUIRED and left in the `not_implemented` state rather than
- * omitted. Omitting them would make the service report itself ready while
- * three required dependencies are absent, which is exactly the false success
- * this project forbids. A B1 runtime therefore answers 503 on /health/ready,
- * truthfully.
+ * B1 implemented configuration and B2 the database (set from the real
+ * connection events in db/mongoose.js). Resume storage (B4) and notifications
+ * (B6) do not exist yet — so they are registered as REQUIRED and left in the
+ * `not_implemented` state rather than omitted. Omitting them would make the
+ * service report itself ready while required dependencies are absent, which
+ * is exactly the false success this project forbids. A B2 runtime therefore
+ * answers 503 on /health/ready, truthfully, even with MongoDB connected.
  *
  * Each later milestone flips its own dependency to ready when it genuinely
- * connects: B2 database, B4 resumeStorage, B6 notifications.
+ * connects: B4 resumeStorage, B6 notifications.
  */
 
 export const DEPENDENCY_STATE = {

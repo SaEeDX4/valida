@@ -68,6 +68,10 @@ export function buildApp(options = {}) {
     logger: options.logger ?? silentLogger(),
     readiness,
     registerTestRoutes: options.registerTestRoutes,
+    // B3: undefined keeps createApp's production defaults (the real MongoDB
+    // repository and the real clock).
+    jobRepository: options.jobRepository,
+    clock: options.clock,
   });
 }
 

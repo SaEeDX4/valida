@@ -12,32 +12,31 @@ One repository. One React frontend. One Express backend. One MongoDB database
 
 | Item      | Status                                                               |
 | --------- | -------------------------------------------------------------------- |
-| Release   | A — Fast Website Foundation                                          |
-| Milestone | A6 — Frontend Quality Baseline                                       |
-| Frontend  | Pre-backend public frontend implemented; A6 awaiting Windows/browser QA. |
-| Backend   | Starts and stops. No routes, no database, no API yet.                |
-| Database  | Not connected (Milestone B2)                                         |
+| Release   | B — Recruitment Backend (Release A approved)                         |
+| Milestone | B3 — Job Provisioning & Public Jobs API: **verified and GPT-approved** |
+| Frontend  | Release A public frontend. Not yet connected to the backend API — that is Release C1. |
+| Backend   | B1 and B2 verified and merged. B3 adds the public Jobs API and Job provisioning. Readiness answers 503 until B4 and B6. See [`backend/README.md`](backend/README.md). |
+| Database  | MongoDB (B2). The real initial role is provisioned only as a DRAFT — its content is AWAITING INPUT. |
 
-The pre-backend public frontend is implemented: Home, About, Privacy, Legal,
-Careers, Job Detail, Apply and the 404, on the shared design system. That is an
-implementation statement, not an acceptance one — Release A is accepted only
-once A6 passes Windows/browser QA and is GPT-approved.
-
-| Status | |
+| Milestone | Status |
 | --- | --- |
-| A6 implementation | **Automated / static verification complete** |
-| Windows / browser / NVDA / Lighthouse QA | **Not yet run** — see the QA matrix |
-| Acceptance target, after that QA and ChatGPT approval | **Ready for backend integration** |
+| Release A (A1–A6) — public frontend foundation | **Approved** |
+| B1 — Backend runtime & configuration | **Verified and merged** |
+| B2 — MongoDB models & indexes | **Verified and merged** |
+| B3 — Job provisioning & public Jobs API | **Verified and GPT-approved** (Windows Node v24.21.0; 917 offline tests + 82 real-MongoDB tests; audit: 0 vulnerabilities) |
+| C1 — Frontend ↔ Jobs API integration | Not started |
 | Phase 1 | **Not verified** — only after Release B and Release C |
 
-The Careers, Job Detail and Apply surfaces call a real API boundary, but no
-backend exists yet, so against a running build Careers correctly shows its error
-state rather than inventing roles. Controlled development fixtures exist for UI
-review only; they are impossible to activate in a production build.
+The public frontend (Home, About, Privacy, Legal, Careers, Job Detail, Apply
+and the 404) calls a real API boundary. A backend exists and serves the Jobs
+API, but the frontend is not connected to it until Release C1, so against a
+running frontend build Careers correctly shows its error state rather than
+inventing roles. Controlled development fixtures exist for UI review only; they
+are impossible to activate in a production build.
 
-Browser, device and assistive-technology checks are listed in
-[`docs/A6_WINDOWS_QA_MATRIX.md`](docs/A6_WINDOWS_QA_MATRIX.md). Anything not yet
-built is listed under **Not yet built** below, and what is built under
+The browser, device and assistive-technology checklist is
+[`docs/A6_WINDOWS_QA_MATRIX.md`](docs/A6_WINDOWS_QA_MATRIX.md). What is not yet
+built is listed under **Not yet built** below, and what Release A built under
 **Built in Release A**.
 
 ---
@@ -138,7 +137,8 @@ are committed and contain safe placeholders only.
 
 - **Backend** — the npm scripts pass `--env-file-if-exists=.env` to Node, so
   Node 24 loads `backend/.env` natively. No `dotenv` package is required.
-  If the file is absent the server still starts using its built-in defaults.
+  From B2 the backend needs `MONGODB_URI` and a reachable MongoDB to start —
+  see [`backend/README.md`](backend/README.md).
 - **Frontend** — Vite loads `frontend/.env` automatically. Only variables
   prefixed `VITE_` are exposed to the browser bundle.
 
@@ -168,18 +168,11 @@ npm install
 npm run dev
 ```
 
-Expected output:
+Expected output: structured JSON log lines, including `"msg":"database connected"`
+and `"msg":"backend listening"` with `"port":4000`. It needs a reachable
+MongoDB (see [`backend/README.md`](backend/README.md)).
 
-```
-[valida-backend] listening on http://localhost:4000 (NODE_ENV=development, APP_ENV=local)
-```
-
-Stop with `Ctrl+C`. Expected output on stop:
-
-```
-[valida-backend] SIGINT received, closing server
-[valida-backend] server closed
-```
+Stop with `Ctrl+C`; the log ends with `"msg":"shutdown complete"`.
 
 **Terminal 2 — Frontend** (from `frontend/`)
 
@@ -202,12 +195,13 @@ branded 404.
 There should be no browser console errors and no red text in the terminal.
 
 **Careers shows "Open roles are temporarily unavailable." — this is correct.**
-No backend exists yet (Release B), so the real API request fails and Careers
-reports the failure honestly instead of inventing roles or claiming there are
-none. Job Detail and Apply behave the same way.
+The frontend is not connected to the backend until Release C1, so the real API
+request fails and Careers reports the failure honestly instead of inventing
+roles or claiming there are none. Job Detail and Apply behave the same way.
 
-To review the Careers, Job Detail and Apply states before the backend exists,
-enable the controlled development fixtures in `frontend/.env`:
+To review the Careers, Job Detail and Apply states before the frontend is
+connected to the backend (Release C1), enable the controlled development
+fixtures in `frontend/.env`:
 
 ```powershell
 VITE_ENABLE_A5_FIXTURES=true
@@ -249,9 +243,9 @@ them, even with the flag set. Set the flag back to `false` when you finish.
 | `npm run dev` | Start the server with automatic restart on file change |
 
 The frontend test stack (Vitest, React Testing Library, axe-core — Document 17)
-landed in A2. The backend has no test script yet; Supertest and Vitest are
-introduced with the Express application in B1. Playwright E2E arrives in
-Release C.
+landed in A2. The backend's test, verification (`verify:b1`–`verify:b3`), index
+and Job provisioning commands are documented in
+[`backend/README.md`](backend/README.md). Playwright E2E arrives in Release C.
 
 ---
 
@@ -285,9 +279,9 @@ npm run build          # expect "built in ..." and a dist/ folder
 # 2. Frontend dev server
 npm run dev            # expect http://localhost:5173, then Ctrl+C
 
-# 3. Backend startup
+# 3. Backend startup (needs MONGODB_URI and a reachable MongoDB since B2)
 cd ..\backend
-npm start              # expect the listening line, then Ctrl+C
+npm start              # expect "backend listening" in the log, then Ctrl+C
 
 # 4. Fresh reproducible install
 cd ..\frontend
@@ -326,8 +320,8 @@ error and that you opened <http://localhost:5173>, not the `dist/` files
 directly.
 
 **Careers says "Open roles are temporarily unavailable."**
-Correct until Release B. No backend exists, so the Jobs request fails and the
-page reports it rather than showing invented roles. To review the role states,
+Correct until Release C1 connects the frontend to the backend: the Jobs
+request fails and the page reports it rather than showing invented roles. To review the role states,
 use the development fixtures described under **Daily development**.
 
 **Text on the page is prefixed `[DEV FIXTURE]`**
@@ -352,23 +346,21 @@ measuring.
 | Careers, Job Detail and Apply states, API boundary, regional job presentation   | A5        |
 | Route-level accessibility, metadata, keyboard and budget quality gates; ApplyLayout | A6        |
 
-The table lists implemented capability, not accepted milestones. Release A is
-complete only once A6 is GPT-approved after Windows and browser QA. Its
-acceptance target is **ready for backend integration**; it is **not**
-Phase 1 verification.
+Release A is approved. Its acceptance target was **ready for backend
+integration**; it is **not** Phase 1 verification, which follows Releases B
+and C.
 
 ---
 
 ## Not yet built
 
 These are scheduled, not forgotten. Each is owned by a named milestone in
-`18_IMPLEMENTATION_ROADMAP.md`.
+`18_IMPLEMENTATION_ROADMAP.md`. (B1–B3 — the Express foundation, MongoDB models
+and indexes, the public Jobs API and Job provisioning — are built; see
+[`backend/README.md`](backend/README.md).)
 
 | Capability                                                                                                           | Milestone |
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
-| `/api/v1` routing, config validation, security headers, CORS, rate limiting, logging, health and readiness endpoints | B1        |
-| MongoDB connection, Job and Application models, indexes                                                              | B2        |
-| Public Jobs API and Job provisioning script                                                                          | B3        |
 | Private resume storage and file validation                                                                           | B4        |
 | Application submission workflow                                                                                      | B5        |
 | Transactional notifications                                                                                          | B6        |

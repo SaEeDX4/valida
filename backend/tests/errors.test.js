@@ -25,7 +25,11 @@ const boom = (api) => {
 describe('unknown routes', () => {
   it.each([
     '/api/v1/does-not-exist',
-    '/api/v1/jobs',
+    // B1 used the then-unbuilt '/api/v1/jobs' here. B3 implements it, so the
+    // case now targets a path below it that no route serves (B5 owns
+    // .../applications); /api/v1/jobs itself is covered by tests/jobs-http.test.js.
+    '/api/v1/jobs/cybersecurity-specialist/applications',
+    '/api/v1/jobs/cybersecurity-specialist/unknown',
     '/api/v2/health',
     '/',
     '/admin',

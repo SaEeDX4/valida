@@ -12,7 +12,8 @@ import { parseMongoUri } from '../db/connectionString.js';
  * TRUTHFULNESS RULE
  * This schema knows only about configuration the backend actually consumes.
  * B1 added the runtime variables; B2 added MONGODB_URI (required) and
- * MONGODB_CONNECT_TIMEOUT_MS. Resume storage (B4), transactional email (B6)
+ * MONGODB_CONNECT_TIMEOUT_MS; B3 added MONGODB_QUERY_TIMEOUT_MS (optional).
+ * Resume storage (B4), transactional email (B6)
  * and PUBLIC_SITE_URL (Release C) are recorded in .env.example as future
  * variables but are deliberately NOT required or read here: requiring a
  * variable nothing uses would imply the capability exists.
@@ -152,6 +153,16 @@ const baseSchema = z.object({
    * rather than a process that hangs and never reports.
    */
   MONGODB_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(10_000),
+
+  /*
+   * Upper bound on one public read against MongoDB — Milestone B3.
+   *
+   * A request for Jobs must end in a bounded time even when the database is
+   * slow or unresponsive, and must then fail with 503 rather than hang or
+   * return an empty success (Doc 09 sections 57 and 70). Also sent to the
+   * server as maxTimeMS. Exact value is deployment tuning (Doc 13 section 56).
+   */
+  MONGODB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5_000),
 });
 
 
@@ -190,6 +201,7 @@ const RULE_TEXT = {
     'replica-set host list or SRV form) with no whitespace, and any database name must be ' +
     'a valid MongoDB database name',
   MONGODB_CONNECT_TIMEOUT_MS: 'must be an integer between 1000 and 120000 (milliseconds)',
+  MONGODB_QUERY_TIMEOUT_MS: 'must be an integer between 500 and 60000 (milliseconds)',
   MONGODB_URI_REQUIRED:
     'is required — the backend connects to MongoDB from Milestone B2 and will ' +
     'not start without it',
@@ -324,6 +336,7 @@ export function loadConfig(env = process.env) {
      */
     mongodbUri: config.MONGODB_URI,
     databaseConnectTimeoutMs: config.MONGODB_CONNECT_TIMEOUT_MS,
+    databaseQueryTimeoutMs: config.MONGODB_QUERY_TIMEOUT_MS,
     rateLimit: Object.freeze({
       windowMs: config.RATE_LIMIT_WINDOW_MS,
       max: config.RATE_LIMIT_MAX,

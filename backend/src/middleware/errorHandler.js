@@ -57,7 +57,10 @@ export function errorHandler(logger) {
         'request failed',
       );
       res.status(appError.status).json(
-        errorEnvelope({ code: appError.code, message: appError.message }, req.id),
+        errorEnvelope(
+          { code: appError.code, message: appError.message, fieldErrors: appError.fieldErrors },
+          req.id,
+        ),
       );
       return;
     }

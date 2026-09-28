@@ -4,7 +4,7 @@ Node.js + Express REST API for the Valida platform.
 
 | | |
 | --- | --- |
-| Milestone | **B2 — MongoDB Models & Indexes** (on top of B1 — Backend Runtime & Configuration) |
+| Milestone | **B3 — Job Provisioning & Public Jobs API** (on top of B1 — Backend Runtime & Configuration, and B2 — MongoDB Models & Indexes) |
 | Runtime | Node.js `>=24.0.0 <25.0.0`, ESM |
 | API base path | `/api/v1` |
 | Database | MongoDB via Mongoose `9.10.2` (driver `mongodb` 7.6.0 — MongoDB server 4.4 or newer) |
@@ -18,10 +18,19 @@ B2 adds the real MongoDB connection (startup, readiness, shutdown), the `Job`
 and `Application` models of Doc 10, their lifecycle/validation helpers, the six
 required indexes, and explicit commands to apply and check them.
 
-It still delivers **no public business endpoint**. There is no `/api/v1/jobs`,
-no application submission, no upload and no email. `/api/v1/health/ready`
-correctly answers **503 "Service is not ready."**, because resume storage (B4)
-and notifications (B6) are required and do not exist yet.
+B3 makes Careers data real and database-backed: the public Jobs API
+(`GET /api/v1/jobs`, `GET /api/v1/jobs/:jobSlug`) reads MongoDB with
+server-controlled publication and closing rules, and a controlled operator
+command provisions Jobs from a validated definition file through the B2
+services. The real initial role, *Cybersecurity Specialist*, is provisioned
+only as a **DRAFT** — its employment type, final schedule wording, description,
+responsibilities and requirements are **AWAITING INPUT**, so it is not public.
+
+There is still no application submission, upload or email.
+`/api/v1/health/ready` correctly answers **503 "Service is not ready."**,
+because resume storage (B4) and notifications (B6) are required and do not
+exist yet. The Jobs API does not depend on them and serves while readiness is
+503.
 
 ---
 
@@ -59,9 +68,14 @@ npm run dev   # start with --watch for local development
 Default: <http://localhost:4000>
 
 ```powershell
-curl http://localhost:4000/api/v1/health
-curl -i http://localhost:4000/api/v1/health/ready
+curl.exe http://localhost:4000/api/v1/health
+curl.exe -i http://localhost:4000/api/v1/health/ready
+curl.exe -i http://localhost:4000/api/v1/jobs
+curl.exe -i http://localhost:4000/api/v1/jobs/cybersecurity-specialist
 ```
+
+(`curl.exe` is the curl that ships with Windows 10 and 11; in Windows
+PowerShell 5.1 plain `curl` is an alias for `Invoke-WebRequest`.)
 
 ## Test
 
@@ -71,14 +85,25 @@ npm run test:watch
 npm run verify:b1      # offline tests + npm audit
 npm run test:db        # REAL-database suite — needs MONGODB_TEST_URI
 npm run verify:b2      # full B2 gate — see "B2 verification" below
+npm run verify:b3      # full B3 gate — see "B3 verification" below
 npm run db:indexes:apply
 npm run db:indexes:check
+npm run jobs:provision:plan  -- --file provisioning/jobs/cybersecurity-specialist.json
+npm run jobs:provision:apply -- --file provisioning/jobs/cybersecurity-specialist.json
 ```
 
 `npm test` deliberately excludes `tests/db`. Those tests need a real MongoDB;
 a default command that silently skipped them could report green while
 persistence and uniqueness were never exercised. Passing `npm test` is
-therefore **not** B2 verification — `npm run verify:b2` is.
+therefore **not** B2 or B3 verification — `npm run verify:b3` (which also
+runs every B2 database test) is.
+
+The offline suite also runs the provisioning module and the unmodified
+provisioning CLI over a **stand-in collection** (`tests/fixtures/fakeJobStore.js`,
+preloaded into the CLI only by tests) to count the writes a run sends and to
+inject failures at exact points — after an acknowledged insert, on
+publication, on the read-back. That proves the outcome reporting, not
+persistence.
 
 ---
 
@@ -96,7 +121,8 @@ therefore **not** B2 verification — `npm run verify:b2` is.
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
 | `MONGODB_CONNECT_TIMEOUT_MS` | no | `10000` | 1000–120000. How long startup waits for MongoDB before failing |
-| `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
+| `MONGODB_QUERY_TIMEOUT_MS` | no | `5000` | 500–60000 (B3). Upper bound on one public Jobs read; also sent to MongoDB as `maxTimeMS`. A slower or unresponsive database gives `503`, never a hung request or an empty list |
+| `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
 
 Configuration is validated once at startup with Zod. **Invalid or missing
 production-critical configuration stops the process** rather than serving
@@ -160,6 +186,97 @@ infrastructure is down. The detail goes to the internal log.
 
 ---
 
+### `GET /api/v1/jobs` — open Jobs (B3)
+
+Public, no authentication (Doc 09 §§48-58). Returns only Jobs whose
+**effective** application status is `OPEN` at the server's current time:
+
+```
+status == PUBLISHED  AND  publishedAt <= now  AND  (closesAt is null OR closesAt > now)
+```
+
+Draft, Closed, Archived, not-yet-published and expired Jobs never appear, and
+no query parameter can widen the selection.
+
+| Parameter | Default | Rule |
+| --- | --- | --- |
+| `page` | `1` | whole number ≥ 1 |
+| `limit` | `20` | whole number 1–50 |
+
+Any other parameter, a repeated parameter or a malformed value is
+`422 VALIDATION_FAILED` with `fieldErrors` (`page` / `limit` / `query`); the
+rejected value and unknown names are never echoed. Order is `publishedAt` DESC,
+then `createdAt` DESC (`_id` DESC breaks exact ties so pages are stable).
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "title": "…", "slug": "…", "location": "…",
+        "workArrangement": "FULLY_REMOTE", "employmentType": "…",
+        "schedule": "…", "weeklyHours": 30,
+        "compensation": { "currency": "CAD", "amount": 35, "unit": "HOUR", "gross": true },
+        "publishedAt": "2026-10-01T11:00:00.000Z", "closesAt": null,
+        "applicationStatus": "OPEN"
+      }
+    ],
+    "pagination": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
+  },
+  "meta": { "requestId": "…" }
+}
+```
+
+- **Zero Jobs is `200`** with `items: []` and `total: 0, totalPages: 0` — never 404.
+- **A database failure is `503 SERVICE_UNAVAILABLE`** — never an empty success
+  the Careers page could mistake for "no open roles". Disconnected MongoDB is
+  detected before querying (no command buffering); a query that exceeds
+  `MONGODB_QUERY_TIMEOUT_MS` is abandoned and answered with 503.
+- A page past the end is `200` with an empty `items` and the true totals.
+- Every response on `/api/v1/jobs…`, success or error, carries
+  **`Cache-Control: no-store`** (Doc 09 §58) — including a `400`/`413` from the
+  JSON body parser, a `429` from the rate limiter and a `404` for an unrouted
+  path below it, because the policy is applied before those middlewares
+  (`src/middleware/noStore.js`, mounted in `app.js`). Other routes are
+  unaffected.
+
+### `GET /api/v1/jobs/:jobSlug` — one public Job (B3)
+
+Doc 09 §§59-70. Returned when the Job is **OPEN**, or a **previously public**
+Job that no longer accepts applications — `status CLOSED`, or `PUBLISHED` with
+`closesAt <= now` — retained at its stable URL. The detail adds `description`,
+`responsibilities`, `requirements`, `preferredQualifications` and
+`applicationForm`:
+
+| `applicationStatus` | `applicationForm` |
+| --- | --- |
+| `OPEN` | `{ phone: { enabled, required }, message: { enabled, required, maxLength }, resume: { required: true, maxBytes: 5242880, allowedExtensions: [".pdf", ".docx"] }, screeningQuestions: [{ id, type, prompt, required, options }] }` |
+| `CLOSED` | `null` — the frontend cannot reconstruct an active form |
+
+`resume` comes from the fixed Phase 1 server policy
+(`src/config/resumePolicy.js`, Doc 10 §46), not from Job data. Screening
+question `id`s are the Job's server-generated UUIDs; `SINGLE_SELECT` options are
+`{ optionId, label }`, every other type has `options: []`.
+
+An **unknown, malformed, Draft, Archived or not-yet-published** slug is the
+same `404 JOB_NOT_FOUND "This role isn't available."` — the responses are
+indistinguishable, and an invalid slug never reaches the database. Query
+parameters are not accepted (`422`). A database failure is `503`.
+
+**Never exposed** by either endpoint: MongoDB `_id` (or any embedded id),
+`internalOccupationalReference`, `status`, `closedAt`, `archivedAt`,
+`createdAt`, `updatedAt`, `__v`, `amountMinor`, the location codes, or any
+field not listed above. DTOs are built field by field from an allowlist
+(`src/modules/jobs/job.mapper.js`), and the repository's projections do not
+even read internal fields.
+
+**Money.** MongoDB stores exact integer minor units (`3500`); the DTO carries
+`amount: 35`, converted with the currency's ISO 4217 exponent from an explicit
+table (`src/modules/jobs/money.js`). Only **CAD** — the currency the documents
+establish — is listed; any other currency is refused by provisioning and fails
+closed (safe `500`) in the public API rather than publishing a wrong wage.
+
 ## Response envelopes
 
 Success:
@@ -174,14 +291,24 @@ Error:
 { "success": false, "error": { "code": "ERROR_CODE", "message": "Safe message." }, "meta": { "requestId": "…" } }
 ```
 
+Field validation (Doc 09 §21) adds `fieldErrors`:
+
+```json
+{ "success": false, "error": { "code": "VALIDATION_FAILED", "message": "Some information needs to be corrected.",
+  "fieldErrors": [ { "field": "limit", "code": "INVALID_LIMIT", "message": "limit must be a whole number from 1 to 50." } ] },
+  "meta": { "requestId": "…" } }
+```
+
 | Code | Status | When |
 | --- | --- | --- |
 | `API_ROUTE_NOT_FOUND` | 404 | Unknown route. Always JSON, never Express HTML |
 | `MALFORMED_REQUEST` | 400 | Body is not valid JSON |
 | `PAYLOAD_TOO_LARGE` | 413 | JSON body over 100 KB |
 | `RATE_LIMITED` | 429 | General rate limit exceeded |
-| `SERVICE_UNAVAILABLE` | 503 | Readiness dependencies not ready |
+| `SERVICE_UNAVAILABLE` | 503 | Readiness dependencies not ready; from B3 also MongoDB unavailable for a Jobs read |
 | `INTERNAL_ERROR` | 500 | Unexpected failure |
+| `VALIDATION_FAILED` | 422 | B3: invalid or unsupported Jobs query parameters. Carries `fieldErrors` |
+| `JOB_NOT_FOUND` | 404 | B3: unknown, invalid, Draft, Archived or not-yet-published Job — one indistinguishable answer |
 
 A `500` never contains a stack, file path, environment variable, connection
 string, credential or driver message — **and neither does the log**. Logs
@@ -236,7 +363,9 @@ Order is the design, not a preference:
 1. trust proxy — before anything reads `req.ip`
 2. request id — so every later log line and error can be correlated
 3. request logging — early, so even a rejected request is recorded
-4. security headers — before any response body exists
+4. security headers — before any response body exists; for `/api/v1/jobs…`
+   also `Cache-Control: no-store` (B3), so it covers responses that parsing or
+   rate limiting end early
 5. CORS — before the body is read, so preflight stays cheap
 6. JSON body parsing (100 KB limit)
 7. general rate limiting — after identity, before route work
@@ -433,13 +562,172 @@ mode, but only against that isolated test database.
 
 ---
 
-## Scope and limitations (B1 + B2)
+## Job provisioning (B3)
+
+Until the protected Recruitment Admin exists (Release E), Jobs are created and
+maintained with a **controlled operator command** (Doc 12 §§46-47, Doc 15
+§§171-175). It is not an HTTP endpoint, and changing a wage, status, closing
+date or content never requires editing frontend code.
+
+A Job is described by a **definition file** — JSON holding the complete desired
+state of one Job — and identified by its `slug`:
+
+| Key | Meaning |
+| --- | --- |
+| `slug` | the Job's identity and canonical URL segment (`/careers/{slug}`) |
+| `status` | the desired lifecycle state after this run: `DRAFT`, `PUBLISHED`, `CLOSED` or `ARCHIVED` |
+| `awaitingInput` | content still waiting for approval. **While it is non-empty the Job cannot be published** |
+| `notes` | provenance notes for humans; never stored, never published |
+| `title` … `closesAt` | every content field of Doc 10 §19, all present (use `null` / `""` / `[]` for empty). Money is `compensation.amountMinor` in integer minor units (`3500` = CAD 35.00); `closesAt` is an ISO 8601 time with an offset, or `null` |
+
+The committed definition of the **real initial role** is
+`provisioning/jobs/cybersecurity-specialist.json`. It contains only the
+source-established planning data — *Cybersecurity Specialist*, internal
+reference `NOC 21220` (never public), *British Columbia, Canada*,
+`FULLY_REMOTE`, 30 hours/week, CAD 35.00 gross per hour — and declares
+**AWAITING INPUT** for the employment type, final schedule wording,
+description, responsibilities, requirements, preferred qualifications,
+screening questions and closing date. Its status is `DRAFT`. Nothing may be
+invented to make it publishable (Doc 12 §45); the illustrative values in the
+Doc 09 API examples are not approval.
+
+### Commands (Windows PowerShell, from `backend/`)
+
+```powershell
+# 1. See exactly what would change. Writes nothing.
+npm run jobs:provision:plan -- --file provisioning/jobs/cybersecurity-specialist.json
+
+# 2. Make that change.
+npm run jobs:provision:apply -- --file provisioning/jobs/cybersecurity-specialist.json
+```
+
+Both act on the database named by `MONGODB_URI` (from `.env`, or the shell for
+one run) and never print the connection string. Run `npm run db:indexes:apply`
+once first: `apply` refuses to write unless the `jobs` indexes exist, because
+slug uniqueness must be enforced by the database, not by a lookup.
+
+`plan` prints the action (`create` / `update` / `unchanged`), the fields that
+would change, any lifecycle transition, the **public effect** (what the public
+sees before → after: `OPEN`, `CLOSED`, not public), whether
+`--confirm-lifecycle` is required, publish readiness, the `awaitingInput` list
+and any refusal.
+
+`apply` ends with exactly one of these results — and says "nothing was
+written" only where that is established:
+
+| Result | Meaning | Exit |
+| --- | --- | --- |
+| `CREATED` / `UPDATED` | every write acknowledged and the stored Job read back | 0 |
+| `UNCHANGED` | the stored Job already matches; nothing was written | 0 |
+| `REFUSED — nothing was written` | refused before any write, or its only write was certainly rejected (e.g. `DUPLICATE_SLUG`) | 1 |
+| `INCOMPLETE` | some writes were acknowledged (listed under `written`) and a later step was certainly not applied — e.g. created as DRAFT, publication rejected | 1 |
+| `NOT CONFIRMED` | the database did not confirm whether a step was applied, or the result could not be read back; nothing is assumed either way | 1 |
+
+Nothing is ever rolled back or deleted. After `INCOMPLETE` or `NOT CONFIRMED`,
+run the same `plan` command to see what is stored, then re-run `apply` — it
+writes only what still differs. A failure before any write (configuration,
+connection, reading the stored Job) prints "Nothing was written"; a failure
+after the result was printed (closing the connection) says the result stands.
+Exit codes: `0` success, `1` refused / incomplete / not confirmed / invalid /
+failed, `2` usage error. Driver messages, stack traces and the connection
+string are never printed.
+
+### Guarantees
+
+- **Validated first.** The definition is checked against a strict schema
+  before any database access: unknown keys (including `publishedAt`,
+  `closedAt`, `_id`), wrong types, out-of-range values, a currency without a
+  verified exponent, inconsistent phone/message toggles, duplicate screening
+  prompts or option labels are refused.
+- **Safe to re-run.** `apply` writes only what differs; re-applying the same
+  file reports `UNCHANGED` and writes nothing (`updatedAt` untouched). One slug
+  is one Job; a concurrent duplicate create is refused by the unique index as
+  `DUPLICATE_SLUG`, never stored twice. A different slug is a different Job —
+  a Job is never renamed by provisioning, so a published slug cannot change.
+- **The approved B2 write path only.** New Jobs are created with a validated
+  save as `DRAFT`; edits go through `applyJobEdit`; lifecycle changes go
+  through `publishJob` / `closeJob` / `archiveJob`. The Job model then enforces
+  its own rules on every save. No write guard is bypassed.
+- **Intentional lifecycle changes.** Publish, close, reopen and archive happen
+  only with `--confirm-lifecycle`, only as one documented transition per run
+  (`DRAFT→PUBLISHED|ARCHIVED`, `PUBLISHED→CLOSED`, `CLOSED→PUBLISHED|ARCHIVED`).
+  Publishing additionally requires an empty `awaitingInput`, complete
+  publish-ready content, no placeholder text (`AWAITING INPUT`,
+  `[DEV FIXTURE]`, `lorem ipsum`) and a `closesAt` that is `null` or in the
+  future. `publishedAt` is set once and kept through close and reopen.
+  `ARCHIVED` is terminal: an archived Job is never modified.
+- **Effective opening and closing need the same confirmation.** Editing
+  `closesAt` can close or reopen a PUBLISHED Job without any status change: a
+  closing time at or before now closes an open Job; removing a passed closing
+  time, or moving it into the future, reopens an expired one. Any run that
+  changes what the public sees (`OPEN` ↔ `CLOSED` ↔ not public) is applied
+  only with `--confirm-lifecycle`, and is refused before any write otherwise.
+  Setting a future closing time on an open Job only schedules the close and
+  needs no confirmation. A Job that expired on schedule and is re-applied
+  unchanged is `UNCHANGED`: the passage of time is not an operator action.
+- **No silent material change.** Once Applications exist for a Job, changing
+  its compensation, weekly hours, work arrangement, location, employment type,
+  responsibilities or requirements also needs `--confirm-material-change`
+  (Doc 12 §§41-42 prefer closing the Job and creating a new one).
+- **Stable screening identifiers.** Question and option UUIDs are generated by
+  the server once and kept on every later run: a question keeps the identifier
+  of the stored question it names by `questionId`, or — when it gives none — of
+  the stored question with the same type and prompt; options likewise by
+  `optionId` or label. Unmatched questions/options are new and get fresh UUIDs.
+  A definition can never invent an identifier: an unknown `questionId` or
+  `optionId` is refused. `apply` prints the resulting identifiers.
+
+### Publishing the real role later
+
+Only when Saeed has approved the missing content: fill in those fields in the
+definition, remove them from `awaitingInput`, set `"status": "PUBLISHED"`, run
+`plan`, then `apply … --confirm-lifecycle`.
+
+---
+
+## B3 verification
+
+```powershell
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test"
+npm run verify:b3
+```
+
+`verify:b3` applies the same fail-closed test-database guard as `verify:b2`
+(refusing before running anything), then reports PASS/FAIL for:
+
+1. Node.js 24 runtime (the OS is printed too);
+2. the complete offline suite — B1, B2 and B3;
+3. real-database prerequisites (`MONGODB_TEST_URI` set, accepted by the guard,
+   reachable);
+4. `db:indexes:apply` against the test database;
+5. the complete real-database suite — every B2 test plus the B3 suites
+   `tests/db/jobs-api.test.js` (the public API over real MongoDB and HTTP:
+   open-only selection, exact `publishedAt`/`closesAt` boundaries, sort and
+   pagination, DTO privacy, the `public_listing` query plan, 503 on a lost
+   connection, and `node src/server.js` serving Jobs from MongoDB) and
+   `tests/db/job-provisioning.test.js` (create, re-run, update, lifecycle,
+   first-publication preservation, effective closing/reopening through
+   `closesAt` and its exact boundaries, unchanged re-application of an expired
+   Job, duplicate slugs under concurrency, missing index refusal,
+   material-change confirmation, screening identifiers, and the provisioning
+   CLI itself);
+6. `db:indexes:check` against the test database.
+
+**The database gate cannot be skipped.** Without `MONGODB_TEST_URI`, or with an
+unreachable database, `verify:b3` exits non-zero and says so. Passing
+`npm test` alone is not B3 verification.
+
+---
+
+## Scope and limitations (B1 + B2 + B3)
 
 Implemented here — and nothing more:
 
 - MongoDB connection, the `Job`/`Application` models and required indexes (B2);
   no data migration exists or is needed yet
-- no `/api/v1/jobs`, job provisioning or real job data (B3)
+- the public Jobs API and controlled Job provisioning (B3); the only real Job
+  is a DRAFT whose content is AWAITING INPUT, so the public list is empty until
+  approved content is provisioned and published
 - no resume upload or private storage (B4)
 - no application submission (B5)
 - no transactional email (B6)
@@ -450,6 +738,6 @@ Implemented here — and nothing more:
 - losing the database connection at runtime flips readiness back to 503; there
   is no in-memory fallback
 
-`GET /api/v1/jobs` returns `404 API_ROUTE_NOT_FOUND`. The frontend's Careers
-page therefore shows its error state against this backend, which is the honest
-result.
+The frontend is not yet connected to this API (Release C1). No admin
+authentication or HTTP write surface for Jobs exists (Release E); provisioning
+is an operator command only.

@@ -8,8 +8,11 @@ import { corsMiddleware } from './middleware/corsMiddleware.js';
 import { generalRateLimit } from './middleware/rateLimit.js';
 import { apiNotFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { noStore } from './middleware/noStore.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
+import { jobsRouter } from './modules/jobs/job.routes.js';
+import { createJobRepository } from './modules/jobs/job.repository.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -31,7 +34,10 @@ export const API_BASE_PATH = '/api/v1';
  *   1. trust proxy      before anything reads req.ip
  *   2. request id       so every later log line and error can be correlated
  *   3. request logging  early, so even a rejected request is recorded
- *   4. security headers before any response body can be produced
+ *   4. security headers before any response body can be produced — including
+ *                       the Jobs `Cache-Control: no-store` policy (B3), so it
+ *                       also covers responses that parsing or rate limiting
+ *                       end early (400, 413, 429)
  *   5. CORS             before the body is read, so preflight is cheap
  *   6. body parsing     with the 100 KB limit
  *   7. rate limiting    after identity, before any route work
@@ -43,6 +49,19 @@ export function createApp({
   config = loadConfig(),
   logger = createLogger({ level: config?.logLevel, appEnv: config?.appEnv, isProduction: config?.isProduction }),
   readiness = new Readiness(),
+  /**
+   * Public Job reads (B3). Production uses the real MongoDB repository over
+   * the process-wide Mongoose connection that server.js opens. Offline tests
+   * may pass a stand-in to exercise the HTTP contract; persistence and query
+   * behaviour are proven only by the real-database suite (tests/db).
+   */
+  jobRepository = createJobRepository({ queryTimeoutMs: config?.databaseQueryTimeoutMs }),
+  /**
+   * The server clock that decides publication and closing (Doc 09 section
+   * 187). Production uses the real time; tests inject a fixed instant to
+   * check the exact publishedAt/closesAt boundaries (Doc 17 section 39).
+   */
+  clock = () => new Date(),
   /**
    * Test-only hook to mount extra routes on the API router.
    *
@@ -88,6 +107,15 @@ export function createApp({
     }),
   );
 
+  /*
+   * 4b. Jobs cache policy — Doc 09 section 58. Mounted here, with the other
+   * response headers and BEFORE CORS, body parsing and rate limiting, so that
+   * every response on /api/v1/jobs carries `Cache-Control: no-store` — also the
+   * 400/413 a malformed or oversized body produces and the 429 of the rate
+   * limiter, which end the request before the Jobs router is reached.
+   */
+  app.use(`${API_BASE_PATH}/jobs`, noStore());
+
   // 5. CORS, from the explicit allowlist.
   app.use(corsMiddleware(config.corsAllowedOrigins));
 
@@ -102,6 +130,8 @@ export function createApp({
 
   // 8. Routes.
   api.use('/health', healthRouter({ readiness, logger }));
+  // B3 — public Jobs API (Doc 09 sections 48-70).
+  api.use('/jobs', jobsRouter({ repository: jobRepository, clock, logger }));
 
   if (typeof registerTestRoutes === 'function') {
     registerTestRoutes(api);

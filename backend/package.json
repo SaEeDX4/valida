@@ -16,7 +16,10 @@
     "test:db": "vitest run --config vitest.db.config.js",
     "db:indexes:check": "node --env-file-if-exists=.env scripts/db-indexes.mjs check",
     "db:indexes:apply": "node --env-file-if-exists=.env scripts/db-indexes.mjs apply",
-    "verify:b2": "node scripts/verify-b2.mjs"
+    "verify:b2": "node scripts/verify-b2.mjs",
+    "jobs:provision:plan": "node --env-file-if-exists=.env scripts/provision-job.mjs plan",
+    "jobs:provision:apply": "node --env-file-if-exists=.env scripts/provision-job.mjs apply",
+    "verify:b3": "node scripts/verify-b3.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",

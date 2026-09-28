@@ -1,0 +1,51 @@
+{
+  "slug": "cybersecurity-specialist",
+  "status": "DRAFT",
+  "awaitingInput": [
+    "employmentType",
+    "schedule",
+    "description",
+    "responsibilities",
+    "requirements",
+    "preferredQualifications",
+    "screeningQuestions",
+    "closesAt"
+  ],
+  "notes": [
+    "REAL INITIAL ROLE. Source-established planning data only: Doc 10 section 70, Doc 12 section 44, Doc 18 section 110.",
+    "title, internalOccupationalReference, location (British Columbia, Canada / CA / BC), workArrangement FULLY_REMOTE, weeklyHours 30 and compensation CAD 35.00 gross per hour (amountMinor 3500) are source-established.",
+    "The slug matches the canonical Job URL /careers/cybersecurity-specialist (Doc 12 section 6).",
+    "AWAITING INPUT: employment type, final schedule wording, description, responsibilities, requirements, preferred qualifications (if used), screening questions (if used) and closing date (if used). Doc 12 section 45: nothing may be invented; the Job stays DRAFT until approved content exists.",
+    "applicationConfig uses the Doc 10 defaults (phone and message disabled, message maxLength 5000, resume required). Whether phone or message is collected is a later approval decision.",
+    "internalOccupationalReference is internal only and never appears in the public API (Doc 10 section 23)."
+  ],
+  "title": "Cybersecurity Specialist",
+  "internalOccupationalReference": "NOC 21220",
+  "location": {
+    "displayName": "British Columbia, Canada",
+    "countryCode": "CA",
+    "regionCode": "BC",
+    "locality": null
+  },
+  "workArrangement": "FULLY_REMOTE",
+  "employmentType": null,
+  "schedule": null,
+  "weeklyHours": 30,
+  "compensation": {
+    "currency": "CAD",
+    "amountMinor": 3500,
+    "unit": "HOUR",
+    "gross": true
+  },
+  "description": "",
+  "responsibilities": [],
+  "requirements": [],
+  "preferredQualifications": [],
+  "applicationConfig": {
+    "resumeRequired": true,
+    "phone": { "enabled": false, "required": false },
+    "message": { "enabled": false, "required": false, "maxLength": 5000 },
+    "screeningQuestions": []
+  },
+  "closesAt": null
+}

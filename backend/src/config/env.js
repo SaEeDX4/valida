@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseMongoUri } from '../db/connectionString.js';
 
@@ -12,9 +15,10 @@ import { parseMongoUri } from '../db/connectionString.js';
  * TRUTHFULNESS RULE
  * This schema knows only about configuration the backend actually consumes.
  * B1 added the runtime variables; B2 added MONGODB_URI (required) and
- * MONGODB_CONNECT_TIMEOUT_MS; B3 added MONGODB_QUERY_TIMEOUT_MS (optional).
- * Resume storage (B4), transactional email (B6)
- * and PUBLIC_SITE_URL (Release C) are recorded in .env.example as future
+ * MONGODB_CONNECT_TIMEOUT_MS; B3 added MONGODB_QUERY_TIMEOUT_MS (optional);
+ * B4 added RESUME_STORAGE_DRIVER and RESUME_STORAGE_LOCAL_ROOT (optional —
+ * see the private storage section below). Transactional email (B6) and
+ * PUBLIC_SITE_URL (Release C) are recorded in .env.example as future
  * variables but are deliberately NOT required or read here: requiring a
  * variable nothing uses would imply the capability exists.
  */
@@ -122,6 +126,158 @@ const mongodbUri = z.string().superRefine((value, ctx) => {
   }
 });
 
+/*
+ * ---------------------------------------------------------------------------
+ * Private resume storage — Milestone B4 (Doc 09 sections 105-107, Doc 15
+ * sections 38, 76-77, 97-103).
+ *
+ * RESUME_STORAGE_DRIVER selects the storage integration. B4 implements one:
+ *
+ *   local — the DEVELOPMENT-ONLY private adapter: resume bytes are written to
+ *           RESUME_STORAGE_LOCAL_ROOT on this machine's disk. Accepted only
+ *           when APP_ENV=local and NODE_ENV is not production. A review or
+ *           production deployment that sets it is refused at startup (Doc 09
+ *           section 107): a hosted instance's disk is ephemeral (Doc 15
+ *           sections 76-77), so "stored" resumes would silently disappear.
+ *
+ * The production provider (managed private object storage, Doc 15 sections
+ * 97-106) is selected at deployment, Milestone C6, and is AWAITING INPUT.
+ * Until it exists, leaving the driver unset is the only valid production
+ * setting: the service starts, serves the Jobs API, and reports resume
+ * storage as not ready — so /health/ready stays 503 and no Application can be
+ * accepted (Doc 15 section 221). It never pretends to store anything.
+ *
+ * An empty value (`RESUME_STORAGE_DRIVER=` copied from a template) is the
+ * same as unset.
+ * ---------------------------------------------------------------------------
+ */
+const emptyAsUnset = (schema) => z.preprocess((value) => (value === '' ? undefined : value), schema);
+
+/**
+ * The repository (application) directory: this file is
+ * <root>/backend/src/config/env.js. The local storage root must lie outside
+ * it — the Vite dev server can serve files from the repository, and a git
+ * working tree is one `git add .` away from committing candidate resumes.
+ */
+export const APPLICATION_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+
+/**
+ * Directory names that conventionally hold web-served files. A private
+ * storage root must not sit inside one (Doc 09 section 105, Doc 13 sections
+ * 68-69). Compared case-insensitively, so Windows' shared C:\Users\Public is
+ * refused too.
+ */
+const PUBLIC_DIRECTORY_NAMES = new Set(['public', 'public_html', 'static', 'www', 'wwwroot', 'htdocs', 'dist']);
+
+/**
+ * Checks a local storage root. Returns null when acceptable, otherwise a
+ * RULE_TEXT sentinel — never the value, which is a filesystem path.
+ *
+ * `pathApi` defaults to the platform's path module; tests pass path.win32 or
+ * path.posix to check both platforms' rules from either platform.
+ */
+export function checkLocalStorageRoot(
+  value,
+  { pathApi = path, applicationRoot = APPLICATION_ROOT, caseInsensitive = process.platform === 'darwin' } = {},
+) {
+  if (typeof value !== 'string' || value.trim() === '') return 'RESUME_STORAGE_LOCAL_ROOT_REQUIRED';
+  if (/[\u0000-\u001f]/.test(value)) return 'RESUME_STORAGE_LOCAL_ROOT_NOT_ABSOLUTE';
+
+  if (pathApi === path.win32) {
+    // A drive-letter or UNC path only. "\data" (current drive) and
+    // "C:data" (drive-relative) depend on the process's working directory,
+    // and a colon after the drive letter would name an NTFS alternate stream.
+    const driveOrUnc = /^[A-Za-z]:[\\/]/.test(value) || /^[\\/]{2}[^\\/]+[\\/][^\\/]+/.test(value);
+    if (!driveOrUnc || value.indexOf(':', 2) !== -1) return 'RESUME_STORAGE_LOCAL_ROOT_NOT_ABSOLUTE';
+  } else if (!pathApi.isAbsolute(value)) {
+    return 'RESUME_STORAGE_LOCAL_ROOT_NOT_ABSOLUTE';
+  }
+
+  const resolved = pathApi.resolve(value);
+  const { root } = pathApi.parse(resolved);
+  const segments = resolved.slice(root.length).split(pathApi.sep).filter(Boolean);
+  if (segments.length === 0) return 'RESUME_STORAGE_LOCAL_ROOT_FILESYSTEM_ROOT';
+  if (segments.some((segment) => PUBLIC_DIRECTORY_NAMES.has(segment.toLowerCase()))) {
+    return 'RESUME_STORAGE_LOCAL_ROOT_PUBLIC_DIRECTORY';
+  }
+
+  // path.win32.relative compares case-insensitively; path.posix exactly —
+  // so on macOS, whose default file system ignores case, both sides are
+  // lower-cased first ("/Users/me/Valida" is the same folder as ".../valida").
+  const fold = pathApi !== path.win32 && caseInsensitive ? (value_) => value_.toLowerCase() : (value_) => value_;
+  const application = pathApi.resolve(applicationRoot);
+  const isWithin = (parent, child) => {
+    const relative = pathApi.relative(fold(parent), fold(child));
+    return relative === '' || (!relative.startsWith('..') && !pathApi.isAbsolute(relative));
+  };
+  if (isWithin(application, resolved) || isWithin(resolved, application)) {
+    return 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION';
+  }
+  return null;
+}
+
+/**
+ * Where a path REALLY leads — B4 review r1, finding 2.
+ *
+ * The lexical rules above look at the path as written. A link anywhere in it
+ * — a symbolic link on any platform, or a junction on Windows — can make an
+ * innocent-looking path lead into a public directory or the repository
+ * ("<alias>/private-resumes" where <alias> points at a folder named
+ * "public"). So the longest EXISTING prefix of the path is resolved through
+ * every link with the operating system's own resolver (fs.realpathSync.native:
+ * realpath(3) on POSIX, GetFinalPathNameByHandle on Windows, which follows
+ * junctions and symbolic links and expands 8.3 short names), and the part
+ * that does not exist yet is appended. Returns null when the path cannot be
+ * resolved safely: an existing component cannot be read, a link is broken
+ * (a dangling link would be created THROUGH), or links loop.
+ */
+const isMissing = (error) => error?.code === 'ENOENT' || error?.code === 'ENOTDIR';
+
+export function resolveStorageLocation(value, { realpath = fs.realpathSync.native, lstat = fs.lstatSync } = {}) {
+  let current = path.resolve(value);
+  const notYetCreated = [];
+  for (;;) {
+    try {
+      return path.join(realpath(current), ...notYetCreated);
+    } catch (error) {
+      if (!isMissing(error)) return null;
+    }
+    // Missing — unless the name exists as a broken link. (A component that is
+    // a file surfaces as ENOTDIR on POSIX and ENOENT on Windows; both walk up
+    // to it, and creating the directory then fails at initialisation.)
+    try {
+      lstat(current);
+      return null;
+    } catch (error) {
+      if (!isMissing(error)) return null;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    notYetCreated.unshift(path.basename(current));
+    current = parent;
+  }
+}
+
+/**
+ * The storage-root rules applied to the RESOLVED location, compared with the
+ * resolved application root as well as the written one. Returns null or a
+ * RULE_TEXT sentinel. Used by loadConfig, and again by the local storage
+ * adapter immediately before it creates anything (and after, on the real
+ * directory it created), so a link cannot redirect it between the two.
+ */
+export function checkResolvedLocalStorageRoot(value, { applicationRoot = APPLICATION_ROOT, realpath, lstat } = {}) {
+  const location = resolveStorageLocation(value, { realpath, lstat });
+  if (location === null) return 'RESUME_STORAGE_LOCAL_ROOT_UNRESOLVED';
+  const applications = [path.resolve(applicationRoot)];
+  const realApplication = resolveStorageLocation(applicationRoot, { realpath, lstat });
+  if (realApplication !== null) applications.push(realApplication);
+  for (const application of applications) {
+    const problem = checkLocalStorageRoot(location, { applicationRoot: application });
+    if (problem) return problem;
+  }
+  return null;
+}
+
 const baseSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   APP_ENV: z.enum(['local', 'review', 'production']).default('local'),
@@ -163,6 +319,12 @@ const baseSchema = z.object({
    * server as maxTimeMS. Exact value is deployment tuning (Doc 13 section 56).
    */
   MONGODB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5_000),
+
+  // Private resume storage — Milestone B4. See the section above.
+  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local']).optional()),
+  // Only its presence is checked here; its rules are applied below, where the
+  // failure can be reported without echoing the path.
+  RESUME_STORAGE_LOCAL_ROOT: emptyAsUnset(z.string().optional()),
 });
 
 
@@ -208,6 +370,28 @@ const RULE_TEXT = {
   CORS_REQUIRED_IN_PRODUCTION:
     'is required when APP_ENV=production; list the exact frontend origins allowed ' +
     'to call this API',
+  RESUME_STORAGE_DRIVER:
+    'must be "local" (development only) or left unset; the production private-storage ' +
+    'provider is selected at deployment (Milestone C6)',
+  RESUME_STORAGE_LOCAL_NOT_ALLOWED:
+    'is "local", which is development-only and is refused unless APP_ENV=local and ' +
+    'NODE_ENV is not production — a deployed instance must use real private object storage',
+  RESUME_STORAGE_LOCAL_ROOT_REQUIRED: 'is required when RESUME_STORAGE_DRIVER=local',
+  RESUME_STORAGE_LOCAL_ROOT_WITHOUT_DRIVER:
+    'is set but RESUME_STORAGE_DRIVER is not "local"; set both, or neither',
+  RESUME_STORAGE_LOCAL_ROOT_NOT_ABSOLUTE:
+    'must be an absolute path (on Windows, with a drive letter such as C:\\ or a UNC share)',
+  RESUME_STORAGE_LOCAL_ROOT_FILESYSTEM_ROOT: 'must be a dedicated directory, not a filesystem or drive root',
+  RESUME_STORAGE_LOCAL_ROOT_PUBLIC_DIRECTORY:
+    'must not be inside a public, static or web-served directory (public, public_html, ' +
+    'static, www, wwwroot, htdocs, dist)',
+  RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION:
+    'must be outside the Valida repository (and must not contain it), so resumes can ' +
+    'never be served by a development server or committed to git',
+  RESUME_STORAGE_LOCAL_ROOT_UNRESOLVED:
+    'must resolve to a real location: every existing part of the path must be readable, ' +
+    'and no link in it may be broken or circular (links are followed, and the rules above ' +
+    'apply to where the path really leads)',
 };
 
 /** Maps one Zod issue to safe text, preferring our sentinel over Zod's wording. */
@@ -247,6 +431,9 @@ function redactedConfigView() {
   for (const [key, value] of Object.entries(this)) {
     if (typeof value === 'function') continue;
     view[key] = key === 'mongodbUri' && value ? REDACTED : value;
+    // B4: the storage root is a filesystem path; it is kept out of any
+    // accidental serialisation too.
+    if (key === 'resumeStorage' && value?.localRoot) view[key] = { ...value, localRoot: REDACTED };
   }
   return view;
 }
@@ -303,6 +490,27 @@ export function loadConfig(env = process.env) {
     missing.push({ variable: 'MONGODB_URI', rule: RULE_TEXT.MONGODB_URI_REQUIRED });
   }
 
+  /*
+   * B4 — private resume storage. The development-only local driver is
+   * refused in any deployed or production-mode process (Doc 09 section 107),
+   * and its root must be a safe, dedicated, private location. Every failure is
+   * a fixed sentinel: the path itself is never echoed.
+   */
+  const storageDriver = config.RESUME_STORAGE_DRIVER ?? null;
+  const storageRoot = config.RESUME_STORAGE_LOCAL_ROOT ?? null;
+  if (storageDriver === 'local') {
+    if (config.APP_ENV !== 'local' || config.NODE_ENV === 'production') {
+      missing.push({ variable: 'RESUME_STORAGE_DRIVER', rule: RULE_TEXT.RESUME_STORAGE_LOCAL_NOT_ALLOWED });
+    }
+    // The path as written, then — if that passes — where it really leads.
+    const rootProblem = checkLocalStorageRoot(storageRoot) ?? checkResolvedLocalStorageRoot(storageRoot);
+    if (rootProblem) {
+      missing.push({ variable: 'RESUME_STORAGE_LOCAL_ROOT', rule: RULE_TEXT[rootProblem] });
+    }
+  } else if (storageRoot !== null) {
+    missing.push({ variable: 'RESUME_STORAGE_LOCAL_ROOT', rule: RULE_TEXT.RESUME_STORAGE_LOCAL_ROOT_WITHOUT_DRIVER });
+  }
+
   // Every missing requirement is reported at once, so an operator fixes the
   // environment in one pass rather than one restart per variable.
   if (missing.length > 0) {
@@ -344,5 +552,16 @@ export function loadConfig(env = process.env) {
     // General JSON body limit — Doc 09. Fixed, not configurable: raising it is
     // a security decision, not a deployment knob.
     jsonBodyLimit: '100kb',
+    /*
+     * B4 — private resume storage. `driver` is null when no storage is
+     * configured (the only valid state for a deployed instance until the
+     * production provider exists, C6). The root is resolved to its absolute
+     * form. It is not a secret, but it is a filesystem path, so it is never
+     * logged or sent in a response (Doc 09 section 22).
+     */
+    resumeStorage: Object.freeze({
+      driver: storageDriver,
+      localRoot: storageDriver === 'local' ? path.resolve(storageRoot) : null,
+    }),
   });
 }

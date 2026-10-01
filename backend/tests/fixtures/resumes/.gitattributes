@@ -1,0 +1,6 @@
+# Synthetic document fixtures are byte-exact binaries: a PDF's cross-reference
+# offsets and a DOCX's ZIP offsets break if Git rewrites line endings
+# (core.autocrlf on Windows). Never convert, diff or merge them as text.
+* binary
+.gitattributes text eol=lf
+README.md text eol=lf

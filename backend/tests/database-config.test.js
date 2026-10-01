@@ -210,7 +210,8 @@ describe('readiness still reflects unimplemented milestones', () => {
     const readiness = new Readiness();
     readiness.set('configuration', DEPENDENCY_STATE.READY);
     readiness.set('database', DEPENDENCY_STATE.READY);
-    // B4 resumeStorage and B6 notifications remain not_implemented.
+    // A fresh Readiness: resumeStorage (set by server.js startup since B4) and
+    // B6 notifications both start not_implemented.
     expect(readiness.isReady()).toBe(false);
     const states = Object.fromEntries(readiness.describe().dependencies.map((d) => [d.name, d.state]));
     expect(states.resumeStorage).toBe('not_implemented');

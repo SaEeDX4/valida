@@ -34,7 +34,7 @@ describe('MONGODB_QUERY_TIMEOUT_MS (B3)', () => {
 });
 
 describe('readiness stays truthful after B3', () => {
-  it('the Jobs API serves while /health/ready still answers 503 (B4 and B6 are not implemented)', async () => {
+  it('the Jobs API serves while /health/ready still answers 503 (resume storage not ready in this app; B6 not implemented)', async () => {
     const repository = {
       listOpenJobs: async () => ({ total: 0, jobs: [] }),
       findPublicJobBySlug: async () => null,

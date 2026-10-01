@@ -19,9 +19,11 @@
     "verify:b2": "node scripts/verify-b2.mjs",
     "jobs:provision:plan": "node --env-file-if-exists=.env scripts/provision-job.mjs plan",
     "jobs:provision:apply": "node --env-file-if-exists=.env scripts/provision-job.mjs apply",
-    "verify:b3": "node scripts/verify-b3.mjs"
+    "verify:b3": "node scripts/verify-b3.mjs",
+    "verify:b4": "node scripts/verify-b4.mjs"
   },
   "dependencies": {
+    "@fastify/busboy": "^3.2.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",

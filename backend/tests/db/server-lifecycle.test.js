@@ -47,7 +47,7 @@ describe('startServer with the real MongoDB connector', () => {
     expect(stateOf(readiness, 'database')).toBe('ready');
   }, 30_000);
 
-  it('still answers the canonical 503, because B4 and B6 are not implemented', async () => {
+  it('still answers the canonical 503 (no resume storage configured here; B6 not implemented)', async () => {
     const { port } = await startAgainstTestDatabase();
     const base = `http://127.0.0.1:${port}`;
     expect((await request(base).get('/api/v1/health')).status).toBe(200);

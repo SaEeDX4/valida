@@ -6,6 +6,9 @@ import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
 import { mongoDatabase, DatabaseConnectionError } from './db/mongoose.js';
+import { createPrivateStorage, StorageInitializationError } from './integrations/storage/privateStorage.js';
+import { TempUploadArea } from './lib/multipart/tempUploadArea.js';
+import { serveUnlessConnectionClosing } from './lib/http/stagedClose.js';
 
 /**
  * Backend process entry point — Doc 09 section 8, Doc 15 section 50.
@@ -76,6 +79,11 @@ export async function startServer({
   cleanupTimeoutMs = 10_000,
   // Tests pass a capturing logger to assert what is written; production never does.
   logger: injectedLogger,
+  // B4 test seams: where the per-process temporary upload area is created
+  // (default: the OS temporary directory), and a replacement storage factory
+  // for startup-failure tests. Production passes neither.
+  uploadTempBaseDirectory,
+  storageFactory = createPrivateStorage,
 } = {}) {
   const config = loadConfig(env);
   const logger =
@@ -89,8 +97,8 @@ export async function startServer({
 
   /*
    * Cleanup functions run during graceful shutdown, one list per server
-   * instance. B2 registers the MongoDB close; B4 will register the storage
-   * client. A module-level list (the B1 shape) would be shared by every server
+   * instance. B4 registers the temporary upload area and the resume storage,
+   * B2 the MongoDB close. A module-level list (the B1 shape) would be shared by every server
    * started in the same process, so one instance's shutdown could close — or
    * fail to close — another instance's dependencies.
    */
@@ -128,6 +136,46 @@ export async function startServer({
   readiness.set('configuration', DEPENDENCY_STATE.READY);
 
   /*
+   * B4 — private resume storage, before anything else is opened.
+   *
+   * When storage is configured it must genuinely work: init() creates and
+   * checks the private directories and writes, reads back and removes a probe
+   * object. If that fails, startup fails — a backend that listens with
+   * broken storage would accept Applications it cannot store. Only then is
+   * `resumeStorage` reported ready, and the per-process temporary upload area
+   * (owner-only, randomly named) is created for the multipart parser.
+   *
+   * When NO storage is configured (config/env.js explains when that is
+   * correct), the backend still starts and serves the Jobs API, and the
+   * dependency is reported honestly: `unavailable` for a local process that
+   * simply has not configured it, `not_implemented` for a deployed one, whose
+   * production provider does not exist until C6. Either way overall
+   * readiness answers 503 — as it must while notifications (B6) are absent.
+   */
+  const resumeStorage = storageFactory({ config, logger });
+  let uploadArea = null;
+  if (resumeStorage) {
+    await resumeStorage.init();
+    try {
+      uploadArea = await TempUploadArea.create({ baseDirectory: uploadTempBaseDirectory, logger });
+    } catch (error) {
+      await resumeStorage.close();
+      throw error;
+    }
+    readiness.set('resumeStorage', DEPENDENCY_STATE.READY);
+    onShutdown('uploadTemp', () => uploadArea.close());
+    onShutdown('resumeStorage', () => resumeStorage.close());
+  } else {
+    const deployed = config.appEnv !== 'local' || config.nodeEnv === 'production';
+    const state = deployed ? DEPENDENCY_STATE.NOT_IMPLEMENTED : DEPENDENCY_STATE.UNAVAILABLE;
+    readiness.set('resumeStorage', state);
+    logger.warn(
+      { dependency: 'resumeStorage', state },
+      'private resume storage is not configured; applications cannot be accepted',
+    );
+  }
+
+  /*
    * B2 — connect to MongoDB before the socket opens.
    *
    * Startup fails if the database is unreachable: a backend that listens
@@ -135,15 +183,32 @@ export async function startServer({
    * sets the `database` readiness dependency from the real connection events
    * and keeps it current if the connection drops later.
    *
-   * resumeStorage (B4) and notifications (B6) remain not_implemented, so
-   * overall readiness still answers the canonical 503 "Service is not ready."
-   * Marking them ready to obtain a 200 would be a false claim.
+   * Notifications (B6) remain not_implemented, so overall readiness still
+   * answers the canonical 503 "Service is not ready." Marking a dependency
+   * ready to obtain a 200 would be a false claim.
    */
-  await database.connect({ config, logger, readiness });
+  try {
+    await database.connect({ config, logger, readiness });
+  } catch (error) {
+    // Storage and the upload area are already open; close them before failing.
+    readiness.beginShutdown();
+    await runShutdownHooks(cleanupTimeoutMs);
+    throw error;
+  }
   onShutdown('mongodb', () => database.disconnect({ logger, readiness }));
 
-  const app = createApp({ config, logger, readiness });
-  const server = http.createServer(app);
+  /*
+   * The storage and upload area are handed to the application for the Apply
+   * route (B5). No B4 route uses them: B4 adds no public upload endpoint.
+   */
+  const app = createApp({ config, logger, readiness, resumeStorage, uploadArea });
+  /*
+   * B4 r3: a request pipelined behind an upload refused before its body was
+   * read (413/503, connection closed in stages) never reaches the app
+   * (RFC 9112 section 9.6; lib/http/stagedClose.js). Outside the app, so the
+   * Express middleware order (Doc 09 section 13) is unchanged.
+   */
+  const server = http.createServer(serveUnlessConnectionClosing(app));
 
   try {
     await new Promise((resolve, reject) => {
@@ -241,7 +306,7 @@ export async function startServer({
     return { reason, clean, http, dependencies };
   }
 
-  return { app, server, config, logger, readiness, shutdown, onShutdown };
+  return { app, server, config, logger, readiness, shutdown, onShutdown, resumeStorage, uploadArea };
 }
 
 /**
@@ -331,6 +396,17 @@ export function formatStartupFailure(error) {
       '[valida-backend] failed to start: the database connection could not be established. ' +
       'Check that MONGODB_URI names a reachable MongoDB server. ' +
       'Detail is withheld because it may contain configuration values or credentials.'
+    );
+  }
+  if (error instanceof StorageInitializationError) {
+    // `reason` is a fixed token (integrations/storage/storageContract.js); the
+    // path is never printed.
+    return (
+      `[valida-backend] failed to start: the private resume storage could not be initialised (${error.reason}). ` +
+      'Check that RESUME_STORAGE_LOCAL_ROOT names a directory this user can create and write, ' +
+      'that is not a link, that does not lead (through any link or junction) into the repository ' +
+      'or a public, static or web-served directory, and (on Linux/macOS) that no other user can ' +
+      'access (mode 700).'
     );
   }
   const { type, code } = safeErrorSummary(error);

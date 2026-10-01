@@ -87,15 +87,18 @@ describe('startServer', () => {
     expect(response.body.data.status).toBe('ok');
   });
 
-  it('marks configuration and database ready, and the B4/B6 dependencies not implemented', async () => {
+  it('marks configuration and database ready, unconfigured storage unavailable and B6 not implemented', async () => {
     const { readiness, database } = await start();
     expect(database.instance.connectCalls).toBe(1);
     expect(stateOf(readiness, 'configuration')).toBe('ready');
     // Set by the real connectDatabase from the connection's 'connected' event.
     expect(stateOf(readiness, 'database')).toBe('ready');
-    ['resumeStorage', 'notifications'].forEach((name) => {
-      expect(stateOf(readiness, name)).toBe('not_implemented');
-    });
+    // B4 CHANGE: resume storage now exists. This server was started without
+    // storage configuration, so it is reported unavailable — not ready, and no
+    // longer "not implemented" (tests/b4-startup.test.js covers the
+    // configured and deployed cases).
+    expect(stateOf(readiness, 'resumeStorage')).toBe('unavailable');
+    expect(stateOf(readiness, 'notifications')).toBe('not_implemented');
     expect(readiness.isReady()).toBe(false);
   });
 
@@ -104,7 +107,7 @@ describe('startServer', () => {
     expect(database.instance.lastConnectOptions).toMatchObject({ autoIndex: false, autoCreate: false });
   });
 
-  it('serves the canonical 503 readiness while B4 and B6 are unimplemented', async () => {
+  it('serves the canonical 503 readiness while storage is unconfigured and B6 is unimplemented', async () => {
     const { port } = await start();
     const response = await request(`http://127.0.0.1:${port}`).get('/api/v1/health/ready');
     expect(response.status).toBe(503);

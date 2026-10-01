@@ -13,9 +13,9 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | Item      | Status                                                               |
 | --------- | -------------------------------------------------------------------- |
 | Release   | B — Recruitment Backend (Release A approved)                         |
-| Milestone | B3 — Job Provisioning & Public Jobs API: **verified and GPT-approved** |
+| Milestone | B4 — Private Resume Storage & Validation: **submitted for review (r3, Windows-run corrections), not verified** |
 | Frontend  | Release A public frontend. Not yet connected to the backend API — that is Release C1. |
-| Backend   | B1 and B2 verified and merged. B3 adds the public Jobs API and Job provisioning. Readiness answers 503 until B4 and B6. See [`backend/README.md`](backend/README.md). |
+| Backend   | B1, B2 and B3 verified and merged. B4 adds private resume storage and validation for the Apply workflow (no public endpoint yet — that is B5). Readiness answers 503 until B6. See [`backend/README.md`](backend/README.md). |
 | Database  | MongoDB (B2). The real initial role is provisioned only as a DRAFT — its content is AWAITING INPUT. |
 
 | Milestone | Status |
@@ -24,6 +24,7 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | B1 — Backend runtime & configuration | **Verified and merged** |
 | B2 — MongoDB models & indexes | **Verified and merged** |
 | B3 — Job provisioning & public Jobs API | **Verified and GPT-approved** (Windows Node v24.21.0; 917 offline tests + 82 real-MongoDB tests; audit: 0 vulnerabilities) |
+| B4 — Private resume storage & validation | **Submitted for review (r3) — not verified** (r2 on Windows: real-MongoDB gate passed, offline gate failed; the corrected r3 Windows run is pending) |
 | C1 — Frontend ↔ Jobs API integration | Not started |
 | Phase 1 | **Not verified** — only after Release B and Release C |
 
@@ -356,20 +357,22 @@ and C.
 
 These are scheduled, not forgotten. Each is owned by a named milestone in
 `18_IMPLEMENTATION_ROADMAP.md`. (B1–B3 — the Express foundation, MongoDB models
-and indexes, the public Jobs API and Job provisioning — are built; see
-[`backend/README.md`](backend/README.md).)
+and indexes, the public Jobs API and Job provisioning — are built and verified,
+and B4 — private resume storage and validation — is built and submitted for
+review; see [`backend/README.md`](backend/README.md).)
 
 | Capability                                                                                                           | Milestone |
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
-| Private resume storage and file validation                                                                           | B4        |
 | Application submission workflow                                                                                      | B5        |
 | Transactional notifications                                                                                          | B6        |
 | Production deployment, domain, HTTPS                                                                                 | C         |
 | Production SEO: canonical host, sitemap, robots.txt, JobPosting data (need the production domain and real Jobs)      | C         |
 
 Awaiting input rather than scheduled: the production API origin, real approved
-Job content and per-market compensation, a corporate contact mechanism, and a
-smaller approved transparent logo export.
+Job content and per-market compensation, a corporate contact mechanism, a
+smaller approved transparent logo export, the production private-storage
+provider (selected at deployment, C6) and a malware-scanning provider (needed
+before resume review, E4).
 
 ---
 

@@ -83,7 +83,7 @@ describe('GET /api/v1/health/ready', () => {
     expect(response.body.meta.requestId).toBeTruthy();
   });
 
-  it('still returns the canonical 503 with the database connected, because B4 and B6 are unimplemented', async () => {
+  it('still returns the canonical 503 with the database connected, because resume storage is not ready here and B6 is unimplemented', async () => {
     // The state a running B2 server reaches. Resume storage and notifications
     // are required and do not exist yet, so claiming ready would be false.
     const response = await request(buildConnectedApp()).get('/api/v1/health/ready');

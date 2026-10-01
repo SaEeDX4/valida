@@ -68,8 +68,20 @@ export function createApp({
    * This exists so the safe-500 path can be tested through the real error
    * handler without shipping a debug or crash endpoint. It is never called by
    * server.js, so production has no such route and no added attack surface.
+   *
+   * B4: it receives `{ resumeStorage, uploadArea, logger }` as a second
+   * argument, so the reusable multipart and resume components can be tested
+   * through the real middleware stack (request id, security headers, rate
+   * limit, error handler) without adding an upload endpoint to the product.
    */
   registerTestRoutes,
+  /**
+   * B4 — the private resume storage and the per-process temporary upload
+   * area, created and initialised by server.js (null when storage is not
+   * configured). No B4 route consumes them; the Apply route (B5) will.
+   */
+  resumeStorage = null,
+  uploadArea = null,
 } = {}) {
   const app = express();
 
@@ -134,7 +146,7 @@ export function createApp({
   api.use('/jobs', jobsRouter({ repository: jobRepository, clock, logger }));
 
   if (typeof registerTestRoutes === 'function') {
-    registerTestRoutes(api);
+    registerTestRoutes(api, { resumeStorage, uploadArea, logger });
   }
 
   app.use(API_BASE_PATH, api);

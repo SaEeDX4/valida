@@ -4,7 +4,7 @@ Node.js + Express REST API for the Valida platform.
 
 | | |
 | --- | --- |
-| Milestone | **B3 — Job Provisioning & Public Jobs API** (on top of B1 — Backend Runtime & Configuration, and B2 — MongoDB Models & Indexes) |
+| Milestone | **B4 — Private Resume Storage & Validation** (on top of B1 — Backend Runtime & Configuration, B2 — MongoDB Models & Indexes, and B3 — Job Provisioning & Public Jobs API) |
 | Runtime | Node.js `>=24.0.0 <25.0.0`, ESM |
 | API base path | `/api/v1` |
 | Database | MongoDB via Mongoose `9.10.2` (driver `mongodb` 7.6.0 — MongoDB server 4.4 or newer) |
@@ -26,11 +26,19 @@ services. The real initial role, *Cybersecurity Specialist*, is provisioned
 only as a **DRAFT** — its employment type, final schedule wording, description,
 responsibilities and requirements are **AWAITING INPUT**, so it is not public.
 
-There is still no application submission, upload or email.
+B4 builds the private resume foundation that the Apply workflow (B5) will
+use: a private storage boundary with a real, development-only local adapter;
+bounded multipart processing; and resume validation — extension, declared MIME
+type and actual PDF/DOCX structure together, bounded DOCX (ZIP) inspection,
+safe filename metadata, server-generated storage keys, SHA-256 checksums and
+`NOT_SCANNED` scan state. See "Private resume storage & validation (B4)".
+**B4 adds no public endpoint**: there is still no application submission
+(B5), no email (B6), and no way to download a stored file (E4).
+
 `/api/v1/health/ready` correctly answers **503 "Service is not ready."**,
-because resume storage (B4) and notifications (B6) are required and do not
-exist yet. The Jobs API does not depend on them and serves while readiness is
-503.
+because notifications (B6) are required and do not exist yet — even when
+MongoDB is connected and resume storage is ready. The Jobs API does not depend
+on them and serves while readiness is 503.
 
 ---
 
@@ -86,6 +94,7 @@ npm run verify:b1      # offline tests + npm audit
 npm run test:db        # REAL-database suite — needs MONGODB_TEST_URI
 npm run verify:b2      # full B2 gate — see "B2 verification" below
 npm run verify:b3      # full B3 gate — see "B3 verification" below
+npm run verify:b4      # full B4 gate — see "B4 verification" below
 npm run db:indexes:apply
 npm run db:indexes:check
 npm run jobs:provision:plan  -- --file provisioning/jobs/cybersecurity-specialist.json
@@ -95,8 +104,14 @@ npm run jobs:provision:apply -- --file provisioning/jobs/cybersecurity-specialis
 `npm test` deliberately excludes `tests/db`. Those tests need a real MongoDB;
 a default command that silently skipped them could report green while
 persistence and uniqueness were never exercised. Passing `npm test` is
-therefore **not** B2 or B3 verification — `npm run verify:b3` (which also
-runs every B2 database test) is.
+therefore **not** B2, B3 or B4 verification — `npm run verify:b4` (which also
+runs every B2 and B3 database test) is.
+
+The B4 storage tests in the offline suite are NOT mocks: they write real
+bytes to real directories, in fresh roots under the OS temporary directory
+(prefix `valida-b4-test-`), and delete only those roots. They prove the local
+adapter's persistence; they cannot prove a production bucket's privacy
+(Doc 17 section 389) — that is C6.
 
 The offline suite also runs the provisioning module and the unmodified
 provisioning CLI over a **stand-in collection** (`tests/fixtures/fakeJobStore.js`,
@@ -122,17 +137,19 @@ persistence.
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
 | `MONGODB_CONNECT_TIMEOUT_MS` | no | `10000` | 1000–120000. How long startup waits for MongoDB before failing |
 | `MONGODB_QUERY_TIMEOUT_MS` | no | `5000` | 500–60000 (B3). Upper bound on one public Jobs read; also sent to MongoDB as `maxTimeMS`. A slower or unresponsive database gives `503`, never a hung request or an empty list |
-| `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
+| `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
+| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. The production provider is selected at deployment (C6, AWAITING INPUT) |
+| `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
 
 Configuration is validated once at startup with Zod. **Invalid or missing
 production-critical configuration stops the process** rather than serving
 traffic in a half-configured state. Error messages name the offending variable
 and never print its value.
 
-Variables recorded in `.env.example` as *future* — `RESUME_STORAGE_*`,
-`TRANSACTIONAL_EMAIL_*`, `PUBLIC_SITE_URL` — are deliberately **not** read or
-required. Requiring a variable nothing consumes would imply the capability
-exists.
+Variables recorded in `.env.example` as *future* — `TRANSACTIONAL_EMAIL_*`,
+`PUBLIC_SITE_URL`, production storage-provider settings — are deliberately
+**not** read or required. Requiring a variable nothing consumes would imply the
+capability exists.
 
 The configuration object carries `MONGODB_URI` because the connection code
 needs it, but serialising the object (`JSON.stringify`, `console.log`, a logger)
@@ -170,10 +187,10 @@ dependency is ready:
 | --- | --- | --- |
 | `configuration` | B1 | ready |
 | `database` | B2 | ready **only while the MongoDB connection is open** — set from the driver's real `connected` / `disconnected` / `error` events |
-| `resumeStorage` | B4 | not implemented |
+| `resumeStorage` | B4 | **ready** only after the configured storage wrote, read back and removed a probe object at startup; `unavailable` when no storage is configured locally; `not_implemented` on a deployed instance (production provider: C6) |
 | `notifications` | B6 | not implemented |
 
-So a B2 runtime, even with MongoDB connected, answers:
+So a B4 runtime, even with MongoDB connected and storage ready, answers:
 
 ```
 HTTP/1.1 503 Service Unavailable
@@ -381,9 +398,10 @@ On `SIGINT`/`SIGTERM`:
    **before** the socket closes;
 2. the HTTP server stops accepting connections and lets in-flight requests
    finish — at most 10 s, after which remaining connections are closed;
-3. registered dependency hooks run — from B2, the MongoDB connection is
-   closed (the `database` dependency is marked unavailable first) — together
-   at most another 10 s. A close that fails or never settles is abandoned and
+3. registered dependency hooks run, in order — from B4 the temporary upload
+   area (its remaining files and its directory are removed) and the resume
+   storage, from B2 the MongoDB connection (the `database` dependency is
+   marked unavailable first) — together at most another 10 s. A close that fails or never settles is abandoned and
    reported (`dependency failed to close` / `dependency close timed out`),
    never reported as closed;
 4. the process exits **0 only if every step finished cleanly**, otherwise 1
@@ -414,7 +432,10 @@ the real Mongoose connector (`mongoDatabase` in `src/db/mongoose.js`).
 Startup failures print one bounded line: configuration errors name the
 variable and rule (never the value); an unreachable database prints
 *"the database connection could not be established. Check that MONGODB_URI
-names a reachable MongoDB server."*; anything else prints only a fixed
+names a reachable MongoDB server."*; storage that cannot be initialised prints
+*"the private resume storage could not be initialised (<REASON>)"* with a fixed
+reason token such as `PERMISSIONS_TOO_OPEN` (never the path) — and is checked
+BEFORE the database is contacted; anything else prints only a fixed
 classification such as `Error (EADDRINUSE)`. Driver messages, hosts, URIs and
 stacks are never printed.
 
@@ -719,7 +740,273 @@ unreachable database, `verify:b3` exits non-zero and says so. Passing
 
 ---
 
-## Scope and limitations (B1 + B2 + B3)
+## Private resume storage & validation (B4)
+
+Governed by 09_BACKEND_API_SPEC.md sections 94-108 and 137-145,
+10_DATA_MODEL.md sections 94-108 and 206-209,
+13_SECURITY_PRIVACY_THREAT_MODEL.md sections 57-79 and 255-256,
+17_QA_TEST_PLAN.md sections 115-127, 18_IMPLEMENTATION_ROADMAP.md sections
+113-121.
+
+B4 provides the pieces the Apply route (B5) composes, in the canonical order
+(Doc 09 section 118): parse -> validate -> store -> *(B5: persist the
+Application, compensate on failure)*. **No public route uses them yet**; the
+tests drive them through a test-only route (`tests/fixtures/uploadHarness.js`)
+mounted via `createApp`'s test hook, which `server.js` never passes.
+
+| Piece | Where |
+| --- | --- |
+| Bounded multipart parsing, owned temporary files | `src/lib/multipart/multipart.js`, `tempUploadArea.js` |
+| Resume validation (the layers below) | `src/modules/applications/resume/resumeValidation.js` |
+| PDF / DOCX / ZIP structure checks | `pdfInspector.js`, `docxInspector.js` (+ `packageXml.js`), `zipInspector.js` (same folder) |
+| Filename normalisation | `filename.js` |
+| Store -> `Application.resume` metadata, compensation | `resumeStorage.js` |
+| Storage boundary, local adapter | `src/integrations/storage/` |
+| The policy (one module for B3's advertised and B4's enforced values) | `src/config/resumePolicy.js` |
+
+### Validation — every layer must agree
+
+| Check | Refused with |
+| --- | --- |
+| request is `multipart/form-data` with a boundary | `415 UNSUPPORTED_MEDIA_TYPE` / `400 MALFORMED_REQUEST` |
+| declared or streamed body within the file limit + the caller's text-field limits + 64 KiB | `413 PAYLOAD_TOO_LARGE` before the body is processed; connection closed in stages (below) |
+| exactly one file, in the field `resume` | `422 VALIDATION_FAILED` — `resume: RESUME_REQUIRED` or `SINGLE_FILE_REQUIRED` |
+| only the allowed text fields, once each, within their byte limits | `422 VALIDATION_FAILED` — `form: UNSUPPORTED_FIELD` / `TOO_MANY_FIELDS`, `<field>: DUPLICATE_FIELD` / `TOO_LONG` (an unknown field name is never echoed) |
+| extension `.pdf` or `.docx` (legacy `.doc`, `.docm`, `.dotx`, `.exe`, none… refused) | `415 UNSUPPORTED_MEDIA_TYPE`, `resume: UNSUPPORTED_FILE_TYPE` |
+| declared MIME type allowed **and** the one matching the extension | `415 UNSUPPORTED_MEDIA_TYPE` |
+| size 1 … 5,242,880 bytes | empty: `422 INVALID_RESUME_FILE`; over: `413 FILE_TOO_LARGE` |
+| content is really that format (below) | `422 INVALID_RESUME_FILE` |
+| storage accepted the object durably | otherwise `503 SERVICE_UNAVAILABLE` — never success |
+| the server could hold the upload (temporary file reserved and written) | otherwise `503 SERVICE_UNAVAILABLE` **at once**, connection closed in stages — never a 400, never a hang |
+
+Client-facing wording comes from Doc 06 (126 type, 127 too large, 128
+processing, 139 required). The log records a fixed reason token and the
+detected real format (`"reason":"PDF_HEADER_MISSING","detected":"PE_EXECUTABLE"`)
+— never the filename, content, path or storage key.
+
+**PDF** (`pdfInspector.js`): `%PDF-x.y` at byte 0 (no prefix — polyglots), an
+`%%EOF` in the last 4 KiB followed only by whitespace (nothing appended), and
+`startxref` pointing inside the file at a **real cross-reference section**:
+either an `xref` table — subsection headers and well-formed fixed-width
+entries (20 bytes; the common 19- and 21-byte variants are accepted, one width
+per subsection), then `trailer` and a dictionary with `/Size` and `/Root` — or
+a cross-reference **stream** (`/Type /XRef`, `/Size`, `/W`, `/Root`, a direct
+`/Length` ending at `endstream`; FlateDecode with PNG predictors decoded
+within a hard output limit). The `/Root` reference is then followed through
+the sections (latest first, a hybrid file's `/XRefStm`, then `/Prev`) and must
+be an in-use `n g obj` holding a complete `/Type /Catalog` dictionary and
+`endobj` — or, for a compressed catalog, an in-use `/Type /ObjStm` object. A
+hybrid section whose table and stream disagree about an object, or a
+dictionary repeating a key the check reads (`/Root`, `/Size`, `/Prev`,
+`/Type`, …), is refused as ambiguous. Every read is a bounded window;
+sections (32), subsections (10,000 per file), tokens, nesting and
+decompressed bytes (4 MiB per stream, 8 MiB per file) are capped. Page content is never parsed, decompressed or
+rendered. (Review r1 finding 4: r1 checked only the first token at the
+offset, so `%PDF-1.7 xref NOT_A_PDF startxref 9 %%EOF` passed.)
+
+**DOCX** (`docxInspector.js` over `zipInspector.js`): nothing is ever
+extracted to disk. The ZIP directory is read and checked strictly (end record
+at end of file, no prepended/appended/hidden data, contiguous non-overlapping
+entries, local headers agreeing with the directory, no encryption, ZIP64,
+multi-disk or unusual compression, safe unique entry names) and bounded
+before anything is decompressed: at most 1000 entries (Apache POI's default),
+at most 100 MiB declared in total, at most 100:1 compression per entry above
+100 KiB (POI's ratio and grace size). Then only `[Content_Types].xml` and
+`_rels/.rels` are inflated in memory, each capped at 256 KiB via zlib's
+`maxOutputLength`, verified by size and CRC-32, and parsed as XML
+**structure** by a small, bounded, namespace-aware reader (`packageXml.js`; no
+XML library, linear time, a tag over 8 KiB, more than 4096 elements or depth 8
+is refused): comments and processing instructions are skipped and can never
+declare anything, CDATA and character data are refused, elements must nest
+and there must be exactly one root, and elements are identified by namespace
+URI, never by prefix. The roots, children and attributes must be exactly the
+OPC schema's, and a package that declares something twice — two Defaults for
+one extension, two Overrides for one part name (compared as OPC compares
+them — escapes decoded, ASCII case-insensitive — and, to leave no room for
+readers that fold case more widely, also Unicode case-insensitive), two
+relationships with one Id — is refused as ambiguous instead of "last one
+wins"; so is a declaration that only a Unicode-case-insensitive reader would
+apply to the main part. (Review r1 finding 1: r1's
+tag scanner read an `<Override>` inside a comment and let it overwrite the
+real one, so a `.docm` passed as a `.docx`.) The package must name
+exactly one internal main document whose content type is exactly the
+WordprocessingML document type — macro-enabled, template and non-Word
+(spreadsheet, presentation, ODF) packages are refused, and so is any VBA part.
+A DTD in either part is refused rather than processed.
+
+Tested against real authoring tools' output (LibreOffice, pandoc,
+python-docx, Chromium print-to-PDF, ReportLab, qpdf) in
+`tests/fixtures/resumes/` — all synthetic.
+
+**Structural validity is not a malware verdict.** Every stored resume is
+recorded `scanStatus: NOT_SCANNED`, `scanCheckedAt: null`: the metadata
+builder ignores any scan value it is given, so nothing can record `CLEAN`.
+(A client field named `scanStatus` is also refused, because the parser
+rejects every field outside the caller's allowlist — B5 must not add one.) The malware scanner is
+AWAITING INPUT; resume review (E4) stays blocked until it exists (Doc 11
+sections 172-174).
+
+### Filenames
+
+The original name is metadata only (Doc 10 section 98): Unicode NFC; only
+the last path segment (`/` and `\`); control characters, bidirectional
+overrides and invisible characters removed (the zero-width joiner and
+non-joiner are kept — Persian and emoji need them); Windows-forbidden
+characters (`< > : " | ? *`) replaced; Windows device names prefixed; cut to
+255 characters keeping the extension and whole graphemes. It never names
+anything on disk.
+
+### Storage
+
+`RESUME_STORAGE_DRIVER=local` (development only) writes to
+`RESUME_STORAGE_LOCAL_ROOT`:
+
+```
+<root>/resumes/<32 hex>/<32 hex>     the object (0600), one directory (0700) per object
+```
+
+The key `resumes/<id>/<fileKey>` is 2 x 128 bits from the CSPRNG in lowercase
+hex (case-insensitive filesystems cannot merge two keys). It is generated by
+the storage boundary, never derived from the filename, and never sent to a
+client (Doc 11 section 168). A write goes to an exclusively created
+`.partial-*` file, is hashed and counted while written, flushed, checked
+against the validated size and SHA-256, then renamed into place and the
+directory synced; any failure removes it and rejects. Directories are never
+reused: a key collision is detected, never overwritten.
+
+**Real locations, not written paths** (review r1 finding 2). The root is
+checked as written AND where it really leads: configuration and `init()`
+resolve it through every symbolic link and Windows junction
+(`fs.realpath.native`) and refuse a location inside a public/static/served
+directory or the repository before creating anything; `init()` then pins the
+root's real path and checks it again. Before every store, stat, delete and
+cleanup the adapter proves the directory it is about to use is a real
+directory (not a link or junction) that resolves to exactly its expected
+place under the pinned root — so a linked object directory, or a linked
+ancestor, makes the operation fail with `PATH_ESCAPES_STORAGE` and nothing
+outside storage is written or deleted. Links in the path *above* a root are
+allowed when they lead somewhere allowed (macOS `/var`, a redirected profile).
+Node has no `openat`/`O_NOFOLLOW` for directories, so a process swapping
+directories inside the private root in the instant between check and use is
+not excluded; such a process already has write access to the root.
+
+`deletePrivateObject(key)` accepts only a valid resume key, never follows a
+link — at the object or in any parent — and removes exactly one object. `discardStoredResume()` is the B5
+compensation step: it never throws, reports `DELETED` / `ABSENT` /
+`ORPHANED`, and logs an orphan with its storage key (not a path) for
+reconciliation. There is **no read, list or URL operation**: Phase 1 has no
+resume retrieval (Doc 09 section 170) and no public file URL.
+
+On POSIX the root must not be accessible to other users (the backend creates
+it `0700`; an existing looser directory is refused). On **Windows** the mode
+bits do not express access control — choose a root inside your own profile,
+e.g. `C:\Users\<you>\AppData\Local\valida-dev-private-resumes`.
+
+### Temporary files
+
+Each process has one temporary upload directory (`mkdtemp`, owner-only, in
+the OS temporary directory) holding an `.owner` marker with its process id:
+one randomly named file per upload, removed before the response is sent, on
+every failure path, and at shutdown. The area deletes only files it created.
+At startup it removes upload files left by a **crashed** process: only in
+its own-named directories, only when older than 24 hours AND the recorded
+owner process is no longer running — an idle but running process's area is
+never touched. If something outside the backend (an OS temp cleaner such as
+Windows Storage Sense) deletes the directory, the next upload recreates it.
+
+The area remembers its directory's identity (device + inode / file index): if
+the path is later a link, junction, file or different directory, nothing is
+reserved or deleted through it. A temporary-storage failure — the area cannot
+reserve a file (replaced, or removed with its parent) or the writer fails
+(disk full, permissions) — answers the upload **immediately** with `503
+SERVICE_UNAVAILABLE` and `Connection: close`, removes the file where possible,
+and logs a fixed reason (`UPLOAD_TEMP_RESERVE_FAILED` /
+`UPLOAD_TEMP_WRITE_FAILED`). A file that cannot be removed is logged as
+`upload_temp_cleanup_incomplete` with an errno code only (never a path) and
+retried at shutdown. (Review r1 finding 3: r1 waited for the parser's
+`finish`, which a failed write prevents, so the request hung.)
+
+### Closing a connection whose upload was not read (r3)
+
+A `413` or `503` sent before the request body was read carries `Connection:
+close`, and nothing that follows on that connection is processed as another
+request: Node's parser still dispatches a request pipelined behind the
+refused body, so the HTTP server's request listener
+(`serveUnlessConnectionClosing`, around the app in `src/server.js`) keeps it
+out of the app, never answers it, and drains its body like the rest; the
+close then waits for the client's own close (or a bound). The Express
+middleware order is unchanged. Not covered, as in r2 (ordinary Node
+pipelining): a request dispatched before the refused request's error has
+been handled.
+The close is done in stages, as RFC 9112 section 9.6 prescribes
+(`src/lib/http/stagedClose.js`): the response, then a half-close (FIN), then
+the rest of *that* request is read and discarded, then the socket closes —
+when the body is complete, when the client closes its side, or at the latest
+after 8 MiB more, 2 s without data, or 5 s in all. Closing a socket with
+unread data makes the TCP stack send a reset, and a reset can erase a
+response the client has not read yet: r2 closed at once, Linux's
+`TCPAbortOnClose` counter rose once per such response, and the Windows run of
+r2 never received the 503s. `tests/upload-temp-failure.test.js` and
+`tests/staged-close.test.js` check, on every OS, that the server has read
+every byte the client sent before it closes.
+
+To see what a client receives in these cases on any machine (synthetic data;
+prints no paths): `node tests/diagnostics/upload-early-response.mjs`.
+
+### Multipart parser selection
+
+`@fastify/busboy` **3.2.2** (added 2026-09-28; Node 24 compatible, zero
+dependencies, maintained by the Fastify team; 3.2.2 is the current security
+release, fixing CRLF header injection — CVE-2026-74866 — and 3.2.1 the
+prototype-name crash and boundary CPU loop). The original `busboy` (used by
+multer) has had no release since 2022. DOCX inspection needs no dependency:
+Node's `zlib` (`inflateRaw` with `maxOutputLength`, `crc32`).
+
+---
+
+## B4 verification
+
+```powershell
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test"
+npm run verify:b4
+echo "exit=$LASTEXITCODE"
+```
+
+Windows-safe (plain Node). It applies the same fail-closed test-database
+guard as `verify:b3`, **clears `RESUME_STORAGE_DRIVER` /
+`RESUME_STORAGE_LOCAL_ROOT` for every child run** (tests use their own
+temporary roots — your configured storage is never touched), then reports
+PASS/FAIL for:
+
+1. Node.js 24 runtime (the OS is printed too);
+2. the complete offline suite — B1, B2, B3 and B4;
+3. the B4 acceptance gate on its own: the Doc 17 file matrix through HTTP
+   into real local storage, archive bounds and zip bombs, aborted and
+   over-limit uploads over raw sockets, storage failures and cleanup,
+   persisted bytes and SHA-256, distinct keys, persistence across a new
+   adapter and a new process, storage privacy, configuration and
+   startup/readiness/shutdown — plus the review r1 regressions
+   (`docx-xml-structure`, `storage-link-confinement`, `upload-temp-failure`,
+   `pdf-xref-structure`) and the r3 `staged-close` tests. On Windows the confinement tests create
+   **junctions** (no administrator right needed); one extra test needs a
+   directory symbolic link and reports itself skipped unless Developer Mode
+   or administrator rights allow creating one;
+4. real-database prerequisites;
+5. `db:indexes:apply` against the test database;
+6. the complete real-database suite — B2, B3, and B4
+   (`tests/db/b4-resume-persistence.test.js`: resume metadata persisted by
+   MongoDB still matches the stored bytes after a reconnect, the unique
+   storage-key index, the compensation shape;
+   `tests/db/b4-storage-lifecycle.test.js`: the backend with storage over real
+   MongoDB — startup, readiness, graceful shutdown, `node src/server.js`);
+7. `db:indexes:check`.
+
+**The database gate cannot be skipped.** Passing `npm test` alone is not B4
+verification.
+
+---
+
+## Scope and limitations (B1 + B2 + B3 + B4)
 
 Implemented here — and nothing more:
 
@@ -728,16 +1015,22 @@ Implemented here — and nothing more:
 - the public Jobs API and controlled Job provisioning (B3); the only real Job
   is a DRAFT whose content is AWAITING INPUT, so the public list is empty until
   approved content is provisioned and published
-- no resume upload or private storage (B4)
-- no application submission (B5)
+- private resume storage and validation (B4) — the development-only local
+  adapter; **the production storage provider is AWAITING INPUT (C6)**, so a
+  deployed instance reports storage `not_implemented`; **no malware scanner**
+  (AWAITING INPUT — files stay `NOT_SCANNED`); no upload endpoint
+- no application submission (B5) and no orphan reconciliation command yet —
+  there are no Application references to reconcile against until B5
+  (Doc 15 section 200, `ops:storage:reconcile`, deferred to B7/C6)
 - no transactional email (B6)
 - no backend security, failure-handling or QA gate hardening (B7 — *Backend
   Security, Failure & QA Gate*; it is not the admin/authentication milestone)
 - no Apply-specific rate limiter — it ships with the Apply endpoint in B5
-- readiness reports 503 until B4 and B6 land, even with the database connected
+- readiness reports 503 until B6 lands, even with the database connected and
+  storage ready
 - losing the database connection at runtime flips readiness back to 503; there
   is no in-memory fallback
 
 The frontend is not yet connected to this API (Release C1). No admin
-authentication or HTTP write surface for Jobs exists (Release E); provisioning
-is an operator command only.
+authentication, HTTP write surface for Jobs, or resume download exists
+(Release E); provisioning is an operator command only.

@@ -6,15 +6,20 @@
  * integration configured.
  *
  * B1 implemented configuration and B2 the database (set from the real
- * connection events in db/mongoose.js). Resume storage (B4) and notifications
- * (B6) do not exist yet — so they are registered as REQUIRED and left in the
- * `not_implemented` state rather than omitted. Omitting them would make the
- * service report itself ready while required dependencies are absent, which
- * is exactly the false success this project forbids. A B2 runtime therefore
- * answers 503 on /health/ready, truthfully, even with MongoDB connected.
+ * connection events in db/mongoose.js). B4 sets resumeStorage from the real
+ * outcome of the storage initialisation in server.js: `ready` only after the
+ * configured storage wrote, read back and removed a probe object;
+ * `unavailable` (local) or `not_implemented` (deployed; the production
+ * provider is selected at C6) when no storage is configured. Notifications
+ * (B6) do not exist yet — so that dependency is registered as REQUIRED and
+ * left `not_implemented` rather than omitted. Omitting it would make the
+ * service report itself ready while a required dependency is absent, which is
+ * exactly the false success this project forbids. A B4 runtime therefore
+ * answers 503 on /health/ready, truthfully, even with MongoDB connected and
+ * storage ready.
  *
- * Each later milestone flips its own dependency to ready when it genuinely
- * connects: B4 resumeStorage, B6 notifications.
+ * Each milestone flips its own dependency to ready when it genuinely
+ * connects: B6 notifications is the one remaining.
  */
 
 export const DEPENDENCY_STATE = {

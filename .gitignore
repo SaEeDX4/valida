@@ -43,6 +43,12 @@ private-storage/
 uploads/
 tmp/
 temp/
+# B4: the storage SOURCE CODE lives in backend/src/integrations/storage/
+# (the Doc 09 canonical layout). That one exact directory is source, not
+# data, and must be committed. Every other directory named storage/ stays
+# ignored — and the backend refuses a storage root inside this repository
+# anyway (backend/src/config/env.js).
+!/backend/src/integrations/storage/
 
 # ---------------------------------------------------------------------------
 # Logs

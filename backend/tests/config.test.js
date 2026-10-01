@@ -98,17 +98,22 @@ describe('configuration', () => {
   });
 
   it('still does not require or read variables owned by later milestones', () => {
-    // Requiring storage, email or public-URL settings before B4/B6/Release C
-    // would imply those capabilities exist.
+    // Requiring email or public-URL settings before B6/Release C would imply
+    // those capabilities exist. B4 CHANGE: resume storage is now implemented,
+    // so `resumeStorage` is a real setting — but only its two B4 variables
+    // are read, it stays optional, and an unrelated storage variable (a
+    // production bucket name, which belongs to C6) is still ignored.
     const config = loadWithDatabase({
       RESUME_STORAGE_BUCKET: 'unused',
       TRANSACTIONAL_EMAIL_API_KEY: 'unused',
       PUBLIC_SITE_URL: 'unused',
     });
     const keys = Object.keys(config).join(' ').toLowerCase();
-    ['storage', 'email', 'publicsite', 'siteurl'].forEach((fragment) =>
+    ['email', 'publicsite', 'siteurl'].forEach((fragment) =>
       expect(keys, `unexpected ${fragment} setting`).not.toContain(fragment),
     );
+    expect(Object.keys(config).filter((key) => key.toLowerCase().includes('storage'))).toEqual(['resumeStorage']);
+    expect(config.resumeStorage).toEqual({ driver: null, localRoot: null });
     expect(JSON.stringify(config)).not.toMatch(/unused/);
   });
 

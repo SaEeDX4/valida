@@ -4,7 +4,7 @@ Node.js + Express REST API for the Valida platform.
 
 | | |
 | --- | --- |
-| Milestone | **B4 — Private Resume Storage & Validation** (on top of B1 — Backend Runtime & Configuration, B2 — MongoDB Models & Indexes, and B3 — Job Provisioning & Public Jobs API) |
+| Milestone | **B5 — Application Submission Workflow** (on top of B1 — Backend Runtime & Configuration, B2 — MongoDB Models & Indexes, B3 — Job Provisioning & Public Jobs API, and B4 — Private Resume Storage & Validation) |
 | Runtime | Node.js `>=24.0.0 <25.0.0`, ESM |
 | API base path | `/api/v1` |
 | Database | MongoDB via Mongoose `9.10.2` (driver `mongodb` 7.6.0 — MongoDB server 4.4 or newer) |
@@ -26,14 +26,28 @@ services. The real initial role, *Cybersecurity Specialist*, is provisioned
 only as a **DRAFT** — its employment type, final schedule wording, description,
 responsibilities and requirements are **AWAITING INPUT**, so it is not public.
 
-B4 builds the private resume foundation that the Apply workflow (B5) will
-use: a private storage boundary with a real, development-only local adapter;
+B4 builds the private resume foundation that the Apply workflow (B5)
+uses: a private storage boundary with a real, development-only local adapter;
 bounded multipart processing; and resume validation — extension, declared MIME
 type and actual PDF/DOCX structure together, bounded DOCX (ZIP) inspection,
 safe filename metadata, server-generated storage keys, SHA-256 checksums and
 `NOT_SCANNED` scan state. See "Private resume storage & validation (B4)".
-**B4 adds no public endpoint**: there is still no application submission
-(B5), no email (B6), and no way to download a stored file (E4).
+
+B5 adds the real Apply backend: `POST /api/v1/jobs/:jobSlug/applications`.
+It validates the request against the Job's CURRENT configuration, enforces
+the Job's effective state at the server clock (re-checked immediately before
+the record is written), validates and privately stores the resume (B4),
+persists the Application through the validated B2 save with immutable Job and
+answer snapshots, and returns `201` only when BOTH the private object and the
+MongoDB record exist. Idempotency (a hashed `Idempotency-Key`, a request
+fingerprint and the unique index) makes retries, double submits and lost
+responses safe. Storage and database failures never produce a success; a
+stored object is deleted only on proof that no Application references it, and
+one whose outcome is unknown is kept and logged for reconciliation. The
+notification boundary exists, but **no email provider does (B6)**: the
+internal notification stays `PENDING` — never attempted, never claimed sent.
+See "Application submission (B5)". There is still no email (B6) and no way to
+download a stored file (E4).
 
 `/api/v1/health/ready` correctly answers **503 "Service is not ready."**,
 because notifications (B6) are required and do not exist yet — even when
@@ -95,6 +109,7 @@ npm run test:db        # REAL-database suite — needs MONGODB_TEST_URI
 npm run verify:b2      # full B2 gate — see "B2 verification" below
 npm run verify:b3      # full B3 gate — see "B3 verification" below
 npm run verify:b4      # full B4 gate — see "B4 verification" below
+npm run verify:b5      # full B5 gate — see "B5 verification" below
 npm run db:indexes:apply
 npm run db:indexes:check
 npm run jobs:provision:plan  -- --file provisioning/jobs/cybersecurity-specialist.json
@@ -104,8 +119,8 @@ npm run jobs:provision:apply -- --file provisioning/jobs/cybersecurity-specialis
 `npm test` deliberately excludes `tests/db`. Those tests need a real MongoDB;
 a default command that silently skipped them could report green while
 persistence and uniqueness were never exercised. Passing `npm test` is
-therefore **not** B2, B3 or B4 verification — `npm run verify:b4` (which also
-runs every B2 and B3 database test) is.
+therefore **not** B2, B3, B4 or B5 verification — `npm run verify:b5` (which also
+runs every B2, B3 and B4 database test) is.
 
 The B4 storage tests in the offline suite are NOT mocks: they write real
 bytes to real directories, in fresh roots under the OS temporary directory
@@ -137,9 +152,12 @@ persistence.
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
 | `MONGODB_CONNECT_TIMEOUT_MS` | no | `10000` | 1000–120000. How long startup waits for MongoDB before failing |
 | `MONGODB_QUERY_TIMEOUT_MS` | no | `5000` | 500–60000 (B3). Upper bound on one public Jobs read; also sent to MongoDB as `maxTimeMS`. A slower or unresponsive database gives `503`, never a hung request or an empty list |
-| `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
+| `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4` / `verify:b5`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
 | `RESUME_STORAGE_DRIVER` | no (B4) | unset | `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. The production provider is selected at deployment (C6, AWAITING INPUT) |
 | `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
+| `APPLICATION_RATE_LIMIT_WINDOW_MS` | no (B5) | `900000` | 1000–86400000. Apply rate-limit window (Doc 09 section 34: 15 minutes) |
+| `APPLICATION_RATE_LIMIT_MAX` | no (B5) | `10` | 1–100000. Apply **attempts** per window per client IP — counted separately from, and in addition to, the general limit |
+| `NOTIFICATION_TIMEOUT_MS` | no (B5) | `5000` | 100–60000. Bound on the notification step of an accepted Application (Doc 09 section 136); when it expires the Application is answered anyway and the notification recorded `FAILED` / `TIMEOUT` |
 
 Configuration is validated once at startup with Zod. **Invalid or missing
 production-critical configuration stops the process** rather than serving
@@ -293,6 +311,68 @@ even read internal fields.
 table (`src/modules/jobs/money.js`). Only **CAD** — the currency the documents
 establish — is listed; any other currency is refused by provisioning and fails
 closed (safe `500`) in the public API rather than publishing a wrong wage.
+
+### `POST /api/v1/jobs/:jobSlug/applications` — Apply (B5)
+
+No authentication (Phase 1). `multipart/form-data`. Header **`Idempotency-Key`**
+required: one high-entropy key per logical submission (a UUID v4 is
+preferred), reused for every retry of that submission.
+
+| Part | Rules |
+| --- | --- |
+| `fullName` | required; trimmed; 2–120 characters; any script; no control characters |
+| `email` | required; trimmed; syntactically valid; at most 254; stored as given **and** normalised (trim + lowercase only) |
+| `phone` | only if the Job enables it (a non-empty value for a Job that does not is refused); required only if configured; 7–32 characters of digits and `+ - ( ) . /` and spaces, at least 7 digits |
+| `message` | only if enabled; required only if configured; at most the Job's `maxLength` (≤ 5000); internal newlines kept |
+| `screeningAnswers` | JSON `[{"questionId": "...", "answer": ...}]`, at most 20, each question once; `answer` is a string (text / the option id of a single-select), a boolean (yes/no) or `null` (not answered). Validated against the Job's current questions |
+| `resume` | exactly one file; the B4 rules (PDF/DOCX, 5 MiB, structure) |
+| anything else (`status`, `scanStatus`, `jobId`, `submittedAt`, …) | refused — `422`, never stored |
+
+Success — `201` (first submission) or `200` (idempotent replay):
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "RECEIVED",
+    "job": { "title": "…", "slug": "…" },
+    "submittedAt": "2026-10-05T12:00:00.000Z"
+  },
+  "meta": { "requestId": "…", "replayed": false }
+}
+```
+
+Nothing the candidate sent, no filename, storage key, internal id or
+notification state is ever returned. `Cache-Control: no-store` on every answer.
+
+| Condition | Status | Code |
+| --- | --- | --- |
+| no / malformed `Idempotency-Key` | 400 | `IDEMPOTENCY_KEY_REQUIRED` / `INVALID_IDEMPOTENCY_KEY` |
+| not multipart | 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| field / answer / missing-resume errors | 422 | `VALIDATION_FAILED` with `fieldErrors` (`fullName`, `email`, `phone`, `message`, `resume`, `screeningAnswers`, `screeningAnswers.<questionId>`) |
+| unknown, Draft, Archived or not-yet-published Job, invalid slug | 404 | `JOB_NOT_FOUND` ("This application isn't available.") |
+| Closed Job, `closesAt` passed — also when it closes DURING the request | 409 | `JOB_NOT_ACCEPTING_APPLICATIONS` |
+| same key, different submission (or another Job) | 409 | `IDEMPOTENCY_KEY_REUSED` |
+| resume type / size / content | 415 / 413 / 422 | B4 codes |
+| too many attempts | 429 | `RATE_LIMITED` |
+| storage or database unavailable, outcome not confirmable, indexes missing | 503 | `SERVICE_UNAVAILABLE` ("We couldn't submit your application right now. Please try again.") |
+| unexpected defect | 500 | `INTERNAL_ERROR` |
+
+Answers given before the upload is read (400 key, the **Apply** limiter's 429,
+503 storage not configured, and B4's 413/503) carry `Connection: close` and
+close the connection in stages, so the client receives them and the upload is
+never processed as another request. The general public limit's 429 (B1,
+unchanged) is answered completely with the connection kept open; Node then
+reads and discards the unread upload — nothing is parsed, stored or created,
+and a request pipelined behind it is framed as its own request and is itself
+subject to the limit. **Limitation (server-wide since B1, not B5) — OPEN,
+tracked for B7, must be resolved before public deployment:** that discard is
+not bounded by the B4 staged-close limits (8 MiB, 5 s) — only by Node's
+default `requestTimeout` (300 s; `server.js` does not set it, and the 300 s
+bound itself is not measured by a test) or the client; B1's 404 and B4's
+non-multipart 415 behave the same. Measured in
+`tests/apply-connection.test.js`. A reverse-proxy body limit configured later
+does not by itself close this item; B7 must resolve and verify it.
 
 ## Response envelopes
 
@@ -893,7 +973,8 @@ not excluded; such a process already has write access to the root.
 `deletePrivateObject(key)` accepts only a valid resume key, never follows a
 link — at the object or in any parent — and removes exactly one object. `discardStoredResume()` is the B5
 compensation step: it never throws, reports `DELETED` / `ABSENT` /
-`ORPHANED`, and logs an orphan with its storage key (not a path) for
+`ORPHANED`, and logs an orphan with its one-way object reference — never the
+storage key or a path (changed in B5, see "Logs and reconciliation (B5)") — for
 reconciliation. There is **no read, list or URL operation**: Phase 1 has no
 resume retrieval (Doc 09 section 170) and no public file URL.
 
@@ -962,6 +1043,186 @@ prototype-name crash and boundary CPU loop). The original `busboy` (used by
 multer) has had no release since 2022. DOCX inspection needs no dependency:
 Node's `zlib` (`inflateRaw` with `maxOutputLength`, `crc32`).
 
+## Application submission (B5)
+
+| Piece | Where |
+| --- | --- |
+| Route, Apply rate limit | `src/modules/applications/application.routes.js`, `src/middleware/rateLimit.js` |
+| HTTP: key header, bounded parse, temp-file release, response | `src/modules/applications/application.controller.js` |
+| Field, answer and key rules; the replay fingerprint | `src/modules/applications/application.validation.js` |
+| The workflow | `src/modules/applications/application.submission.js` |
+| Bounded, classified persistence (validated B2 saves) | `src/modules/applications/application.repository.js` |
+| Job reads for Apply (same visibility rule) | `src/modules/jobs/job.repository.js` |
+| Notification boundary | `src/integrations/notifications/notificationService.js` |
+
+### The sequence
+
+1. candidate fields and the shape of `screeningAnswers` — `422`;
+2. **an Application already created with this key?** the file must still pass
+   the B4 validator, and the record must be confirmed by a read with read
+   concern `majority` (otherwise `503`, nothing stored); then same
+   fingerprint -> the original result, `200 replayed`; different -> `409`;
+3. the Job by slug and its effective state at the server clock — `404` / `409`;
+4. phone, message and answers against the Job's current configuration — `422`;
+5. the resume (B4) — `415` / `413` / `422`;
+6. the unique Application indexes are present (fail closed) — `503`;
+7. the resume is stored privately (B4) — `503` on failure;
+8. **the Job's state is read again**, then the server clock is read: the
+   state is evaluated at that fresh instant, which becomes `submittedAt` — if
+   the Job has closed (also exactly at `closesAt`), the stored object is
+   removed and the answer is `409`;
+9. the Application is inserted through the validated B2 save, under the
+   write-durability policy (below);
+10. the notification step (bounded; never affects acceptance);
+11. `201`.
+
+Step 2 comes before the Job checks deliberately: Doc 09 section 121 requires a
+retry after a lost response to return the original success even when the Job
+has closed since. For a key with no Application the order is exactly Doc 09
+section 109. Step 8 makes the closing-time race (Doc 09 section 115) exact:
+the eligibility state is evaluated at a server time taken AFTER the read (r2 —
+a time taken before it would be stale by the read's duration), and that same
+instant is `submittedAt`; so every Application is recorded with a
+`submittedAt` before its Job's `closesAt`. An administrative close that
+commits during that read is not seen (there is no cross-collection
+transaction); because such a close stamps its `closedAt` before its save
+commits, the Application's `submittedAt` can then be later than the Job's
+`closedAt` by at most the read's duration plus the close's save time.
+
+### Write durability (r2)
+
+Success requires the Application "persisted successfully" (Doc 09 section
+117), so every Application write — the insert and the notification-state
+update — is sent with an explicit write concern `{ w: "majority", j: true,
+wtimeout: MONGODB_QUERY_TIMEOUT_MS }` (`APPLICATION_WRITE_CONCERN`,
+`application.repository.js`): acknowledged by a majority (on a single server,
+that server) and journaled. It is set on the operation, which the driver
+uses INSTEAD of the connection default, so an unsafe `MONGODB_URI` (`w=0`,
+`journal=false`) cannot weaken it (`tests/db/b5-apply.test.js` connects with
+`w=0` and observes the insert command). The acknowledgement is verified, not
+assumed: an insert counts as created only when the driver's result says
+`acknowledged: true`; anything else is an unknown outcome (`UNACKNOWLEDGED`)
+— the write may still land — and a `wtimeout` is a write-concern error, also
+unknown. Neither is ever treated as "not persisted".
+
+- On a **single server** (the local Windows development and verification
+  target) "majority" is that server, so majority reads are ordinary reads; the
+  failover protection is real on a **replica set** (production topology is
+  C6). The journal requirement (`j: true`) applies on both.
+- On a host **without journaling** (an in-memory storage engine, or an old
+  server started with `--nojournal`) the server refuses `j: true`: every
+  Apply is then answered `503` and its resume kept — fail closed.
+- If the URI sets `timeoutMS` (client-side operation timeouts), the driver
+  drops `wtimeout` and that timeout bounds the write instead.
+- The policy protects Application writes. A `w=0` `MONGODB_URI` is not
+  refused at startup, so other writes (B3 Job provisioning) would follow it.
+
+### Idempotency
+
+The key itself is never stored or logged: the record keeps
+`sha256("idempotency:" + key)` and a fingerprint hash of the canonical
+submission (Job, normalised name and email, enabled fields, normalised answers,
+resume SHA-256 — Doc 10 section 114). Same key + same fingerprint = replay
+(nothing stored, nothing notified); different fingerprint = `409`. Concurrent
+requests with one key all reach MongoDB, the **unique index** admits one, and
+each loser removes its own stored object and answers with the winner's result
+— once that result is majority-confirmed (on a replica set a loser that
+arrives before the winner's write is majority-committed gets `503` and replays
+on retry; on a single server it replays at once).
+A different key with the same email is a new Application (Doc 09 section 81).
+
+A replay — and a `409` for a conflicting reuse — is answered only from a
+record confirmed by a read with read concern `majority` (r2): in the early
+lookup and on every race path that answers with the winner. A record visible to
+an ordinary read but not (yet) majority-confirmed is answered `503`
+(`application_replay_unconfirmed`), with nothing stored for the request; the
+same key replays once the record is confirmed.
+
+### Failures — what happens to the stored object
+
+An object is deleted only on **proof** that no Application references it.
+
+| Insert outcome | Object | Answer |
+| --- | --- | --- |
+| persisted | kept (referenced) | `201` |
+| refused by the key-hash unique index | the key's Application is read FIRST: another object -> ours removed (the server refused it), the winner replayed once majority-confirmed (else `503`); ours (a retried insert whose first attempt was applied), confirmed by a `majority` read -> `201`; unreadable or unconfirmed -> **kept**, `application_persistence_ambiguous` | replay / `409` / `201` / `503` |
+| **proven** not persisted — the connection was down so nothing was sent, or the error carries the server's `NoWritesPerformed` label | removed — if removal fails it stays private and `resume_compensation ORPHANED` names its object reference | `503` |
+| **unknown** — timeout, network failure, write-concern error (incl. `wtimeout`), an **unacknowledged** result, **any other server error, a failed server selection**, or an unrecognised error | read back by key hash with read concern `majority`: ours found -> `201`; another found -> removed + replay; otherwise **kept** — it may belong to a persisted Application — and `application_persistence_ambiguous` names its object reference; a timed-out insert is followed to its end and its real outcome logged (removed only if then proven not persisted, or if another Application is read back for its key) | `503` — neither success nor failure is claimed |
+| refused by a unique index the server did not name | removed only if an Application with this key exists with another object and nothing references ours; otherwise kept | replay / `409` / `503` |
+| refused before sending (schema validation — a defect) | removed | `500` |
+
+Why a server error or a failed server selection is "unknown": with retryable
+writes (the default on a replica set) the driver retries a failed insert once
+and, if the retry fails too, reports the retry's error — while the first
+attempt may already have been applied.
+
+A client that retries after a `503` with the same key either gets the replay
+(the record existed after all) or creates the Application then; an unknown
+outcome's object that no record references is an orphan for the conservative
+reconciliation of Doc 10 sections 207-209 (the command is deferred, see Scope).
+The follow-up of a timed-out insert lives in process memory: it is not awaited
+at shutdown, and one still pending when the process stops is dropped — safely,
+since its object is then kept and already named.
+
+### Logs and reconciliation (B5)
+
+A storage key is private: it is never in a response (Doc 09 section 22; Doc 13
+sections 237 and 279), "not public metadata" (SEC-026), not "exposed in
+ordinary application data" (Doc 13 section 81), and not among the fields Doc 09
+section 150 lists for Application logs. **No log carries a storage key, a key segment or a storage
+path.** Where an event must point at ONE object — `resume_compensation
+ORPHANED`, `private_storage_cleanup_incomplete`,
+`application_persistence_ambiguous`, `application_storage_key_conflict`,
+`application_persistence_resolved` (`UNKNOWN`) — it carries `objectRef`: the
+first 128 bits of SHA-256 over the domain-separated key — exactly
+`sha256("valida:storage-object-ref:v1:" + storageKey)` as lowercase hex, first
+32 characters (`storageObjectRef()`, `src/integrations/storage/storageContract.js`).
+It is one-way (the key has 256 random bits) and grants nothing. On the local
+adapter a failed write can leave `<key>.partial-<random>`; its key is the name
+without that suffix.
+
+Reconciliation (Doc 10 sections 207-209; Doc 15 sections 200-204; the
+`ops:storage:reconcile` command is deferred to B7/C6) needs no log to work: it
+lists private storage, looks each key up in `Application.resume.storageKey`,
+and treats an unreferenced object older than the safety window as a possible
+orphan — dry-run by default, deletion only on an explicit operator action. The
+log's `objectRef` lets an operator connect an incident (request id, reason) to
+the one object concerned: reconciliation computes `storageObjectRef()` for each
+key it lists. Until that command exists (B7/C6), an operator with access to the
+private store computes the same value for the keys listed there. The key itself stays only where it is already protected — in
+private storage and in MongoDB (`tests/db/b5-apply.test.js` performs exactly
+this resolution against the real database).
+
+This changes two approved B4 log events (`resume_compensation ORPHANED`,
+`private_storage_cleanup_incomplete`), which logged the key: B5 is the first
+public path that can reach them. Their B4 tests now assert the reference is
+logged and the key is not.
+
+### Notification boundary
+
+After the record exists — never on a replay — the workflow calls
+`notifyApplicationReceived()` with the internal id, the Job title/slug and the
+time only (no candidate data, no resume). B5 has **no transport**: the outcome
+is `NOT_ATTEMPTED / NOT_CONFIGURED`, and the record keeps
+`notifications.internal = PENDING, attemptCount 0`. With a transport (B6;
+tests use doubles) a provider acceptance records `SENT` (handed to the
+provider — not delivery), a failure records `FAILED` with a fixed code, and a
+call that exceeds `NOTIFICATION_TIMEOUT_MS` is aborted and recorded
+`FAILED / TIMEOUT`. In every case the Application stays accepted. Readiness
+keeps answering `503` until B6.
+
+### Pipelined requests
+
+The B4 server wrapper (`serveUnlessConnectionClosing`, `src/server.js`)
+refuses any request that arrives on a connection after a refusal armed its
+staged close. A request pipelined so closely that Node dispatches it BEFORE
+the refusal is decided is an ordinary pipelined request: measured (Linux),
+it is processed and accepted, but its response is not delivered because the
+connection closes after the earlier refusal — the lost-response case. Its
+retry with the same key replays it: never a duplicate, never an orphan
+(`tests/apply-connection.test.js`, `tests/db/b5-apply-server.test.js`).
+Browsers do not pipeline.
+
 ---
 
 ## B4 verification
@@ -1004,9 +1265,53 @@ PASS/FAIL for:
 **The database gate cannot be skipped.** Passing `npm test` alone is not B4
 verification.
 
+## B5 verification
+
+```powershell
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test"
+npm run verify:b5
+echo "exit=$LASTEXITCODE"
+```
+
+Same guard, isolation and fail-closed database gate as `verify:b4`. PASS/FAIL
+for: Node.js 24; the complete offline suite (B1–B5); the **B5 acceptance
+gate** (`apply-http`, `apply-validation-http`, `apply-failures`,
+`apply-units`, `apply-connection`); the B4 acceptance gate carried forward;
+real-database prerequisites; `db:indexes:apply`; the complete real-database
+suite (B2–B5); the **B5 real-database gate** (`tests/db/b5-apply.test.js`,
+`tests/db/b5-apply-server.test.js`) followed by its sanitised evidence; and
+`db:indexes:check`.
+
+What the B5 real-database gate exercises against MongoDB, and what is
+injected:
+
+| Real | Injected (the rest is real) |
+| --- | --- |
+| the full chain request -> response -> MongoDB record -> private object (PDF and DOCX) | — |
+| replay and key conflict; 8 concurrent requests with one key resolved by the real unique index | an insert gate holds the 8 inserts until all are in flight |
+| closed, archived, Draft, expired and unknown Jobs refused; a Job closed during Apply; snapshot immutability after a Job edit | the close during Apply is made by a real `closeJob` inside the storage call, after the object is written |
+| loss of the connection after storage: the real repository's disconnected check, compensation | the disconnect is triggered at that moment |
+| the real repository's bound expiring before a real insert completes; its `settled` follow-up; the `majority` read-back; the late commit; the retry replay (from a majority-confirmed record) | the START of the save is delayed past the bound |
+| an unknown outcome where nothing was written: the real read-back finds nothing; the object is kept and unreferenced | the insert reports a network failure |
+| missing unique index -> fail closed; restored -> accepted | the index is dropped |
+| the write-durability policy on an UNSAFE connection: the URI sets `w=0`, and the observed insert command still carries `{ w: "majority", j: true, wtimeout }`; the record is read back with read concern `majority` (r2) | the unsafe URI option (that is the point) |
+| the notification-state update observed with the same write concern (r2) | a transport double |
+| expiry DURING the real eligibility read: `409`, no record, object compensated (r2) | the read's return is delayed past `closesAt` |
+| notification FAILED persisted through the validated save; no re-notification on replay | a transport double (no provider exists — B6) |
+| the production server composition (`startServer`), pipelining after the refusal, the documented pre-arming limit, and persistence across a backend **process** restart | — |
+
+The repository's classification of driver errors (server error, server
+selection, the `NoWritesPerformed` label, write concern, network) is covered by unit
+tests with constructed driver errors; reproducing them against a live server
+would need a replica set with failure injection (`failCommand`), which this
+gate does not assume.
+
+**The database gate cannot be skipped.** Passing `npm test` alone is not B5
+verification.
+
 ---
 
-## Scope and limitations (B1 + B2 + B3 + B4)
+## Scope and limitations (B1 + B2 + B3 + B4 + B5)
 
 Implemented here — and nothing more:
 
@@ -1018,14 +1323,26 @@ Implemented here — and nothing more:
 - private resume storage and validation (B4) — the development-only local
   adapter; **the production storage provider is AWAITING INPUT (C6)**, so a
   deployed instance reports storage `not_implemented`; **no malware scanner**
-  (AWAITING INPUT — files stay `NOT_SCANNED`); no upload endpoint
-- no application submission (B5) and no orphan reconciliation command yet —
-  there are no Application references to reconcile against until B5
-  (Doc 15 section 200, `ops:storage:reconcile`, deferred to B7/C6)
+  (AWAITING INPUT — files stay `NOT_SCANNED`)
+- application submission (B5) — the real Apply endpoint; **no email provider**
+  (the internal notification stays `PENDING`; B6) and no candidate
+  acknowledgement (`NOT_REQUIRED`)
+- no orphan reconciliation command yet (Doc 15 section 200,
+  `ops:storage:reconcile`, deferred to B7/C6): unknown-outcome and
+  failed-compensation objects are KEPT, and the logs name them by a one-way
+  object reference (never the key)
+- the Apply rate limit counts in process memory: with several backend
+  instances each counts separately (Doc 13 section 54; deployment design, C6)
+- an early answer given before a request body has arrived (the general 429,
+  B1's 404, B4's non-multipart 415) lets Node read and discard the rest of the
+  body, bounded only by Node's default `requestTimeout` (300 s) or the client,
+  not by the B4 staged-close limits — a server-wide property since B1, measured in
+  `tests/apply-connection.test.js`. **OPEN — tracked for B7 and to be resolved
+  before public deployment**; a reverse-proxy body limit configured later does
+  not by itself close it
 - no transactional email (B6)
 - no backend security, failure-handling or QA gate hardening (B7 — *Backend
   Security, Failure & QA Gate*; it is not the admin/authentication milestone)
-- no Apply-specific rate limiter — it ships with the Apply endpoint in B5
 - readiness reports 503 until B6 lands, even with the database connected and
   storage ready
 - losing the database connection at runtime flips readiness back to 503; there

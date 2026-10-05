@@ -1,6 +1,6 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { errorEnvelope } from '../lib/envelope.js';
-import { ERROR_CODES } from '../errors/AppError.js';
+import { ERROR_CODES, applicationRateLimited } from '../errors/AppError.js';
 
 /**
  * General public API rate limit — Doc 13.
@@ -14,8 +14,8 @@ import { ERROR_CODES } from '../errors/AppError.js';
  * outage. The health endpoints touch no database and return no data, so
  * exempting them costs nothing.
  *
- * The Apply-specific limiter (10 per 15 minutes) is NOT implemented here: the
- * Apply endpoint arrives in B5 and will bring its own stricter limiter.
+ * The Apply-specific limiter (Doc 09 section 34) is applicationRateLimit()
+ * below — B5.
  */
 export function generalRateLimit({ windowMs, max }) {
   return rateLimit({
@@ -47,6 +47,46 @@ export function generalRateLimit({ windowMs, max }) {
             req.id,
           ),
         );
+    },
+  });
+}
+
+/**
+ * Apply rate limit — Milestone B5, Doc 09 sections 34-35, BE-045.
+ *
+ * Starting policy: 10 submission ATTEMPTS per 15 minutes per effective client
+ * IP (configuration-driven). Mounted on the Apply route only, BEFORE the
+ * Idempotency-Key check and before a byte of the upload is read, so every
+ * attempt counts — accepted, refused or replayed — and a limited client costs
+ * the server no upload processing.
+ *
+ * Its own counter (a separate limiter instance): Apply attempts do not consume
+ * the general read budget's allowance beyond the one request each, and reads
+ * cannot exhaust the Apply allowance.
+ *
+ * A limited request is answered through the central error handler as
+ * 429 RATE_LIMITED with `closeConnection`: its upload body has not been read,
+ * so — like B4's early 413/503 — the connection is closed in stages
+ * (lib/http/stagedClose.js), the unread body is never processed as another
+ * request, and the client still receives the 429. The RateLimit headers
+ * (draft-7) are set by the limiter before the error is raised.
+ *
+ * Same key derivation as the general limiter: req.ip under the validated
+ * `trust proxy` setting, IPv6 normalised to its /56.
+ *
+ * LIMITATION (Doc 13 section 54): the counter lives in process memory. With
+ * several backend instances each instance counts separately; the deployment
+ * design (C6) must account for that before scaling out.
+ */
+export function applicationRateLimit({ windowMs, max }) {
+  return rateLimit({
+    windowMs,
+    limit: max,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => ipKeyGenerator(req.ip),
+    handler(_req, _res, next) {
+      next(applicationRateLimited());
     },
   });
 }

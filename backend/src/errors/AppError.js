@@ -14,8 +14,10 @@
 /**
  * Canonical error codes used so far: B1 (the first six), B3 (the public Jobs
  * API — VALIDATION_FAILED and JOB_NOT_FOUND, Doc 09 sections 21-23, 51, 61,
- * 69) and B4 (resume files — UNSUPPORTED_MEDIA_TYPE, INVALID_RESUME_FILE and
- * FILE_TOO_LARGE, Doc 09 sections 23, 139-141).
+ * 69), B4 (resume files — UNSUPPORTED_MEDIA_TYPE, INVALID_RESUME_FILE and
+ * FILE_TOO_LARGE, Doc 09 sections 23, 139-141) and B5 (Application
+ * submission — JOB_NOT_ACCEPTING_APPLICATIONS and the three idempotency codes,
+ * Doc 09 sections 23, 76, 80, 114).
  */
 export const ERROR_CODES = {
   API_ROUTE_NOT_FOUND: 'API_ROUTE_NOT_FOUND',
@@ -29,6 +31,10 @@ export const ERROR_CODES = {
   UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
   INVALID_RESUME_FILE: 'INVALID_RESUME_FILE',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  JOB_NOT_ACCEPTING_APPLICATIONS: 'JOB_NOT_ACCEPTING_APPLICATIONS',
+  IDEMPOTENCY_KEY_REQUIRED: 'IDEMPOTENCY_KEY_REQUIRED',
+  INVALID_IDEMPOTENCY_KEY: 'INVALID_IDEMPOTENCY_KEY',
+  IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
 };
 
 /**
@@ -259,4 +265,102 @@ export const uploadInterrupted = () =>
     code: ERROR_CODES.MALFORMED_REQUEST,
     message: 'The upload was interrupted before it completed.',
     reason: 'CLIENT_ABORTED',
+  });
+
+/*
+ * ---------------------------------------------------------------------------
+ * B5 — Application submission (Doc 09 sections 71-150; user-facing wording
+ * from Doc 06 sections 134-147 where Doc 06 defines it).
+ *
+ * The Apply route answers some failures BEFORE it has read the request body
+ * (a missing or malformed Idempotency-Key, the Apply rate limit, storage not
+ * configured). Those carry `closeConnection`, exactly like B4's early 413/503:
+ * the unread upload is never processed as another request, and the close is
+ * staged (lib/http/stagedClose.js) so the client still receives the answer.
+ * ---------------------------------------------------------------------------
+ */
+
+/** Doc 06 section 144 / Doc 09 section 114. */
+export const APPLICATIONS_CLOSED_MESSAGE = 'Applications for this role have closed.';
+/** Doc 06 sections 142-143 — the same safe text for unknown, Draft, Archived and unpublished Jobs. */
+export const APPLICATION_NOT_AVAILABLE_MESSAGE = "This application isn't available.";
+/** Doc 06 section 146 — the "approved frontend-compatible failure messaging" of Doc 09 section 137. */
+export const APPLICATION_UNAVAILABLE_MESSAGE = "We couldn't submit your application right now. Please try again.";
+
+/** Doc 09 section 76 — no Idempotency-Key header. (Wording: not defined by Doc 06; protocol-level.) */
+export const idempotencyKeyRequired = ({ closeConnection } = {}) =>
+  new AppError({
+    status: 400,
+    code: ERROR_CODES.IDEMPOTENCY_KEY_REQUIRED,
+    message: 'This request must include an Idempotency-Key header.',
+    reason: 'IDEMPOTENCY_KEY_MISSING',
+    closeConnection,
+  });
+
+/** Doc 09 section 76 — a key that is not a 16-128 character printable token. */
+export const invalidIdempotencyKey = ({ closeConnection } = {}) =>
+  new AppError({
+    status: 400,
+    code: ERROR_CODES.INVALID_IDEMPOTENCY_KEY,
+    message: 'The Idempotency-Key header is not valid.',
+    reason: 'IDEMPOTENCY_KEY_MALFORMED',
+    closeConnection,
+  });
+
+/**
+ * Doc 09 section 80 — the key already produced an Application for a DIFFERENT
+ * logical submission (Doc 10 section 115: same key hash, different request
+ * fingerprint). The client must generate a new key for a new submission.
+ */
+export const idempotencyKeyReused = () =>
+  new AppError({
+    status: 409,
+    code: ERROR_CODES.IDEMPOTENCY_KEY_REUSED,
+    message: 'This Idempotency-Key was already used for a different submission. Use a new key for a new application.',
+    reason: 'IDEMPOTENCY_FINGERPRINT_MISMATCH',
+  });
+
+/** Doc 09 sections 111-113 — unknown, Draft, Archived or not-yet-published Job: indistinguishable. */
+export const applicationJobNotFound = ({ reason = 'JOB_NOT_PUBLIC' } = {}) =>
+  new AppError({
+    status: 404,
+    code: ERROR_CODES.JOB_NOT_FOUND,
+    message: APPLICATION_NOT_AVAILABLE_MESSAGE,
+    reason,
+  });
+
+/** Doc 09 sections 114-115 — a closed Job, including one that closed while the request was being processed. */
+export const jobNotAcceptingApplications = ({ reason = 'JOB_CLOSED' } = {}) =>
+  new AppError({
+    status: 409,
+    code: ERROR_CODES.JOB_NOT_ACCEPTING_APPLICATIONS,
+    message: APPLICATIONS_CLOSED_MESSAGE,
+    reason,
+  });
+
+/**
+ * Doc 09 sections 137-138 — the Application could not be confirmed (private
+ * storage or MongoDB unavailable, or the persistence outcome could not be
+ * established). Same canonical code and status as every other 503; the
+ * message is the Doc 06 Apply wording, which never claims success or failure
+ * of an uncertain operation.
+ */
+export const applicationUnavailable = (cause, { reason, closeConnection } = {}) =>
+  new AppError({
+    status: 503,
+    code: ERROR_CODES.SERVICE_UNAVAILABLE,
+    message: APPLICATION_UNAVAILABLE_MESSAGE,
+    cause,
+    reason,
+    closeConnection,
+  });
+
+/** Doc 09 section 34 — the Apply-specific limit (Doc 06 section 147 wording). The body is unread. */
+export const applicationRateLimited = () =>
+  new AppError({
+    status: 429,
+    code: ERROR_CODES.RATE_LIMITED,
+    message: 'Too many attempts were received in a short period. Please wait and try again.',
+    reason: 'APPLICATION_RATE_LIMIT',
+    closeConnection: true,
   });

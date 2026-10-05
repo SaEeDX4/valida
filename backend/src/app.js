@@ -13,6 +13,10 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
 import { jobsRouter } from './modules/jobs/job.routes.js';
 import { createJobRepository } from './modules/jobs/job.repository.js';
+import { applicationsRouter } from './modules/applications/application.routes.js';
+import { createApplicationRepository } from './modules/applications/application.repository.js';
+import { createApplicationSubmissionService } from './modules/applications/application.submission.js';
+import { createNotificationService } from './integrations/notifications/notificationService.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -78,10 +82,23 @@ export function createApp({
   /**
    * B4 — the private resume storage and the per-process temporary upload
    * area, created and initialised by server.js (null when storage is not
-   * configured). No B4 route consumes them; the Apply route (B5) will.
+   * configured). B5's Apply route consumes them.
    */
   resumeStorage = null,
   uploadArea = null,
+  /**
+   * B5 — Application persistence (validated B2 saves over the process-wide
+   * Mongoose connection). Offline tests may pass a stand-in to drive failure
+   * paths; persistence, the unique indexes and concurrency are proven only by
+   * the real-database suite.
+   */
+  applicationRepository = createApplicationRepository({ timeoutMs: config?.databaseQueryTimeoutMs }),
+  /**
+   * B5 — the notification boundary. No transport exists until B6 (the
+   * provider is AWAITING INPUT, Doc 14 section 94): nothing is attempted and
+   * nothing is claimed sent. Tests inject transports to exercise the boundary.
+   */
+  notificationService = createNotificationService({ transport: null, timeoutMs: config?.notificationTimeoutMs ?? 5_000, clock }),
 } = {}) {
   const app = express();
 
@@ -144,6 +161,20 @@ export function createApp({
   api.use('/health', healthRouter({ readiness, logger }));
   // B3 — public Jobs API (Doc 09 sections 48-70).
   api.use('/jobs', jobsRouter({ repository: jobRepository, clock, logger }));
+  // B5 — Apply (Doc 09 sections 71-150): POST /jobs/:jobSlug/applications only.
+  const applicationSubmission = createApplicationSubmissionService({
+    jobs: jobRepository,
+    applications: applicationRepository,
+    storage: resumeStorage,
+    notifications: notificationService,
+    clock,
+    logger,
+  });
+  app.locals.applicationSubmission = applicationSubmission;
+  api.use(
+    '/jobs',
+    applicationsRouter({ service: applicationSubmission, uploadArea, resumeStorage, rateLimit: config.applicationRateLimit ?? { windowMs: 900_000, max: 10 } }),
+  );
 
   if (typeof registerTestRoutes === 'function') {
     registerTestRoutes(api, { resumeStorage, uploadArea, logger });

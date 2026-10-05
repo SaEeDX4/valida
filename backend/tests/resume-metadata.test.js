@@ -10,6 +10,7 @@ import { RESUME_FORMATS, RESUME_UPLOAD_POLICY, RESUME_FILENAME_MAX_LENGTH } from
 import {
   buildResumeMetadata, discardStoredResume, storeValidatedResume, INITIAL_SCAN_STATE,
 } from '../src/modules/applications/resume/resumeStorage.js';
+import { storageObjectRef } from '../src/integrations/storage/privateStorage.js';
 import { AppError, ERROR_CODES, invalidResumeFile, resumeTooLarge, unsupportedResumeType, resumeRequired } from '../src/errors/AppError.js';
 import { capturingLogger } from './helpers.js';
 import { syntheticPdf } from './fixtures/resumeFiles.js';
@@ -141,7 +142,7 @@ describe('compensation: discardStoredResume (Doc 09 section 119)', () => {
     expect(await discardStoredResume({ storage: env.storage, storageKey, logger: log.logger })).toBe('ABSENT');
   });
 
-  it('ORPHANED: a failed delete never throws, never claims deletion, and logs the key for reconciliation', async () => {
+  it('ORPHANED: a failed delete never throws, never claims deletion, and logs the object reference for reconciliation — never the key (B5)', async () => {
     const { storageKey } = await storeOne();
     const failing = {
       deletePrivateObject: async () => {
@@ -151,7 +152,11 @@ describe('compensation: discardStoredResume (Doc 09 section 119)', () => {
     expect(await discardStoredResume({ storage: failing, storageKey, logger: log.logger, requestId: 'qa-req' })).toBe('ORPHANED');
     const output = log.output();
     expect(output).toContain('"outcome":"ORPHANED"');
-    expect(output).toContain(`"storageKey":"${storageKey}"`);
+    // B5: the one-way reference reconciliation resolves by listing storage; the private key itself is never logged.
+    expect(output).toContain(`"objectRef":"${storageObjectRef(storageKey)}"`);
+    expect(output).not.toContain(storageKey);
+    expect(output).not.toContain(storageKey.split('/')[1]);
+    expect(output).not.toContain(storageKey.split('/')[2]);
     expect(output).toContain('"reason":"PERMISSION_DENIED"');
     expect(output).not.toContain(env.storageRoot);
     expect(output).not.toContain('QA simulated');

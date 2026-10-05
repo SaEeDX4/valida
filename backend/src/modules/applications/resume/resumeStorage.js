@@ -1,5 +1,5 @@
 import { serviceUnavailable } from '../../../errors/AppError.js';
-import { classifyStorageError, isResumeStorageKey } from '../../../integrations/storage/privateStorage.js';
+import { classifyStorageError, isResumeStorageKey, storageObjectRef } from '../../../integrations/storage/privateStorage.js';
 
 /**
  * From a validated upload to Application resume metadata — Milestone B4.
@@ -81,9 +81,10 @@ export function buildResumeMetadata(validated, stored) {
  *   'DELETED'   the object was removed
  *   'ABSENT'    there was no such object
  *   'ORPHANED'  it could not be removed — it stays private, and an error is
- *               logged with the server-generated storage key so the
- *               reconciliation process can find it (Doc 10 sections 207-209).
- *               No filename or candidate data is logged.
+ *               logged with the object's one-way reference (storageObjectRef;
+ *               B5: never the private storage key) so the reconciliation
+ *               process, which lists storage, can identify it (Doc 10 sections
+ *               207-209). No key, path, filename or candidate data is logged.
  *
  * Only a valid resume storage key is ever passed to storage; anything else
  * is refused without touching it.
@@ -104,7 +105,7 @@ export async function discardStoredResume({ storage, storageKey, logger, request
     return 'ABSENT';
   } catch (error) {
     logger?.error(
-      { ...context, outcome: 'ORPHANED', storageKey, reason: classifyStorageError(error) },
+      { ...context, outcome: 'ORPHANED', objectRef: storageObjectRef(storageKey), reason: classifyStorageError(error) },
       'resume storage orphan: compensation could not remove the stored resume',
     );
     return 'ORPHANED';

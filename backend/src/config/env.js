@@ -17,7 +17,9 @@ import { parseMongoUri } from '../db/connectionString.js';
  * B1 added the runtime variables; B2 added MONGODB_URI (required) and
  * MONGODB_CONNECT_TIMEOUT_MS; B3 added MONGODB_QUERY_TIMEOUT_MS (optional);
  * B4 added RESUME_STORAGE_DRIVER and RESUME_STORAGE_LOCAL_ROOT (optional —
- * see the private storage section below). Transactional email (B6) and
+ * see the private storage section below); B5 added the Apply rate limit
+ * (APPLICATION_RATE_LIMIT_WINDOW_MS, APPLICATION_RATE_LIMIT_MAX) and the bound
+ * on the notification step (NOTIFICATION_TIMEOUT_MS). Transactional email (B6) and
  * PUBLIC_SITE_URL (Release C) are recorded in .env.example as future
  * variables but are deliberately NOT required or read here: requiring a
  * variable nothing uses would imply the capability exists.
@@ -290,6 +292,23 @@ const baseSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).max(3_600_000).default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(120),
 
+  /*
+   * Apply rate limit — Milestone B5, Doc 09 section 34: "10 Application
+   * submission attempts per 15 minutes per effective client IP", a
+   * configuration-driven starting policy to be reviewed once real traffic
+   * exists. Stricter than the general limit (BE-045) and counted separately.
+   */
+  APPLICATION_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).max(86_400_000).default(900_000),
+  APPLICATION_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100_000).default(10),
+
+  /*
+   * Upper bound on the notification step of one Application — Milestone B5,
+   * Doc 09 section 136: a notification provider that hangs must not hold the
+   * API request open. The accepted Application is answered when the bound
+   * expires; the notification is then recorded as FAILED (TIMEOUT).
+   */
+  NOTIFICATION_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(5_000),
+
   // Optional: absent in local, where a default allowlist is supplied below.
   CORS_ALLOWED_ORIGINS: originList.optional(),
 
@@ -345,6 +364,9 @@ const RULE_TEXT = {
   TRUST_PROXY_INVALID: 'must be "false" or the number of trusted proxy hops (1-10)',
   RATE_LIMIT_WINDOW_MS: 'must be an integer between 1000 and 3600000 (milliseconds)',
   RATE_LIMIT_MAX: 'must be an integer between 1 and 100000',
+  APPLICATION_RATE_LIMIT_WINDOW_MS: 'must be an integer between 1000 and 86400000 (milliseconds)',
+  APPLICATION_RATE_LIMIT_MAX: 'must be an integer between 1 and 100000',
+  NOTIFICATION_TIMEOUT_MS: 'must be an integer between 100 and 60000 (milliseconds)',
   CORS_ALLOWED_ORIGINS:
     'must be a comma-separated list of canonical origins, each scheme://host[:port] ' +
     'with no userinfo, path, query, fragment or trailing slash',
@@ -549,6 +571,13 @@ export function loadConfig(env = process.env) {
       windowMs: config.RATE_LIMIT_WINDOW_MS,
       max: config.RATE_LIMIT_MAX,
     }),
+    // B5 — Doc 09 section 34.
+    applicationRateLimit: Object.freeze({
+      windowMs: config.APPLICATION_RATE_LIMIT_WINDOW_MS,
+      max: config.APPLICATION_RATE_LIMIT_MAX,
+    }),
+    // B5 — Doc 09 section 136.
+    notificationTimeoutMs: config.NOTIFICATION_TIMEOUT_MS,
     // General JSON body limit — Doc 09. Fixed, not configurable: raising it is
     // a security decision, not a deployment knob.
     jsonBodyLimit: '100kb',

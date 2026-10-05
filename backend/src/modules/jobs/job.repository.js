@@ -86,11 +86,40 @@ function isDatabaseFailure(error) {
 }
 
 /**
+ * B5 — the Job fields the Apply workflow reads: the public-visibility fields,
+ * the snapshot fields (Doc 10 section 77) and the application configuration.
+ * Unlike the public DTO projections it includes `_id`, which the Application
+ * references (Doc 10 section 74). It is used only server-side: no response
+ * ever carries it (Doc 09 section 127).
+ */
+export const APPLICATION_JOB_PROJECTION = Object.freeze({
+  _id: 1,
+  title: 1,
+  slug: 1,
+  status: 1,
+  publishedAt: 1,
+  closesAt: 1,
+  'location.displayName': 1,
+  workArrangement: 1,
+  employmentType: 1,
+  schedule: 1,
+  weeklyHours: 1,
+  compensation: 1,
+  applicationConfig: 1,
+});
+
+/** B5 — the lifecycle fields that decide whether a Job accepts Applications at an instant. */
+export const ELIGIBILITY_PROJECTION = Object.freeze({ _id: 1, status: 1, publishedAt: 1, closesAt: 1 });
+
+/**
  * Runs `operation` against a connected database within `timeoutMs`.
  * Rejects with DatabaseUnavailableError on disconnection, timeout or driver
  * failure; any other error is re-thrown unchanged.
+ *
+ * Exported for the B5 Application repository's READS (same semantics). Not
+ * for writes: an abandoned write has an unknown outcome, which a read does not.
  */
-function runBounded(model, operation, timeoutMs) {
+export function runBounded(model, operation, timeoutMs) {
   if (model.db?.readyState !== 1) {
     return Promise.reject(new DatabaseUnavailableError('disconnected'));
   }
@@ -166,6 +195,39 @@ export function createJobRepository({ model = Job, queryTimeoutMs = 5_000 } = {}
       return runBounded(
         model,
         () => model.findOne(filter, DETAIL_PROJECTION).maxTimeMS(queryTimeoutMs).lean(),
+        queryTimeoutMs,
+      );
+    },
+
+    /**
+     * B5 — the Job an Application at this public slug would be for, with the
+     * same visibility filter as the public detail (Doc 09 sections 110-114):
+     * DRAFT, ARCHIVED and not-yet-published Jobs are not selected at all.
+     * Whether it is still accepting Applications is decided by the caller with
+     * publicApplicationStatus() against the same `now`.
+     *
+     * @returns {Promise<object | null>}
+     */
+    findJobForApplication({ slug, now }) {
+      const filter = publicDetailFilter(slug, now);
+      return runBounded(
+        model,
+        () => model.findOne(filter, APPLICATION_JOB_PROJECTION).maxTimeMS(queryTimeoutMs).lean(),
+        queryTimeoutMs,
+      );
+    },
+
+    /**
+     * B5 — a FRESH read of one Job's lifecycle state, immediately before an
+     * Application for it is persisted (Doc 09 section 115, closing-time race).
+     * The id is the server's own (from findJobForApplication), bound with $eq.
+     *
+     * @returns {Promise<object | null>} null when the Job no longer exists
+     */
+    findJobEligibility({ jobId }) {
+      return runBounded(
+        model,
+        () => model.findOne({ _id: { $eq: jobId } }, ELIGIBILITY_PROJECTION).maxTimeMS(queryTimeoutMs).lean(),
         queryTimeoutMs,
       );
     },

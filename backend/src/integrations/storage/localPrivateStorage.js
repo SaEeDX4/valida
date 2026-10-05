@@ -13,6 +13,7 @@ import {
   PrivateStorageError,
   StorageInitializationError,
   classifyStorageError,
+  storageObjectRef,
 } from './storageContract.js';
 
 /**
@@ -422,11 +423,13 @@ export class LocalPrivateStorage {
       /*
        * The write failed AND its cleanup failed. Nothing was reported as
        * stored, and the bytes stay private, but reconciliation must be able to
-       * find them (Doc 09 section 119, Doc 10 section 207): the server-generated
-       * key identifies the object directory. No path or filename is logged.
+       * find them (Doc 09 section 119, Doc 10 section 207). B5: the log names
+       * the object by its one-way reference (storageObjectRef) — never the
+       * private key, a path or a filename (Doc 09 section 150; SEC-026; Doc 13
+       * section 81). Reconciliation, which lists storage, resolves the reference.
        */
       this.#logger?.error(
-        { event: 'private_storage_cleanup_incomplete', storageKey, leftovers },
+        { event: 'private_storage_cleanup_incomplete', objectRef: storageObjectRef(storageKey), leftovers },
         'private storage could not remove a failed write',
       );
     }

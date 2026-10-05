@@ -6,6 +6,7 @@ export {
   RESUME_STORAGE_KEY_PATTERN,
   generateResumeStorageKey,
   isResumeStorageKey,
+  storageObjectRef,
   STORAGE_FAILURE_REASONS,
   PrivateStorageError,
   StorageInitializationError,

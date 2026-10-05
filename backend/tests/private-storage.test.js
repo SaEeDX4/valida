@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import request from 'supertest';
 import { LocalPrivateStorage } from '../src/integrations/storage/localPrivateStorage.js';
 import {
-  createPrivateStorage, generateResumeStorageKey, isResumeStorageKey, PrivateStorageError, StorageInitializationError,
+  createPrivateStorage, generateResumeStorageKey, isResumeStorageKey, storageObjectRef, PrivateStorageError, StorageInitializationError,
   STORAGE_FAILURE_REASONS, classifyStorageError,
 } from '../src/integrations/storage/privateStorage.js';
 import { capturingLogger, buildApp, testConfig } from './helpers.js';
@@ -397,7 +397,7 @@ describe('failed or unverifiable writes store nothing (Doc 09 section 137, Doc 1
     expect(fs.readdirSync(path.join(storageRoot, 'resumes'))).toEqual([]);
   });
 
-  it('when even the cleanup fails, it is logged with the key (no path) and still rejected', async () => {
+  it('when even the cleanup fails, it is logged with the object reference (no key, no path — B5) and still rejected', async () => {
     const log = capturingLogger();
     const storage = newStorage({
       logger: log.logger,
@@ -414,7 +414,18 @@ describe('failed or unverifiable writes store nothing (Doc 09 section 137, Doc 1
     await expect(storage.storePrivateResume(request_())).rejects.toMatchObject({ reason: 'IO_ERROR' });
     const output = log.output();
     expect(output).toContain('"event":"private_storage_cleanup_incomplete"');
-    expect(output).toMatch(/"storageKey":"resumes\/[0-9a-f]{32}\/[0-9a-f]{32}"/);
+    // B5: the one-way reference (storageObjectRef) — never the private key.
+    expect(output).toMatch(/"objectRef":"[0-9a-f]{32}"/);
+    expect(output).not.toMatch(/resumes\/[0-9a-f]{32}/);
+    expect(output).not.toContain('storageKey');
+    // Reconciliation's view: list the store; the leftover's key (its name
+    // without the `.partial-*` suffix) resolves to exactly the logged reference.
+    // (The init probe file is also left behind here, because every removal fails.)
+    const leftovers = objects().filter((name) => /^[0-9a-f]{32}[\\/]/.test(name));
+    expect(leftovers).toHaveLength(1);
+    const leftoverKey = `resumes/${leftovers[0].split(path.sep).join('/')}`.replace(/\.partial-[^/]+$/, '');
+    expect(isResumeStorageKey(leftoverKey)).toBe(true);
+    expect(JSON.parse(output.trim().split('\n').find((line) => line.includes('private_storage_cleanup_incomplete'))).objectRef).toBe(storageObjectRef(leftoverKey));
     expect(output).not.toContain(storageRoot);
     expect(output).not.toContain('QA simulated');
   });

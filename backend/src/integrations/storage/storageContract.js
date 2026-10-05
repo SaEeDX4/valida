@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 /**
  * Private storage contract — Milestone B4: provider identifiers, the storage
@@ -28,6 +28,32 @@ export function generateResumeStorageKey(random = randomBytes) {
 
 export function isResumeStorageKey(value) {
   return typeof value === 'string' && RESUME_STORAGE_KEY_PATTERN.test(value);
+}
+
+/**
+ * The object reference used in LOGS instead of a storage key — Milestone B5.
+ *
+ * A storage key is private: never in a response (Doc 09 section 22, Doc 13
+ * sections 237 and 279), "not public metadata" (SEC-026), "not exposed in
+ * ordinary application data" (Doc 13 section 81), and not among the fields
+ * Doc 09 section 150 lists for Application logs. So no log carries one. Where an operator must be able to
+ * find ONE object — an orphan whose deletion failed, or an object kept because
+ * its Application's outcome is unknown (Doc 09 section 119: "cleanup/
+ * reconciliation process must be able to identify it") — the log carries this
+ * reference: the first 128 bits of SHA-256 over the domain-separated key.
+ *
+ * It is one-way (the key holds 256 random bits) and grants nothing. It is
+ * resolved only by something that may already list private storage — the
+ * reconciliation process (Doc 10 sections 207-209, Doc 15 sections 200-204),
+ * which computes it for each object it lists. A failed local write can leave
+ * `<key>.partial-<random>`; the key is that name without the suffix. The key itself stays where it
+ * is already protected: in the private store and in MongoDB.
+ *
+ * @param {string} storageKey
+ * @returns {string} 32 lowercase hex characters
+ */
+export function storageObjectRef(storageKey) {
+  return createHash('sha256').update(`valida:storage-object-ref:v1:${storageKey}`, 'utf8').digest('hex').slice(0, 32);
 }
 
 /** Fixed failure reasons — the only values a storage failure can log. */

@@ -20,7 +20,8 @@
     "jobs:provision:plan": "node --env-file-if-exists=.env scripts/provision-job.mjs plan",
     "jobs:provision:apply": "node --env-file-if-exists=.env scripts/provision-job.mjs apply",
     "verify:b3": "node scripts/verify-b3.mjs",
-    "verify:b4": "node scripts/verify-b4.mjs"
+    "verify:b4": "node scripts/verify-b4.mjs",
+    "verify:b5": "node scripts/verify-b5.mjs"
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.2",

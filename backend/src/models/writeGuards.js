@@ -39,9 +39,11 @@
  * Reads and deletes are unaffected. The raw driver (`Model.collection.*`)
  * bypasses Mongoose entirely and is not a supported write path.
  *
- * A later milestone that needs an atomic update (for example B6 recording a
- * notification attempt) must add a narrowly scoped, explicitly validated
- * helper here, reviewed on its own — not re-open general query updates.
+ * A later milestone that needs an atomic update must add a narrowly scoped,
+ * explicitly validated helper here, reviewed on its own — not re-open general
+ * query updates. (B6 needed none: notification attempts are claimed and
+ * recorded through this same validated document save, made CONDITIONAL with
+ * Mongoose's documented `doc.$where` — see application.repository.js.)
  */
 
 export const REJECTED_QUERY_WRITE_OPERATIONS = [

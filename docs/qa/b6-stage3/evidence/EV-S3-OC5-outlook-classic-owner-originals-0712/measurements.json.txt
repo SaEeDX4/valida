@@ -1,0 +1,411 @@
+{
+ "tool": "measure_ev_s3_oc5.py",
+ "method": "see the module docstring",
+ "shots": {
+  "O1": {
+   "file": "image(20261102-151219).png",
+   "sha256": "7e95b039f3fbcb2ed92bac71e28028d67123db48a963c85d9b6d1bf99722b797",
+   "bytes": 2191567,
+   "pixels": [
+    1919,
+    1079
+   ],
+   "owner_description": "narrow window, owner-reported Zoom 200 %",
+   "masthead_band": {
+    "x0": 432,
+    "x1": 1188,
+    "y0": 461,
+    "y1": 671,
+    "width": 757,
+    "height": 211
+   },
+   "band_cut_at_right_edge": true,
+   "logo_ink_px": 302,
+   "layout_scale_from_logo": 1.987,
+   "message_area": {
+    "x0": 421,
+    "x1": 1188,
+    "width_px": 768
+   },
+   "headline_ink": {
+    "x0": 513,
+    "x1": 1169,
+    "y0": 846,
+    "y1": 891,
+    "gap_to_area_edge_px": 19
+   },
+   "horizontal_scrollbar": {
+    "row": 954,
+    "thumb": [
+     438,
+     897
+    ],
+    "thumb_px": 460,
+    "bar_thickness_px": 17,
+    "bar": [
+     429,
+     1180
+    ],
+    "track_inner_approx": [
+     446,
+     1163
+    ],
+    "visible_fraction_approx": 0.641,
+    "thumb_at_left_end": true
+   },
+   "colours": {
+    "message_below_band": "#E9EBEF",
+    "canvas_left_of_band": "#ECEEF0"
+   },
+   "implied_layout_width_px": 1198,
+   "implied_layout_width_css_px_at_scale_2": 599
+  },
+  "O2": {
+   "file": "image(20261102-151223).png",
+   "sha256": "88f9c609fccd81fa1edbad1e7893641f5f9885a95a123d886255d8dd76acf680",
+   "bytes": 197192,
+   "pixels": [
+    1919,
+    1079
+   ],
+   "owner_description": "maximized window, enlarged rendering",
+   "masthead_band": {
+    "x0": 351,
+    "x1": 1550,
+    "y0": 263,
+    "y1": 473,
+    "width": 1200,
+    "height": 211
+   },
+   "band_cut_at_right_edge": false,
+   "logo_ink_px": 302,
+   "layout_scale_from_logo": 1.987,
+   "message_area": {
+    "x0": 14,
+    "x1": 1888,
+    "width_px": 1875
+   },
+   "headline_ink": {
+    "x0": 432,
+    "x1": 1334,
+    "y0": 647,
+    "y1": 693,
+    "gap_to_area_edge_px": 554
+   },
+   "horizontal_scrollbar": null,
+   "colours": {
+    "message_below_band": "#E9EBEF",
+    "canvas_left_of_band": "#ECEEF0"
+   },
+   "layout_scale_from_band_width": 2.0
+  },
+  "O3": {
+   "file": "image(20261102-151235).png",
+   "sha256": "a1f8cbfb4c018fad0de77c4a4dd6b64f307f15dd4f597285312fdadba8332985",
+   "bytes": 179524,
+   "pixels": [
+    1919,
+    1079
+   ],
+   "owner_description": "maximized window, normal-size rendering",
+   "masthead_band": {
+    "x0": 651,
+    "x1": 1250,
+    "y0": 263,
+    "y1": 367,
+    "width": 600,
+    "height": 105
+   },
+   "band_cut_at_right_edge": false,
+   "logo_ink_px": 151,
+   "layout_scale_from_logo": 0.993,
+   "message_area": {
+    "x0": 14,
+    "x1": 1888,
+    "width_px": 1875
+   },
+   "headline_ink": {
+    "x0": 692,
+    "x1": 1141,
+    "y0": 462,
+    "y1": 477,
+    "gap_to_area_edge_px": 747
+   },
+   "horizontal_scrollbar": null,
+   "colours": {
+    "message_below_band": "#E9EBEF",
+    "canvas_left_of_band": "#ECEEF0"
+   },
+   "layout_scale_from_band_width": 1.0
+  }
+ },
+ "O3_text_lines": [
+  {
+   "role": "logo",
+   "y": [
+    299,
+    328
+   ],
+   "bg": "#05070A",
+   "peak_ink": "#FFFFFF",
+   "peak_contrast": 20.17,
+   "p90_contrast": 19.54,
+   "ink_pixels": 1249
+  },
+  {
+   "role": "eyebrow",
+   "y": [
+    414,
+    423
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#006DA5",
+   "peak_contrast": 4.72,
+   "p90_contrast": 4.72,
+   "ink_pixels": 822,
+   "source": "#83C6FF",
+   "known_light_ink": "#006DA5",
+   "known_ink_contrast": 4.72,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "headline",
+   "y": [
+    454,
+    484
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 4728,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "body",
+   "y": [
+    520,
+    535
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 1100,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "label",
+   "y": [
+    582,
+    590
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 126,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "value",
+   "y": [
+    606,
+    619
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 2364,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "value",
+   "y": [
+    628,
+    641
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 2162,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "label",
+   "y": [
+    680,
+    688
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 409,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "value",
+   "y": [
+    704,
+    717
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 2378,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "value",
+   "y": [
+    726,
+    739
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 1711,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "label",
+   "y": [
+    778,
+    788
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 358,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "value",
+   "y": [
+    802,
+    812
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 569,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "label",
+   "y": [
+    854,
+    862
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 583,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "value",
+   "y": [
+    878,
+    888
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#2C3034",
+   "peak_contrast": 11.14,
+   "p90_contrast": 11.14,
+   "ink_pixels": 888,
+   "source": "#F4F7FA",
+   "known_light_ink": "#2C3034",
+   "known_ink_contrast": 11.14,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "note",
+   "y": [
+    942,
+    954
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 1992,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  },
+  {
+   "role": "note",
+   "y": [
+    964,
+    973
+   ],
+   "bg": "#E9EBEF",
+   "peak_ink": "#5D6875",
+   "peak_contrast": 4.75,
+   "p90_contrast": 4.75,
+   "ink_pixels": 293,
+   "source": "#B6C0CC",
+   "known_light_ink": "#5D6875",
+   "known_ink_contrast": 4.75,
+   "overshoot_pixels": 0,
+   "reliability": "exact"
+  }
+ ]
+}

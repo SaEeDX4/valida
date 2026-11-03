@@ -379,50 +379,134 @@ describe('the bounded insert (application.repository.js, scripted model)', () =>
     expect(lists).toBe(1); // verified once per process
   });
 
-  it('recordInternalNotification goes through the validated document save and increments attemptCount', async () => {
-    const repo = createApplicationRepository({ model: modelWith(), timeoutMs: 200 });
+  /*
+   * B6 CHANGE: recordInternalNotification (B5: one unconditional save AFTER
+   * the send) is replaced by a CLAIM before the send and a RECORD after it —
+   * both validated document saves, CONDITIONAL on the stored channel state
+   * (doc.$where), under the same write-durability policy. Real-MongoDB
+   * behaviour (the race, the filter) is proven in tests/db/b6-notifications.test.js.
+   */
+  const notificationDocument = (onSave = async () => 1) => {
     const document = new Application({}); // shape only; save is replaced
-    let saves = 0;
-    document.save = async () => { saves += 1; };
-    await repo.recordInternalNotification(document, { status: 'FAILED', attemptedAt: new Date(0), errorCode: 'TIMEOUT' });
-    await repo.recordInternalNotification(document, { status: 'SENT', attemptedAt: new Date(1), sentAt: new Date(2) });
-    expect(saves).toBe(2);
-    expect(document.notifications.internal.toObject()).toEqual({
-      status: 'SENT',
-      attemptCount: 2,
-      lastAttemptAt: new Date(1),
-      sentAt: new Date(2),
-      lastErrorCode: null,
+    document.saves = [];
+    document.save = async (options) => {
+      document.saves.push({ options, where: document.$where ? { ...document.$where } : document.$where, state: document.notifications.internal.toObject() });
+      const matched = await onSave(document);
+      if (matched !== undefined) document.$emit('save', document, matched);
+    };
+    return document;
+  };
+  const WRITE_POLICY = { writeConcern: { w: 'majority', j: true, wtimeout: 200 } };
+
+  it('claim, then record: validated saves, conditional on the stored state, under the write-durability policy; the attempt is counted once', async () => {
+    const repo = createApplicationRepository({ model: modelWith(), timeoutMs: 200 });
+    const document = notificationDocument();
+    expect(await repo.claimNotificationAttempts(document, ['internal'], { now: new Date(1) })).toBe('CLAIMED');
+    expect(document.saves[0]).toEqual({
+      options: WRITE_POLICY,
+      where: { 'notifications.internal.status': 'PENDING', 'notifications.internal.attemptCount': 0, 'notifications.internal.lastErrorCode': null },
+      state: { status: 'PENDING', attemptCount: 1, lastAttemptAt: new Date(1), sentAt: null, lastErrorCode: 'ATTEMPT_IN_PROGRESS' },
     });
+    expect(await repo.recordNotificationOutcomes(document, { internal: { status: 'SENT', attemptedAt: new Date(1), sentAt: new Date(2) } })).toBe('RECORDED');
+    expect(document.saves[1]).toMatchObject({
+      options: WRITE_POLICY,
+      where: { 'notifications.internal.attemptCount': 1, 'notifications.internal.lastErrorCode': 'ATTEMPT_IN_PROGRESS' },
+    });
+    expect(document.saves).toHaveLength(2);
+    expect(document.notifications.internal.toObject()).toEqual({ status: 'SENT', attemptCount: 1, lastAttemptAt: new Date(1), sentAt: new Date(2), lastErrorCode: null });
+    expect(document.$where).toBeNull();
+  });
+
+  it('a FAILED outcome keeps the attempt count and stores only the fixed code', async () => {
+    const repo = createApplicationRepository({ model: modelWith(), timeoutMs: 200 });
+    const document = notificationDocument();
+    await repo.claimNotificationAttempts(document, ['internal'], { now: new Date(5) });
+    expect(await repo.recordNotificationOutcomes(document, { internal: { status: 'FAILED', attemptedAt: new Date(5), errorCode: 'TIMEOUT' } })).toBe('RECORDED');
+    expect(document.notifications.internal.toObject()).toEqual({ status: 'FAILED', attemptCount: 1, lastAttemptAt: new Date(5), sentAt: null, lastErrorCode: 'TIMEOUT' });
+  });
+
+  it('the stored state no longer matches (DocumentNotFoundError): LOST — never an error, never a success', async () => {
+    const repo = createApplicationRepository({ model: modelWith(), timeoutMs: 200 });
+    const document = notificationDocument(async () => {
+      throw new mongoose.Error.DocumentNotFoundError({}, 'Application', 0, {});
+    });
+    expect(await repo.claimNotificationAttempts(document, ['internal'], { now: new Date(1) })).toBe('LOST');
+    expect(document.$where).toBeNull();
+    expect(await repo.recordNotificationOutcomes(document, { internal: { status: 'SENT', sentAt: new Date(2) } })).toBe('LOST');
+  });
+
+  it('unknown or failed writes reject with DatabaseUnavailableError (the caller sends nothing); invalid state is a ValidationError', async () => {
+    const reasonOf = async (promise) => promise.then(() => 'resolved', (error) => `${error.name}:${error.reason ?? ''}`);
+    const claim = (repo, document) => repo.claimNotificationAttempts(document, ['internal'], { now: new Date(1) });
+
+    const disconnected = notificationDocument();
+    expect(await reasonOf(claim(createApplicationRepository({ model: modelWith(0), timeoutMs: 200 }), disconnected))).toBe('DatabaseUnavailableError:disconnected');
+    expect(disconnected.saves).toHaveLength(0);
+
+    const repo = createApplicationRepository({ model: modelWith(), timeoutMs: 60 });
+    const started = Date.now();
+    expect(await reasonOf(claim(repo, notificationDocument(() => new Promise(() => {}))))).toBe('DatabaseUnavailableError:timeout');
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(await reasonOf(claim(repo, notificationDocument(async () => { throw new mongo.MongoNetworkError('qa'); })))).toBe('DatabaseUnavailableError:write_failed');
+    // Resolved without an acknowledged, matching write (e.g. w:0): not claimed.
+    expect(await reasonOf(claim(repo, notificationDocument(async () => undefined)))).toBe('DatabaseUnavailableError:write_failed');
+    expect(await reasonOf(claim(repo, notificationDocument(async () => 0)))).toBe('DatabaseUnavailableError:write_failed');
+    const invalid = notificationDocument(async () => {
+      throw new mongoose.Error.ValidationError();
+    });
+    expect(await reasonOf(claim(repo, invalid))).toBe('ValidationError:');
+  });
+
+  it('findNotificationCandidates: the given due-filter, bounded, oldest first, notification state only (no candidate data); refuses anything but a single $or', async () => {
+    const seen = {};
+    const query = {
+      sort: (sort) => ((seen.sort = sort), query),
+      limit: (limit) => ((seen.limit = limit), query),
+      maxTimeMS: (ms) => ((seen.maxTimeMS = ms), query),
+      lean: () => Promise.resolve([]),
+    };
+    const model = { ...modelWith(), find: (filter, projection) => ((seen.filter = filter), (seen.projection = projection), query) };
+    const repo = createApplicationRepository({ model, timeoutMs: 200 });
+    const filter = { $or: [{ 'notifications.internal.status': 'PENDING' }] };
+    expect(await repo.findNotificationCandidates({ limit: 25, filter })).toEqual([]);
+    expect(seen).toEqual({ filter, projection: { _id: 1, submittedAt: 1, notifications: 1 }, sort: { submittedAt: 1, _id: 1 }, limit: 25, maxTimeMS: 200 });
+    for (const bad of [undefined, {}, { $or: {} }, { $or: [], extra: 1 }, { 'candidate.email': 'x' }]) {
+      await expect(repo.findNotificationCandidates({ limit: 25, filter: bad })).rejects.toThrow(TypeError);
+    }
   });
 });
 
 describe('the notification boundary (notificationService.js)', () => {
-  const summary = { applicationId: 'a'.repeat(24), job: { title: 'QA', slug: 'qa' }, submittedAt: new Date(0) };
+  // B6 CHANGE: notifyApplicationReceived(summary) became deliver(event, input),
+  // which renders the backend template and applies the recipient safeguards.
+  const input = { applicationId: 'a'.repeat(24), job: { title: 'QA', slug: 'qa' }, submittedAt: new Date(0), candidateEmail: 'qa.candidate@qa-valida.example.test' };
+  const options = { timeoutMs: 100, internalRecipient: 'recruitment@qa-valida.example.test', fromAddress: 'careers@notify.qa-valida.example.test' };
+  const internal = (service) => service.deliver('APPLICATION_RECEIVED_INTERNAL', input);
 
   it('no transport (B5): NOT_ATTEMPTED / NOT_CONFIGURED — never SENT', async () => {
-    const service = createNotificationService({ transport: null, timeoutMs: 100 });
+    const service = createNotificationService({ ...options, transport: null });
     expect(service.configured).toBe(false);
-    expect(await service.notifyApplicationReceived(summary)).toEqual({ status: 'NOT_ATTEMPTED', reason: 'NOT_CONFIGURED' });
+    expect(await internal(service)).toEqual({ status: 'NOT_ATTEMPTED', reason: 'NOT_CONFIGURED' });
+    expect(await service.deliver('APPLICATION_ACKNOWLEDGEMENT', input)).toEqual({ status: 'NOT_ATTEMPTED', reason: 'NOT_CONFIGURED' });
   });
 
   it('classifies failures into fixed codes only, and never throws', async () => {
     for (const code of TRANSPORT_ERROR_CODES) {
-      const service = createNotificationService({ transport: { send: async () => { throw Object.assign(new Error('x'), { notificationCode: code }); } }, timeoutMs: 100 });
-      expect((await service.notifyApplicationReceived(summary)).errorCode).toBe(code);
+      const service = createNotificationService({ ...options, transport: { send: async () => { throw Object.assign(new Error('x'), { notificationCode: code }); } } });
+      expect((await internal(service)).errorCode).toBe(code);
     }
-    const hostile = createNotificationService({ transport: { send: async () => { throw Object.assign(new Error('x'), { notificationCode: 'mongodb://u:p@h' }); } }, timeoutMs: 100 });
-    expect((await hostile.notifyApplicationReceived(summary)).errorCode).toBe('PROVIDER_ERROR');
-    const throwsSync = createNotificationService({ transport: { send: () => { throw new Error('sync'); } }, timeoutMs: 100 });
-    expect((await throwsSync.notifyApplicationReceived(summary)).status).toBe('FAILED');
+    const hostile = createNotificationService({ ...options, transport: { send: async () => { throw Object.assign(new Error('x'), { notificationCode: 'mongodb://u:p@h' }); } } });
+    expect((await internal(hostile)).errorCode).toBe('PROVIDER_ERROR');
+    const throwsSync = createNotificationService({ ...options, transport: { send: () => { throw new Error('sync'); } } });
+    expect((await internal(throwsSync)).status).toBe('FAILED');
   });
 
   it('a hanging transport is cut off at the bound with TIMEOUT and its signal aborted', async () => {
     let signal;
-    const service = createNotificationService({ transport: { send: (_m, options) => { signal = options.signal; return new Promise(() => {}); } }, timeoutMs: 40 });
+    const service = createNotificationService({ ...options, timeoutMs: 40, transport: { send: (_m, sendOptions) => { signal = sendOptions.signal; return new Promise(() => {}); } } });
     const started = Date.now();
-    const outcome = await service.notifyApplicationReceived(summary);
-    expect(outcome).toMatchObject({ status: 'FAILED', errorCode: 'TIMEOUT' });
+    const outcome = await internal(service);
+    expect(outcome).toMatchObject({ status: 'FAILED', errorCode: 'TIMEOUT', errorClass: 'UNCERTAIN' });
     expect(Date.now() - started).toBeLessThan(1000);
     expect(signal.aborted).toBe(true);
   });

@@ -175,12 +175,86 @@ const pick = (record, projection) => {
  *   nextInsert                  { kind, reason, persist, settleAfterMs, settleAs } — settleAs is
  *                               the kind the abandoned save settles with ('CREATED' writes it)
  *   insertGate                  a promise every insert awaits first (races)
- *   faults.recordNotification   an error to throw when recording notification state
+ *   faults.recordNotification   an error to throw when recording notification outcomes
+ *   faults.claimNotification    an error to throw when claiming a notification attempt (nothing written)
+ *   faults.claimNotificationAppliedThenFails  an error to throw AFTER the claim was applied (unknown outcome)
+ *   faults.loadForUpdate        an error to throw when loading an Application for update
  */
+/*
+ * A minimal MongoDB filter matcher for the notification scan — the operators
+ * notificationDueFilter uses: equality (null matches null or missing), $in,
+ * $nin (null in the list excludes null AND missing), $gt, $gte, $lt, $lte
+ * (never match null or missing) and $or. Anything else is a test defect and
+ * throws.
+ */
+const comparable = (value) => (value instanceof Date ? value.getTime() : value);
+// MongoDB compares only within one type bracket: a date never orders against a number or a string.
+const sameType = (a, b) => a instanceof Date === b instanceof Date && typeof a === typeof b;
+function matchesCondition(value, condition) {
+  if (condition !== null && typeof condition === 'object' && !(condition instanceof Date)) {
+    return Object.entries(condition).every(([operator, operand]) => {
+      switch (operator) {
+        case '$in':
+          return operand.some((item) => matchesCondition(value, item ?? null));
+        case '$nin':
+          return !operand.some((item) => matchesCondition(value, item ?? null));
+        case '$gt':
+          return value != null && sameType(value, operand) && comparable(value) > comparable(operand);
+        case '$lt':
+          return value != null && sameType(value, operand) && comparable(value) < comparable(operand);
+        case '$lte':
+          return value != null && sameType(value, operand) && comparable(value) <= comparable(operand);
+        case '$gte':
+          return value != null && sameType(value, operand) && comparable(value) >= comparable(operand);
+        default:
+          throw new Error(`matchesFilter: unsupported operator ${operator}`);
+      }
+    });
+  }
+  if (value != null && condition != null && !sameType(value, condition)) return false;
+  return comparable(value ?? null) === comparable(condition ?? null);
+}
+export function matchesFilter(record, filter) {
+  return Object.entries(filter).every(([key, condition]) =>
+    key === '$or'
+      ? condition.some((clause) => matchesFilter(record, clause))
+      : matchesCondition(key.split('.').reduce((value, part) => (value == null ? undefined : value[part]), record), condition),
+  );
+}
+
 export function memoryApplicationRepository() {
   const records = new Map(); // keyHash -> plain record
-  const faults = { findByKeyHash: null, indexesMissing: false, recordNotification: null, readBackAfterAmbiguity: undefined };
-  const calls = { insert: 0, findByKeyHash: 0, majorityReads: 0, recordInternalNotification: 0 };
+  const faults = {
+    findByKeyHash: null,
+    indexesMissing: false,
+    recordNotification: null,
+    claimNotification: null,
+    claimNotificationAppliedThenFails: null,
+    loadForUpdate: null,
+    readBackAfterAmbiguity: undefined,
+  };
+  const calls = {
+    insert: 0,
+    findByKeyHash: 0,
+    majorityReads: 0,
+    loadForUpdate: 0,
+    claimNotificationAttempts: 0,
+    recordNotificationOutcomes: 0,
+    findNotificationCandidates: 0,
+  };
+  const byId = (id) => [...records.values()].find((candidate) => String(candidate._id) === String(id));
+  const heldClaims = new WeakMap();
+  const claimedThrough = new WeakSet();
+  const plain = (value) => (value && typeof value.toObject === 'function' ? value.toObject() : { ...value });
+  const pathValue = (object, path) => path.split('.').reduce((value, key) => (value == null ? undefined : value[key]), object);
+  /** Applies the caller's channel states to the stored record iff `where` still matches it. */
+  function applyConditionally(document, channels, where) {
+    const record = byId(document._id);
+    if (!record) return false;
+    if (!Object.entries(where).every(([path, expected]) => (pathValue(record, path) ?? null) === expected)) return false;
+    for (const channel of channels) record.notifications[channel] = clone(plain(document.notifications[channel]));
+    return true;
+  }
   const repo = {
     records,
     faults,
@@ -241,44 +315,151 @@ export function memoryApplicationRepository() {
       return [...records.values()].some((record) => record.resume.storageKey === storageKey);
     },
     async loadForUpdate(id) {
-      const record = [...records.values()].find((candidate) => String(candidate._id) === String(id));
-      if (!record) return null;
-      return { _id: record._id, notifications: clone(record.notifications) };
+      calls.loadForUpdate += 1;
+      if (faults.loadForUpdate) throw faults.loadForUpdate;
+      const record = byId(id);
+      // A full, independent copy — like a freshly loaded Mongoose document.
+      return record ? clone(record) : null;
     },
-    async recordInternalNotification(document, outcome) {
-      calls.recordInternalNotification += 1;
+    /*
+     * B6 — notification state with the real repository's CONDITIONAL
+     * semantics: a claim / record applies only if the stored channel state
+     * still matches what the caller's copy held (else LOST).
+     */
+    async claimNotificationAttempts(document, channels, { now }) {
+      calls.claimNotificationAttempts += 1;
+      // r3: the real repository's ownership rules — valid channels, single-use documents, claimable states only.
+      if (!Array.isArray(channels) || channels.length === 0 || new Set(channels).size !== channels.length || !channels.every((channel) => ['internal', 'candidateAcknowledgement'].includes(channel))) {
+        throw new TypeError('claimNotificationAttempts: channels must be distinct notification channels');
+      }
+      if (claimedThrough.has(document)) return 'LOST';
+      if (!channels.every((channel) => ['PENDING', 'FAILED'].includes(document.notifications?.[channel]?.status))) return 'LOST';
+      claimedThrough.add(document);
+      if (faults.claimNotification) throw faults.claimNotification;
+      const appliedThenFails = faults.claimNotificationAppliedThenFails;
+      const where = {};
+      const attempts = {};
+      for (const channel of channels) {
+        const state = document.notifications[channel];
+        where[`notifications.${channel}.status`] = state.status;
+        where[`notifications.${channel}.attemptCount`] = state.attemptCount;
+        where[`notifications.${channel}.lastErrorCode`] = state.lastErrorCode ?? null;
+        state.status = 'PENDING';
+        state.attemptCount += 1;
+        state.lastAttemptAt = now;
+        state.lastErrorCode = 'ATTEMPT_IN_PROGRESS';
+        attempts[channel] = state.attemptCount;
+      }
+      const claimed = applyConditionally(document, channels, where);
+      // The write was applied, but its acknowledgement is lost (e.g. a timeout): no ownership.
+      if (claimed && appliedThenFails) throw appliedThenFails;
+      if (claimed) heldClaims.set(document, { attempts, claimedAt: now });
+      return claimed ? 'CLAIMED' : 'LOST';
+    },
+    async recordNotificationOutcomes(document, outcomes) {
+      calls.recordNotificationOutcomes += 1;
+      // r3: only the holder of the claim, for exactly its channels; nothing is written otherwise.
+      const claim = heldClaims.get(document);
+      const channels = Object.keys(outcomes ?? {});
+      const owned = claim ? Object.keys(claim.attempts) : [];
+      if (!claim || channels.length === 0 || channels.length !== owned.length || !channels.every((channel) => owned.includes(channel))) return 'LOST';
+      heldClaims.delete(document);
       if (faults.recordNotification) throw faults.recordNotification;
-      const internal = document.notifications.internal;
-      internal.status = outcome.status;
-      internal.attemptCount = (internal.attemptCount ?? 0) + 1;
-      internal.lastAttemptAt = outcome.attemptedAt;
-      if (outcome.status === 'SENT') {
-        internal.sentAt = outcome.sentAt;
-        internal.lastErrorCode = null;
-      } else internal.lastErrorCode = outcome.errorCode;
-      const record = [...records.values()].find((candidate) => String(candidate._id) === String(document._id));
-      record.notifications.internal = clone(
-        typeof internal.toObject === 'function' ? internal.toObject() : { ...internal },
-      );
+      const where = {};
+      for (const [channel, outcome] of Object.entries(outcomes)) {
+        const state = document.notifications[channel];
+        where[`notifications.${channel}.attemptCount`] = claim.attempts[channel];
+        where[`notifications.${channel}.lastErrorCode`] = 'ATTEMPT_IN_PROGRESS';
+        state.attemptCount = claim.attempts[channel];
+        state.lastAttemptAt = claim.claimedAt;
+        if (outcome.status === 'SENT') {
+          state.status = 'SENT';
+          state.sentAt = outcome.sentAt;
+          state.lastErrorCode = null;
+        } else {
+          state.status = 'FAILED';
+          state.lastErrorCode = outcome.errorCode;
+        }
+      }
+      return applyConditionally(document, Object.keys(outcomes), where) ? 'RECORDED' : 'LOST';
+    },
+    async findNotificationCandidates({ limit, filter }) {
+      calls.findNotificationCandidates += 1;
+      return [...records.values()]
+        .filter((record) => matchesFilter(record, filter))
+        .sort((a, b) => a.submittedAt - b.submittedAt || String(a._id).localeCompare(String(b._id)))
+        .slice(0, limit)
+        .map((record) => ({ _id: record._id, submittedAt: record.submittedAt, notifications: clone(record.notifications) }));
+    },
+    async summarizeNotificationStates({ maxAttempts }) {
+      const summary = {};
+      for (const channel of ['internal', 'candidateAcknowledgement']) {
+        const counts = new Map();
+        let exhausted = 0;
+        for (const record of records.values()) {
+          const { status, lastErrorCode, attemptCount } = record.notifications[channel];
+          const key = `${status}/${lastErrorCode ?? null}`;
+          counts.set(key, { status, code: lastErrorCode ?? null, count: (counts.get(key)?.count ?? 0) + 1 });
+          if (['PENDING', 'FAILED'].includes(status) && attemptCount >= maxAttempts) exhausted += 1;
+        }
+        summary[channel] = { states: [...counts.values()].sort((a, b) => `${a.status}/${a.code}`.localeCompare(`${b.status}/${b.code}`)), exhausted };
+      }
+      return summary;
     },
   };
   return repo;
 }
 
+/** B6 — synthetic sending identity and recipients for the Notification Service (never deliverable). */
+export const QA_NOTIFICATION_OPTIONS = Object.freeze({
+  fromAddress: 'careers@notify.qa-valida.example.test',
+  fromName: 'Valida Careers',
+  replyTo: 'careers@qa-valida.example.test',
+  internalRecipient: 'recruitment@qa-valida.example.test',
+  acknowledgementEnabled: false,
+  recipientAllowlist: null,
+});
+
 /** A transport double for the notification boundary — records calls; never sends anything. */
-export function recordingTransport(behaviour = 'accept') {
+export function recordingTransport(behaviour = 'accept', { verify = 'ok', name = 'qa-test-double' } = {}) {
+  /*
+   * B6 — a TEST DOUBLE implementing the transport contract of
+   * notificationService.js. It never sends anything; its acceptance is not
+   * email evidence. `behaviour` (or a function (message, callNumber) ->
+   * behaviour, for per-call sequences):
+   *   'accept'            resolves with a synthetic provider message id
+   *   'hang'              never settles (the bound must abort it)
+   *   '<CODE>'            rejects with { notificationCode: '<CODE>' }
+   *   an Error / value    rejects with it as is
+   * `verify`: 'ok' | 'hang' | '<CODE>' | null (no verify function).
+   */
+  const settle = (current, accepted) => {
+    if (current === 'accept') return accepted();
+    if (current === 'hang') return new Promise(() => {});
+    if (typeof current === 'string') throw Object.assign(new Error('QA transport failure'), { notificationCode: current });
+    throw current;
+  };
   const transport = {
+    name,
     calls: [],
     signals: [],
-    async send(message, { signal }) {
+    idempotencyKeys: [],
+    verifyCalls: 0,
+    async send(message, { signal, idempotencyKey }) {
       transport.calls.push(clone(message));
       transport.signals.push(signal);
-      if (behaviour === 'accept') return { accepted: true };
-      if (behaviour === 'hang') return new Promise(() => {});
-      if (typeof behaviour === 'string') throw Object.assign(new Error('QA transport failure'), { notificationCode: behaviour });
-      throw behaviour;
+      transport.idempotencyKeys.push(idempotencyKey);
+      const callNumber = transport.calls.length;
+      const current = typeof behaviour === 'function' ? behaviour(message, callNumber) : behaviour;
+      return settle(current, () => ({ providerMessageId: `qa-message-${callNumber}` }));
     },
   };
+  if (verify !== null) {
+    transport.verify = async () => {
+      transport.verifyCalls += 1;
+      return settle(verify === 'ok' ? 'accept' : verify, () => undefined);
+    };
+  }
   return transport;
 }
 
@@ -290,6 +471,8 @@ export async function createApplyEnvironment({
   jobs = [qaJob()],
   transport = null,
   notificationTimeoutMs = 2_000,
+  // B6 — synthetic identities only (example.test is never deliverable).
+  notificationOptions = {},
   clock = () => QA_NOW,
   configOverrides = {},
   storageOptions = {},
@@ -300,7 +483,13 @@ export async function createApplyEnvironment({
   const intake = withStorage ? await createIntakeEnvironment({ logger: log.logger, storageOptions }) : null;
   const jobRepository = memoryJobRepository(jobs);
   const applicationRepository = memoryApplicationRepository();
-  const notificationService = createNotificationService({ transport, timeoutMs: notificationTimeoutMs, clock });
+  const notificationService = createNotificationService({
+    transport,
+    timeoutMs: notificationTimeoutMs,
+    clock,
+    ...QA_NOTIFICATION_OPTIONS,
+    ...notificationOptions,
+  });
   const readiness = new Readiness();
   readiness.set('configuration', DEPENDENCY_STATE.READY);
   const config = testConfig({

@@ -1,0 +1,12 @@
+A new application has arrived.
+
+The application is recorded in Valida.
+
+Role: Cybersecurity Specialist
+Role identifier: cybersecurity-specialist
+Received (UTC): 2026-10-26 15:42:00
+Application reference: 0123456789abcdef01234567
+
+Candidate details and the resume are stored privately in Valida and are not included in this email.
+
+Valida · Recruitment operations

@@ -19,7 +19,6 @@ import {
 import { validateResumeUpload } from './resume/resumeValidation.js';
 import { discardStoredResume, storeValidatedResume } from './resume/resumeStorage.js';
 import { storageObjectRef } from '../../integrations/storage/privateStorage.js';
-import { NOTIFICATION_OUTCOMES } from '../../integrations/notifications/notificationService.js';
 import { safeErrorSummary } from '../../lib/safeError.js';
 
 /**
@@ -135,11 +134,11 @@ function resultFrom(record, replayed) {
  * @param {ReturnType<import('../jobs/job.repository.js').createJobRepository>} deps.jobs
  * @param {ReturnType<import('./application.repository.js').createApplicationRepository>} deps.applications
  * @param {object | null} deps.storage the private resume storage (B4), or null when not configured
- * @param {ReturnType<import('../../integrations/notifications/notificationService.js').createNotificationService>} deps.notifications
+ * @param {ReturnType<import('./application.notifications.js').createApplicationNotifier>} deps.notifier the B6 notification cycle
  * @param {() => Date} deps.clock the server clock (Doc 09 section 187)
  * @param {object} deps.logger
  */
-export function createApplicationSubmissionService({ jobs, applications, storage, notifications, clock, logger }) {
+export function createApplicationSubmissionService({ jobs, applications, storage, notifier, clock, logger }) {
   /*
    * Follow-ups of an abandoned (timed-out) insert: when it finally settles,
    * its real outcome is logged and, if it is then proven not persisted, its
@@ -321,6 +320,9 @@ export function createApplicationSubmissionService({ jobs, applications, storage
       idempotencyKey,
       submittedAt,
     });
+    // B6 — Doc 10 section 121: with candidate acknowledgement enabled, its
+    // channel starts PENDING; otherwise it stays NOT_REQUIRED (the model's default).
+    if (notifier.acknowledgementEnabled) document.notifications.candidateAcknowledgement.status = 'PENDING';
 
     /**
      * Who holds this idempotency key now? OURS (the record references our
@@ -488,40 +490,44 @@ export function createApplicationSubmissionService({ jobs, applications, storage
     }
 
     // 10. ------------------------------------------------ notification --
+    // B6: one claim / send / record cycle (application.notifications.js) for
+    // the channels this acceptance made due. It can never undo the
+    // Application (Doc 09 section 132); it runs only here, never on a replay
+    // (section 135), and every provider call in it is bounded (section 136).
     const applicationId = String(accepted._id);
-    let notification;
-    try {
-      notification = await notifications.notifyApplicationReceived({
-        applicationId,
-        job: { title: accepted.jobSnapshot.title, slug: accepted.jobSnapshot.slug },
-        submittedAt: accepted.submittedAt,
-      });
-    } catch {
-      notification = { status: NOTIFICATION_OUTCOMES.FAILED, attemptedAt: clock(), errorCode: 'INTERNAL_ERROR' };
-    }
-
-    if (notification.status !== NOTIFICATION_OUTCOMES.NOT_ATTEMPTED) {
+    let notification = { attempted: false, reason: 'NOT_CONFIGURED' };
+    if (notifier.configured) {
       try {
         updatable ??= await applications.loadForUpdate(accepted._id);
-        if (!updatable) throw new Error('application not found for notification update');
-        await applications.recordInternalNotification(updatable, notification);
       } catch {
-        // The Application is accepted regardless (Doc 09 section 132); the
-        // missing state is visible here for an operator.
+        updatable = null;
+      }
+      if (updatable) {
+        try {
+          notification = await notifier.notifyAccepted(updatable, { requestId });
+        } catch {
+          // notifyAccepted never throws by contract; if it ever did, nothing is assumed sent.
+          notification = { attempted: false, reason: 'NOTIFICATION_STEP_FAILED' };
+        }
+      } else {
+        notification = { attempted: false, reason: 'APPLICATION_NOT_LOADED' };
+      }
+      if (notification.reason === 'APPLICATION_NOT_LOADED' || notification.reason === 'NOTIFICATION_STEP_FAILED') {
         logger.error(
-          { ...context, event: 'notification_state_unrecorded', applicationId, notification: notification.status },
-          'notification outcome could not be recorded on the application',
+          { ...context, event: 'notification_not_attempted', applicationId, reason: notification.reason },
+          'the notification step did not run for the accepted application; its notification state stays as stored for the retry command',
         );
       }
     }
-
+    const outcomeOf = (channel) => notification.outcomes?.[channel];
     logger.info(
       {
         ...context,
         event: 'application_accepted',
         applicationId,
-        notification: notification.status,
-        notificationReason: notification.reason ?? notification.errorCode ?? undefined,
+        notification: outcomeOf('internal')?.status ?? 'NOT_ATTEMPTED',
+        notificationReason: outcomeOf('internal')?.errorCode ?? (notification.attempted ? undefined : notification.reason),
+        acknowledgement: outcomeOf('candidateAcknowledgement')?.status ?? (notifier.acknowledgementEnabled ? 'NOT_ATTEMPTED' : 'NOT_REQUIRED'),
       },
       'application accepted',
     );

@@ -1,0 +1,26 @@
+# B6 Stage 2 — review material (template version `b6-2`, approved logo integrated)
+
+Everything in this folder is **synthetic review material** produced in Claude's sandbox under OD-2026-10-26-03 and OD-2026-10-27-01 — except the two owner-run records in `evidence/windows/` (the Windows test log and the package-verification transcript), kept byte for byte. Nothing here was sent as email, and **nothing here is email-client evidence**. Start with [`STAGE2_IMPLEMENTATION_REPORT.md`](STAGE2_IMPLEMENTATION_REPORT.md).
+
+| Folder / file | What it is | Provenance |
+| --- | --- | --- |
+| [`STAGE2_IMPLEMENTATION_REPORT.md`](STAGE2_IMPLEMENTATION_REPORT.md) | The report: baseline, scope, the logo approval and integration, test evidence by class, limitations, the owner's Windows instructions, packages | Written by Claude |
+| [`STAGE2_DELTA_MANIFEST.sha256`](STAGE2_DELTA_MANIFEST.sha256) | SHA-256 of every file the Stage 2 delta adds or changes against the recovered r9 + rev 6 baseline (it does not list itself) | Generated when packaging |
+| `fixtures/SYNTHETIC-*` | **Integrated build.** `.html`, `.txt`, `.subject.txt`: the renderers' output for synthetic values. `.eml`: the exact bytes the **real** SMTP adapter submitted to the **local SMTP test server** (TLS on loopback, `synthetic.example.invalid` addresses, fixed clock) — `multipart/alternative[text/plain, multipart/related[text/html, image/png]]` with the approved logo. `fixtures-index.json`: sizes, MIME structure, logo hash per message | [`tools/make_fixtures_integrated.mjs`](tools/make_fixtures_integrated.mjs), Node v24.21.0 |
+| `fixtures/superseded-no-logo-2026-10-26/` | The 2026-10-26 fixtures of the pre-approval build (no image), unchanged | [`tools/make_fixtures.mjs`](tools/make_fixtures.mjs) |
+| `previews/as-built-*.from-eml.html` | The HTML part **of each synthetic EML**, with its `cid:` reference replaced by a `data:` URI made from **the same EML's image part** — so the browser shows the bytes the message carries | `tools/make_fixtures_integrated.mjs` |
+| `previews/as-built-*.png`, `previews/previews-index.json` | Screenshots of the integrated build at 680 px (desktop) and 390 / 320 px (mobile); long values; a fallback-font simulation; images not loaded | **Chromium 153.0.8010.12, headless (Playwright) — a browser, NOT Gmail, Outlook or Apple Mail** ([`tools/make_previews_integrated.py`](tools/make_previews_integrated.py)) |
+| `previews/PREVIEW-ONLY-*` | The candidate-logo previews on which the owner approved the logo and its black field (OD-2026-10-27-01) — unchanged | Chromium; from the patch in a scratch copy, before integration |
+| `previews/superseded-no-logo-2026-10-26/` | The 2026-10-26 previews of the pre-approval build, unchanged | Chromium |
+| `logo/valida-logo-email-316x72.candidate.png` | The reviewed derived logo — **APPROVED** (OD-2026-10-27-01); byte-identical to the integrated asset `backend/src/integrations/notifications/assets/valida-logo-email-316x72.png` | [`tools/derive_logo.py`](tools/derive_logo.py) (Pillow 12.3.0; resample only) |
+| `logo/logo-derivation.json`, `logo/logo-side-by-side.png`, `logo/logo-display-size-preview*` | Hashes, dimensions, size, PNG chunks, fidelity check; source and derived side by side; display size 158 × 36 | `tools/derive_logo.py`, `tools/logo_sheet.py`; the display-size screenshots by an ad-hoc Chromium command (not saved) |
+| `logo/logo-integration.patch` | The reviewed integration patch, **applied** to the deliverable on 2026-10-27 (named `logo-integration.NOT-APPLIED.patch` until then; bytes unchanged, SHA-256 `767f492e…a00`) | Claude |
+| [`WINDOWS_EVIDENCE_ADDENDUM_2026-10-27.md`](WINDOWS_EVIDENCE_ADDENDUM_2026-10-27.md) | The owner-run Windows evidence **EV-S2-W1** (test log) and **EV-S2-W2** (package verification): package identity, results counted without double counting, the five Windows skips, the DEP0190 assessment | Claude, from the owner's log |
+| `evidence/windows/` | Two owner-run records, each **byte for byte** and cross-referenced in the addendum: the Windows `verify:b6` log (EV-S2-W1, SHA-256 `d0b3bc71…5cb5`) and the PowerShell package-verification transcript (EV-S2-W2, `d083d6b1…2856`); plus the sandbox DEP0190 trigger probe | Owner-run (the two records); sandbox (the probe) |
+| `evidence/integrated/` | Logs of the runs against the **integrated deliverable** (2026-10-27) | Sandbox only — **not** Windows evidence |
+| `evidence/` (top level) | Logs of 2026-10-26: the pre-approval build and the patch tested in a **throwaway scratch copy** — kept separate and unchanged | Sandbox only |
+| `tools/` | The scripts that produced the fixtures, previews, logo material, probes and mutations, **exactly as run**. Absolute paths are the sandbox's; the SMTP user name and password in them are synthetic values for the local test server, as in the existing test fixtures | Claude |
+
+**Not here:** real candidate data, real addresses, credentials, `.env`, dependencies or database files. The historical evidence in `docs/qa/evidence/` and `docs/qa/B6_EVIDENCE_ADDENDUM.md` (including `PENDING_MANUAL`) is unchanged.
+
+**r6 (2026-11-02):** everything in this folder documents template `b6-2`. The current build is `b6-3` (OD-2026-11-02-01); its fixtures, previews and evidence are in [`../b6-3/`](../b6-3/). The `b6-2` logo bytes remain in `logo/`.

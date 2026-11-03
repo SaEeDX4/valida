@@ -1,0 +1,149 @@
+{
+ "tool": "measure_ev_s3_oc4.py",
+ "method": "EV-S3-OC4 measurements (r7) \u2014 three owner screenshots of Outlook classic received 2026-11-02 (America/Los_Angeles).",
+ "shots": {
+  "Z1": {
+   "file": "Z1-88773f01-image.png",
+   "sha256": "7728cd9119c50f4d2b4b236e624e6fdbd3f8488ff62aec065dc610a65bc19731",
+   "bytes": 1473465,
+   "pixels": [
+    1919,
+    1079
+   ],
+   "owner_description": "narrow window, owner-reported Zoom 200 %",
+   "masthead_band": {
+    "x0": 408,
+    "x1": 1416,
+    "y0": 416,
+    "y1": 626,
+    "width": 1009,
+    "height": 211
+   },
+   "layout_scale": 1.987,
+   "band_width_css_px_visible": 507.8,
+   "message_area": {
+    "x0": 398,
+    "x1": 1416,
+    "width_px": 1019,
+    "width_css_px": 512.8
+   },
+   "headline_ink": {
+    "x0": 489,
+    "x1": 1391,
+    "y0": 800,
+    "y1": 846,
+    "css_px_wide": 454.5
+   },
+   "headline_fully_visible": true,
+   "horizontal_scrollbar": {
+    "row": 909,
+    "thumb": [
+     415,
+     1236
+    ],
+    "thumb_px": 822,
+    "bar_thickness_px": 17,
+    "bar": [
+     406,
+     1408
+    ],
+    "track_inner_approx": [
+     423,
+     1391
+    ],
+    "track_px_approx": 969,
+    "visible_fraction_approx": 0.848,
+    "thumb_at_left_end": true
+   },
+   "colours": {
+    "message_below_band": "#E9EBEF",
+    "canvas_left_of_band": "#ECEEF0"
+   },
+   "logo_ink_px": 302,
+   "implied_layout_width_px": 1202,
+   "implied_layout_width_css_px": 605
+  },
+  "Z2": {
+   "file": "Z2-a1d58126-image.png",
+   "sha256": "b4d1397f254660e4a580e9fb1bc153ec92a550f3e2333aff31c65bdc61ec7669",
+   "bytes": 199679,
+   "pixels": [
+    1919,
+    1079
+   ],
+   "owner_description": "maximized window, enlarged rendering",
+   "masthead_band": {
+    "x0": 352,
+    "x1": 1551,
+    "y0": 263,
+    "y1": 473,
+    "width": 1200,
+    "height": 211
+   },
+   "layout_scale": 1.987,
+   "band_width_css_px_visible": 603.9,
+   "message_area": {
+    "x0": 14,
+    "x1": 1888,
+    "width_px": 1875,
+    "width_css_px": 943.6
+   },
+   "headline_ink": {
+    "x0": 433,
+    "x1": 1335,
+    "y0": 647,
+    "y1": 693,
+    "css_px_wide": 454.5
+   },
+   "headline_fully_visible": true,
+   "horizontal_scrollbar": null,
+   "colours": {
+    "message_below_band": "#E9EBEF",
+    "canvas_left_of_band": "#ECEEF0"
+   },
+   "logo_ink_px": 302,
+   "layout_scale_from_band_width": 2.0
+  },
+  "Z3": {
+   "file": "Z3-a1b8b6fc-image.png",
+   "sha256": "8fe36c06b2d507b93e34372b4b8a1ba29d005becebc323f635b761726c24d86d",
+   "bytes": 182957,
+   "pixels": [
+    1919,
+    1079
+   ],
+   "owner_description": "maximized window, normal-size rendering",
+   "masthead_band": {
+    "x0": 651,
+    "x1": 1250,
+    "y0": 263,
+    "y1": 367,
+    "width": 600,
+    "height": 105
+   },
+   "layout_scale": 0.993,
+   "band_width_css_px_visible": 604.2,
+   "message_area": {
+    "x0": 14,
+    "x1": 1888,
+    "width_px": 1875,
+    "width_css_px": 1888.2
+   },
+   "headline_ink": {
+    "x0": 692,
+    "x1": 1141,
+    "y0": 462,
+    "y1": 477,
+    "css_px_wide": 453.2
+   },
+   "headline_fully_visible": true,
+   "horizontal_scrollbar": null,
+   "colours": {
+    "message_below_band": "#E9EBEF",
+    "canvas_left_of_band": "#ECEEF0"
+   },
+   "logo_ink_px": 151,
+   "layout_scale_from_band_width": 1.0
+  }
+ }
+}

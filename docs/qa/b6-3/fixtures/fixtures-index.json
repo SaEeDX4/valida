@@ -1,0 +1,104 @@
+{
+  "templateVersion": "b6-3",
+  "node": "v24.21.0",
+  "generatedFrom": "b6-3 working copy (C2 masthead + P-04, OD-2026-11-02-01)",
+  "approvedImageSha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+  "fixtures": [
+    {
+      "name": "internal",
+      "subject": "New application — Cybersecurity Specialist | Valida",
+      "htmlBytes": 9025,
+      "textBytes": 364,
+      "emlBytes": 32973,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+        "bytes": 15801,
+        "approved": true
+      }
+    },
+    {
+      "name": "acknowledgement",
+      "subject": "Application received — Cybersecurity Specialist | Valida",
+      "htmlBytes": 5276,
+      "textBytes": 220,
+      "emlBytes": 28804,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+        "bytes": 15801,
+        "approved": true
+      }
+    },
+    {
+      "name": "internal-long-values",
+      "subject": "New application — Principal Offensive Security Engineer, Cloud Infrastructure and Identity Platforms Principal Offensive Security Enginee… | Valida",
+      "htmlBytes": 9355,
+      "textBytes": 596,
+      "emlBytes": 33705,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+        "bytes": 15801,
+        "approved": true
+      }
+    },
+    {
+      "name": "acknowledgement-long-values",
+      "subject": "Application received — Principal Offensive Security Engineer, Cloud Infrastructure and Identity Platforms Principal Offensive Security Enginee… | Valida",
+      "htmlBytes": 5510,
+      "textBytes": 356,
+      "emlBytes": 29346,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+        "bytes": 15801,
+        "approved": true
+      }
+    }
+  ]
+}

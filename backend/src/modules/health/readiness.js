@@ -10,16 +10,16 @@
  * outcome of the storage initialisation in server.js: `ready` only after the
  * configured storage wrote, read back and removed a probe object;
  * `unavailable` (local) or `not_implemented` (deployed; the production
- * provider is selected at C6) when no storage is configured. Notifications
- * (B6) do not exist yet — so that dependency is registered as REQUIRED and
- * left `not_implemented` rather than omitted. Omitting it would make the
- * service report itself ready while a required dependency is absent, which is
- * exactly the false success this project forbids. A B4 runtime therefore
- * answers 503 on /health/ready, truthfully, even with MongoDB connected and
- * storage ready.
- *
- * Each milestone flips its own dependency to ready when it genuinely
- * connects: B6 notifications is the one remaining.
+ * provider is selected at C6) when no storage is configured. B6 sets
+ * notifications in server.js: `not_implemented` while no transactional email
+ * transport is configured (TRANSACTIONAL_EMAIL_PROVIDER=none), `ready` only
+ * after a configured transport's verify() succeeds (r4, SMTP: connection,
+ * TLS and login — not delivery), `unavailable` if it fails or if the relay
+ * later refuses the login. The dependency stays REQUIRED rather than
+ * omitted: omitting it would make the service report itself ready while a
+ * required dependency is absent, which is exactly the false success this
+ * project forbids. A runtime without a provider therefore answers 503 on
+ * /health/ready, truthfully, even with MongoDB connected and storage ready.
  */
 
 export const DEPENDENCY_STATE = {

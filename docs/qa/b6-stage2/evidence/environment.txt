@@ -1,0 +1,36 @@
+# Sandbox environment record — B6 Stage 2 (2026-10-26T22:05:26Z)
+
+## Node used for the Stage 2 evidence
+shim: /home/claude/recovery/tools/node24/bin/node -> /usr/local/lib/python3.13/dist-packages/playwright/driver/node
+sha256: 0a05402f14a0a05211298a47b07cea28fa49090864f677a78517fde796609414
+{"node":"v24.21.0","v8":"13.6.233.17-node.53","icu":"78.3","unicode":"17.0","cldr":"48.0","tz":"2026c","platform":"linux","arch":"x64"}
+npm: 10.9.9
+Intl.Segmenter available: function
+Provenance: Playwright's bundled Node runtime (python3 playwright package). Not an official nodejs.org download; no official checksum could be checked (nodejs.org blocked, below). DEVELOPMENT EVIDENCE ONLY.
+
+## Other Node runtimes present in the image (not used for Stage 2 evidence)
+/usr/local/bin/node v22.23.4
+node-tools
+node20
+node21
+node22
+
+## MongoDB
+mongod on PATH: none
+mongosh on PATH: none
+
+## Official distribution hosts (HEAD request through the sandbox proxy)
+https://nodejs.org/dist/index.json -> curl: (56) CONNECT tunnel failed, response 403 000
+https://nodejs.org/dist/v24.11.1/SHASUMS256.txt -> curl: (56) CONNECT tunnel failed, response 403 000
+https://fastdl.mongodb.org/ -> curl: (56) CONNECT tunnel failed, response 403 000
+https://downloads.mongodb.org/ -> curl: (56) CONNECT tunnel failed, response 403 000
+https://www.mongodb.org/ -> curl: (56) CONNECT tunnel failed, response 403 000
+https://repo.mongodb.org/apt/ubuntu/ -> curl: (56) CONNECT tunnel failed, response 403 000
+
+## Lockfile and package manifest (unchanged by Stage 2)
+before npm ci:
+c539a7e0ec19fb2e67822481a0e07c1c3120529180ef653f7610c5b4385930fa  backend/package-lock.json
+3cf13f01fb2fe6aaec3014d47124344c16acc06b43aea0e8aa69ad9e71cea083  backend/package.json
+now:
+c539a7e0ec19fb2e67822481a0e07c1c3120529180ef653f7610c5b4385930fa  backend/package-lock.json
+3cf13f01fb2fe6aaec3014d47124344c16acc06b43aea0e8aa69ad9e71cea083  backend/package.json

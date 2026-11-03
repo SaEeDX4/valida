@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -19,10 +20,14 @@ import { parseMongoUri } from '../db/connectionString.js';
  * B4 added RESUME_STORAGE_DRIVER and RESUME_STORAGE_LOCAL_ROOT (optional —
  * see the private storage section below); B5 added the Apply rate limit
  * (APPLICATION_RATE_LIMIT_WINDOW_MS, APPLICATION_RATE_LIMIT_MAX) and the bound
- * on the notification step (NOTIFICATION_TIMEOUT_MS). Transactional email (B6) and
- * PUBLIC_SITE_URL (Release C) are recorded in .env.example as future
- * variables but are deliberately NOT required or read here: requiring a
- * variable nothing uses would imply the capability exists.
+ * on the notification step (NOTIFICATION_TIMEOUT_MS). B6 adds transactional
+ * email (Doc 14 section 180): TRANSACTIONAL_EMAIL_PROVIDER ("none" by default;
+ * r4: "smtp" for the selected provider, Bluehost Professional Email / Titan,
+ * with the SMTP_* settings), the sending identity and recipients, the
+ * acknowledgement switch, the development recipient allowlist and the retry
+ * policy — see the transactional email section below. PUBLIC_SITE_URL (Release C) is recorded
+ * in .env.example as a future variable but is deliberately NOT read here:
+ * requiring a variable nothing uses would imply the capability exists.
  */
 
 /** Ports outside this range cannot be bound. */
@@ -154,6 +159,178 @@ const mongodbUri = z.string().superRefine((value, ctx) => {
  * ---------------------------------------------------------------------------
  */
 const emptyAsUnset = (schema) => z.preprocess((value) => (value === '' ? undefined : value), schema);
+
+/*
+ * Transactional email — Milestone B6 (Doc 14 sections 93-114, 180-186).
+ *
+ * One plain address, nothing else: no display name, no comment, no list, no
+ * whitespace or line break (Doc 14 section 144: no header injection through
+ * configuration either). Deliberately narrower than RFC 5322.
+ */
+export const PLAIN_EMAIL_ADDRESS =
+  /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+const DOMAIN_NAME = /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+const emailAddress = (sentinel) =>
+  emptyAsUnset(
+    z
+      .string()
+      .refine((value) => value.length <= 254 && PLAIN_EMAIL_ADDRESS.test(value), { message: sentinel })
+      .transform((value) => value.toLowerCase())
+      .optional(),
+  );
+/**
+ * Display name: printable text only — no quotes, angle brackets, backslash,
+ * address-list punctuation (, ; : @), C0/C1 control, zero-width, line /
+ * paragraph separator or bidirectional formatting characters — so it can be
+ * placed in a From header verbatim.
+ */
+// eslint-disable-next-line no-control-regex
+const DISPLAY_NAME = /^[^"<>\\,;:@\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]{1,64}$/;
+/** "a@x.test,@example.test" -> exact addresses and whole domains (written with a leading @). */
+const recipientAllowlist = emptyAsUnset(
+  z
+    .string()
+    .transform((value) => value.split(',').map((entry) => entry.trim().toLowerCase()).filter((entry) => entry.length > 0))
+    .refine(
+      (entries) =>
+        entries.length > 0 &&
+        entries.length <= 50 &&
+        entries.every((entry) => (entry.startsWith('@') ? DOMAIN_NAME.test(entry.slice(1)) : entry.length <= 254 && PLAIN_EMAIL_ADDRESS.test(entry))),
+      { message: 'EMAIL_RECIPIENT_ALLOWLIST_INVALID' },
+    )
+    .optional(),
+);
+const booleanFlag = emptyAsUnset(
+  z
+    .enum(['true', 'false'], { message: 'BOOLEAN_FLAG' })
+    .transform((value) => value === 'true')
+    .optional(),
+);
+
+/**
+ * Providers this build can actually talk to. r4: the owner selected Bluehost
+ * Professional Email (powered by Titan), whose only programmatic interface is
+ * authenticated SMTP submission — "smtp" (integrations/notifications/smtpTransport.js).
+ */
+export const TRANSACTIONAL_EMAIL_PROVIDERS = Object.freeze(['none', 'smtp']);
+
+/*
+ * SMTP submission settings — r4 (Doc 14 sections 109-111, 131, 152-153, 179).
+ *
+ *   SMTP_HOST      the relay's DNS name (never an IP literal: the certificate
+ *                  is verified against the name). Titan: smtp.titan.email.
+ *   SMTP_SECURITY  implicit-tls (default; port 465) | starttls (port 587, with
+ *                  STARTTLS REQUIRED). There is no plaintext mode.
+ *   SMTP_PORT      default 465 for implicit-tls, 587 for starttls.
+ *   SMTP_USERNAME  the sending mailbox; TRANSACTIONAL_FROM_ADDRESS must equal it.
+ *   SMTP_PASSWORD  a SECRET (with Titan 2FA: an app password). Only its
+ *                  presence and shape are checked; it is never echoed,
+ *                  logged or serialised.
+ */
+const SMTP_HOSTNAME = /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+const smtpHost = emptyAsUnset(
+  z
+    .string()
+    .refine((value) => SMTP_HOSTNAME.test(value) && net.isIP(value) === 0, { message: 'SMTP_HOST' })
+    .transform((value) => value.toLowerCase())
+    .optional(),
+);
+// eslint-disable-next-line no-control-regex
+const smtpPassword = emptyAsUnset(z.string().max(512).refine((value) => !/[\u0000-\u001f\u007f]/.test(value), { message: 'SMTP_PASSWORD' }).optional());
+const SMTP_VARIABLES = Object.freeze({
+  smtpHost: 'SMTP_HOST',
+  smtpPort: 'SMTP_PORT',
+  smtpSecurity: 'SMTP_SECURITY',
+  smtpUsername: 'SMTP_USERNAME',
+  smtpPasswordSet: 'SMTP_PASSWORD',
+});
+
+/**
+ * The transactional-email rules that depend on more than one variable — B6.
+ * Pure, and exported so every branch is tested, including the ones only a
+ * future provider value can reach. Returns [{ variable, rule }] with RULE_TEXT
+ * keys only (never a value).
+ *
+ *   - An API key without a provider is a misconfiguration (it would be ignored).
+ *   - Candidate acknowledgement (Doc 09 section 130; Doc 14 sections 98-101,
+ *     113) needs an operational identity: a real provider, a From address and
+ *     the careers Reply-To. Otherwise it stays NOT_REQUIRED.
+ *   - A real provider needs its credentials, a From address and the
+ *     recruitment recipient (Doc 09 section 129; Doc 14 section 181:
+ *     configuration, never source). An API provider authenticates with its
+ *     key; "smtp" (r4) with SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD, uses no
+ *     API key, and sends only as the authenticated mailbox (From must equal
+ *     SMTP_USERNAME). SMTP settings without the smtp provider are refused.
+ *   - Outside production a real provider may only reach allowlisted test
+ *     recipients (Doc 14 sections 182-183; Doc 15 section 39). In production
+ *     an allowlist is refused: it would silently drop real candidates' mail
+ *     (Doc 14 section 184: refuse clearly unsafe test configuration).
+ */
+export function checkNotificationSettings(settings, { isProduction }) {
+  const problems = [];
+  const realProvider = settings.provider !== 'none';
+  const smtpProvider = settings.provider === 'smtp';
+  if (!realProvider && settings.apiKey) {
+    problems.push({ variable: 'TRANSACTIONAL_EMAIL_API_KEY', rule: 'TRANSACTIONAL_EMAIL_API_KEY_WITHOUT_PROVIDER' });
+  }
+  // r4 — SMTP settings belong to the smtp provider only: a password lying
+  // around in a configuration that does not use it is refused, not ignored.
+  if (!smtpProvider) {
+    for (const [key, variable] of Object.entries(SMTP_VARIABLES)) {
+      if (settings[key]) problems.push({ variable, rule: 'SMTP_SETTING_WITHOUT_SMTP_PROVIDER' });
+    }
+  } else {
+    if (settings.apiKey) problems.push({ variable: 'TRANSACTIONAL_EMAIL_API_KEY', rule: 'TRANSACTIONAL_EMAIL_API_KEY_NOT_USED_BY_SMTP' });
+    if (!settings.smtpHost) problems.push({ variable: 'SMTP_HOST', rule: 'SMTP_REQUIRES_HOST' });
+    if (!settings.smtpUsername) problems.push({ variable: 'SMTP_USERNAME', rule: 'SMTP_REQUIRES_USERNAME' });
+    if (!settings.smtpPasswordSet) problems.push({ variable: 'SMTP_PASSWORD', rule: 'SMTP_REQUIRES_PASSWORD' });
+    // The relay authenticates the mailbox; it is the only sender it can be trusted to accept.
+    if (settings.smtpUsername && settings.fromAddress && settings.fromAddress.toLowerCase() !== settings.smtpUsername.toLowerCase()) {
+      problems.push({ variable: 'TRANSACTIONAL_FROM_ADDRESS', rule: 'FROM_MUST_BE_SMTP_USERNAME' });
+    }
+    // 465 is implicit TLS and 587 is STARTTLS by convention; the opposite pairing is a typo that would only fail later.
+    const security = settings.smtpSecurity ?? 'implicit-tls';
+    if ((security === 'implicit-tls' && settings.smtpPort === 587) || (security === 'starttls' && settings.smtpPort === 465)) {
+      problems.push({ variable: 'SMTP_PORT', rule: 'SMTP_PORT_SECURITY_MISMATCH' });
+    }
+  }
+  if (settings.acknowledgementEnabled) {
+    if (!realProvider) {
+      problems.push({ variable: 'APPLICATION_ACKNOWLEDGEMENT_ENABLED', rule: 'ACKNOWLEDGEMENT_REQUIRES_PROVIDER' });
+    }
+    if (!settings.replyTo) {
+      problems.push({ variable: 'TRANSACTIONAL_REPLY_TO', rule: 'ACKNOWLEDGEMENT_REQUIRES_REPLY_TO' });
+    }
+    if (!settings.fromAddress) {
+      problems.push({ variable: 'TRANSACTIONAL_FROM_ADDRESS', rule: 'ACKNOWLEDGEMENT_REQUIRES_FROM' });
+    }
+  }
+  if (realProvider) {
+    // An API provider authenticates with its key; SMTP with SMTP_USERNAME / SMTP_PASSWORD (above).
+    if (!smtpProvider && !settings.apiKey) problems.push({ variable: 'TRANSACTIONAL_EMAIL_API_KEY', rule: 'PROVIDER_REQUIRES_API_KEY' });
+    if (!settings.fromAddress && !settings.acknowledgementEnabled) {
+      problems.push({ variable: 'TRANSACTIONAL_FROM_ADDRESS', rule: 'PROVIDER_REQUIRES_FROM' });
+    }
+    if (!settings.internalRecipient) {
+      problems.push({ variable: 'RECRUITMENT_NOTIFICATION_RECIPIENT', rule: 'PROVIDER_REQUIRES_RECIPIENT' });
+    }
+    if (!isProduction && !settings.recipientAllowlist) {
+      problems.push({ variable: 'EMAIL_RECIPIENT_ALLOWLIST', rule: 'ALLOWLIST_REQUIRED_OUTSIDE_PRODUCTION' });
+    }
+  }
+  if (isProduction && settings.recipientAllowlist) {
+    problems.push({ variable: 'EMAIL_RECIPIENT_ALLOWLIST', rule: 'ALLOWLIST_REFUSED_IN_PRODUCTION' });
+  }
+  // The required internal notification must be able to pass the allowlist.
+  if (!isProduction && settings.recipientAllowlist && settings.internalRecipient) {
+    const recipient = settings.internalRecipient.toLowerCase();
+    const domain = recipient.slice(recipient.lastIndexOf('@'));
+    if (!settings.recipientAllowlist.some((entry) => entry === recipient || entry === domain)) {
+      problems.push({ variable: 'RECRUITMENT_NOTIFICATION_RECIPIENT', rule: 'INTERNAL_RECIPIENT_NOT_ALLOWLISTED' });
+    }
+  }
+  return problems;
+}
 
 /**
  * The repository (application) directory: this file is
@@ -307,7 +484,8 @@ const baseSchema = z.object({
    * API request open. The accepted Application is answered when the bound
    * expires; the notification is then recorded as FAILED (TIMEOUT).
    */
-  NOTIFICATION_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(5_000),
+  // Default 5000; r4: 10000 (and at least 10000) with TRANSACTIONAL_EMAIL_PROVIDER=smtp — see below.
+  NOTIFICATION_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).optional(),
 
   // Optional: absent in local, where a default allowlist is supplied below.
   CORS_ALLOWED_ORIGINS: originList.optional(),
@@ -344,6 +522,26 @@ const baseSchema = z.object({
   // Only its presence is checked here; its rules are applied below, where the
   // failure can be reported without echoing the path.
   RESUME_STORAGE_LOCAL_ROOT: emptyAsUnset(z.string().optional()),
+
+  // Transactional email — B6. See the section above.
+  TRANSACTIONAL_EMAIL_PROVIDER: emptyAsUnset(z.enum(TRANSACTIONAL_EMAIL_PROVIDERS).optional()),
+  // A secret: only its presence is checked; it is never echoed, logged or serialised.
+  TRANSACTIONAL_EMAIL_API_KEY: emptyAsUnset(z.string().max(512).optional()),
+  TRANSACTIONAL_FROM_ADDRESS: emailAddress('TRANSACTIONAL_FROM_ADDRESS'),
+  TRANSACTIONAL_FROM_NAME: emptyAsUnset(z.string().regex(DISPLAY_NAME, { message: 'TRANSACTIONAL_FROM_NAME' }).optional()),
+  TRANSACTIONAL_REPLY_TO: emailAddress('TRANSACTIONAL_REPLY_TO'),
+  RECRUITMENT_NOTIFICATION_RECIPIENT: emailAddress('RECRUITMENT_NOTIFICATION_RECIPIENT'),
+  APPLICATION_ACKNOWLEDGEMENT_ENABLED: booleanFlag,
+  EMAIL_RECIPIENT_ALLOWLIST: recipientAllowlist,
+  // r4 — SMTP submission (TRANSACTIONAL_EMAIL_PROVIDER=smtp). See the section above.
+  SMTP_HOST: smtpHost,
+  SMTP_PORT: emptyAsUnset(port.optional()),
+  SMTP_SECURITY: emptyAsUnset(z.enum(['implicit-tls', 'starttls']).optional()),
+  SMTP_USERNAME: emailAddress('SMTP_USERNAME'),
+  // A secret: only presence and shape are checked; never echoed, logged or serialised.
+  SMTP_PASSWORD: smtpPassword,
+  NOTIFICATION_RETRY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+  NOTIFICATION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(1_000).max(86_400_000).default(60_000),
 });
 
 
@@ -367,6 +565,64 @@ const RULE_TEXT = {
   APPLICATION_RATE_LIMIT_WINDOW_MS: 'must be an integer between 1000 and 86400000 (milliseconds)',
   APPLICATION_RATE_LIMIT_MAX: 'must be an integer between 1 and 100000',
   NOTIFICATION_TIMEOUT_MS: 'must be an integer between 100 and 60000 (milliseconds)',
+  TRANSACTIONAL_EMAIL_PROVIDER:
+    'must be "none", "smtp" or left unset — "smtp" is the integration for the selected provider ' +
+    '(Bluehost Professional Email, powered by Titan)',
+  SMTP_HOST: 'must be the SMTP relay\'s DNS host name (not an IP address), e.g. smtp.titan.email',
+  SMTP_PORT: 'must be an integer between 1 and 65535',
+  SMTP_SECURITY: 'must be "implicit-tls" (port 465) or "starttls" (port 587); there is no plaintext mode',
+  SMTP_USERNAME: 'must be one plain email address — the sending mailbox',
+  SMTP_PASSWORD: 'must be at most 512 characters without control characters (the value is never shown)',
+  SMTP_SETTING_WITHOUT_SMTP_PROVIDER:
+    'is set but TRANSACTIONAL_EMAIL_PROVIDER is not "smtp"; remove it, or set the provider it belongs to',
+  TRANSACTIONAL_EMAIL_API_KEY_NOT_USED_BY_SMTP:
+    'is set but the smtp provider authenticates with SMTP_USERNAME / SMTP_PASSWORD; remove it',
+  SMTP_REQUIRES_HOST: 'is required when TRANSACTIONAL_EMAIL_PROVIDER=smtp',
+  SMTP_REQUIRES_USERNAME: 'is required when TRANSACTIONAL_EMAIL_PROVIDER=smtp',
+  SMTP_REQUIRES_PASSWORD: 'is required when TRANSACTIONAL_EMAIL_PROVIDER=smtp (with Titan 2FA: an app password)',
+  FROM_MUST_BE_SMTP_USERNAME:
+    'must be the same mailbox as SMTP_USERNAME — the relay authenticates that mailbox, and it is the only sender used',
+  SMTP_TIMEOUT_TOO_SHORT:
+    'must be at least 10000 (milliseconds) when TRANSACTIONAL_EMAIL_PROVIDER=smtp — one SMTP session ' +
+    '(connect, TLS, login, envelope, message, the relay\'s final reply) must fit in it; a shorter bound ' +
+    'turns slow but successful submissions into OUTCOME_UNKNOWN',
+  SMTP_PORT_SECURITY_MISMATCH:
+    'does not match SMTP_SECURITY: port 587 is STARTTLS (SMTP_SECURITY=starttls) and port 465 is implicit TLS (implicit-tls)',
+  TRANSACTIONAL_EMAIL_API_KEY: 'must be at most 512 characters',
+  TRANSACTIONAL_EMAIL_API_KEY_WITHOUT_PROVIDER:
+    'is set but TRANSACTIONAL_EMAIL_PROVIDER is "none"; remove it, or configure the provider it belongs to',
+  TRANSACTIONAL_FROM_ADDRESS: 'must be one plain email address (no display name, list or whitespace)',
+  TRANSACTIONAL_FROM_NAME:
+    'must be 1-64 printable characters without quotes, angle brackets, backslashes, , ; : @, ' +
+    'control or bidirectional formatting characters',
+  TRANSACTIONAL_REPLY_TO: 'must be one plain email address (no display name, list or whitespace)',
+  RECRUITMENT_NOTIFICATION_RECIPIENT: 'must be one plain email address (no display name, list or whitespace)',
+  APPLICATION_ACKNOWLEDGEMENT_ENABLED: 'must be "true" or "false"',
+  BOOLEAN_FLAG: 'must be "true" or "false"',
+  EMAIL_RECIPIENT_ALLOWLIST: 'must be a comma-separated list of 1-50 email addresses or @domains',
+  EMAIL_RECIPIENT_ALLOWLIST_INVALID: 'must be a comma-separated list of 1-50 email addresses or @domains',
+  NOTIFICATION_RETRY_MAX_ATTEMPTS: 'must be an integer between 1 and 20',
+  NOTIFICATION_RETRY_BASE_DELAY_MS: 'must be an integer between 1000 and 86400000 (milliseconds)',
+  ACKNOWLEDGEMENT_REQUIRES_PROVIDER:
+    'is "true", but candidate acknowledgement needs an operational transactional email ' +
+    'provider (TRANSACTIONAL_EMAIL_PROVIDER is "none")',
+  ACKNOWLEDGEMENT_REQUIRES_REPLY_TO:
+    'is required when APPLICATION_ACKNOWLEDGEMENT_ENABLED=true — candidates must be able to ' +
+    'reply to the recruitment mailbox',
+  ACKNOWLEDGEMENT_REQUIRES_FROM: 'is required when APPLICATION_ACKNOWLEDGEMENT_ENABLED=true',
+  PROVIDER_REQUIRES_API_KEY: 'is required when a transactional email provider is configured',
+  PROVIDER_REQUIRES_FROM: 'is required when a transactional email provider is configured',
+  PROVIDER_REQUIRES_RECIPIENT:
+    'is required when a transactional email provider is configured (the internal ' +
+    'new-application notification goes there)',
+  ALLOWLIST_REQUIRED_OUTSIDE_PRODUCTION:
+    'is required outside production when a transactional email provider is configured, so ' +
+    'development and review cannot email real candidates',
+  INTERNAL_RECIPIENT_NOT_ALLOWLISTED:
+    'is not covered by EMAIL_RECIPIENT_ALLOWLIST — the internal new-application notification ' +
+    'could never be sent; add it (or its @domain) to the allowlist',
+  ALLOWLIST_REFUSED_IN_PRODUCTION:
+    'must not be set when APP_ENV=production — it would silently drop real candidates\' mail',
   CORS_ALLOWED_ORIGINS:
     'must be a comma-separated list of canonical origins, each scheme://host[:port] ' +
     'with no userinfo, path, query, fragment or trailing slash',
@@ -456,8 +712,32 @@ function redactedConfigView() {
     // B4: the storage root is a filesystem path; it is kept out of any
     // accidental serialisation too.
     if (key === 'resumeStorage' && value?.localRoot) view[key] = { ...value, localRoot: REDACTED };
+    // B6: the transactional email API key is a secret; r4: so is the SMTP password.
+    if (key === 'notifications' && value) {
+      const notifications = { ...value };
+      if (notifications.apiKey) notifications.apiKey = REDACTED;
+      if (notifications.smtp?.password) notifications.smtp = { ...notifications.smtp, password: REDACTED };
+      view[key] = notifications;
+    }
   }
   return view;
+}
+
+/**
+ * r4 — gives a settings object NON-enumerable serialisation guards that
+ * replace the named secret fields, so the object is safe to log or stringify
+ * even on its own (not only through the whole config). Non-enumerable: a
+ * spread or an equality check sees the plain fields only.
+ */
+function withRedactedSerialisation(object, secretKeys) {
+  const view = function redactedView() {
+    const copy = { ...this };
+    for (const key of secretKeys) if (copy[key]) copy[key] = REDACTED;
+    return copy;
+  };
+  Object.defineProperty(object, 'toJSON', { value: view, enumerable: false });
+  Object.defineProperty(object, Symbol.for('nodejs.util.inspect.custom'), { value: view, enumerable: false });
+  return object;
 }
 
 /** Vite dev server and `vite preview`, the only local frontend origins. */
@@ -533,6 +813,57 @@ export function loadConfig(env = process.env) {
     missing.push({ variable: 'RESUME_STORAGE_LOCAL_ROOT', rule: RULE_TEXT.RESUME_STORAGE_LOCAL_ROOT_WITHOUT_DRIVER });
   }
 
+  // B6 — transactional email (see checkNotificationSettings).
+  const notificationSettings = {
+    provider: config.TRANSACTIONAL_EMAIL_PROVIDER ?? 'none',
+    apiKey: config.TRANSACTIONAL_EMAIL_API_KEY ?? null,
+    fromAddress: config.TRANSACTIONAL_FROM_ADDRESS ?? null,
+    fromName: config.TRANSACTIONAL_FROM_NAME ?? 'Valida Careers',
+    replyTo: config.TRANSACTIONAL_REPLY_TO ?? null,
+    internalRecipient: config.RECRUITMENT_NOTIFICATION_RECIPIENT ?? null,
+    acknowledgementEnabled: config.APPLICATION_ACKNOWLEDGEMENT_ENABLED ?? false,
+    recipientAllowlist: config.EMAIL_RECIPIENT_ALLOWLIST ?? null,
+  };
+  // r4 — SMTP: presence only for the password (the rules never see the secret).
+  const smtpSettings = {
+    smtpHost: config.SMTP_HOST ?? null,
+    smtpPort: config.SMTP_PORT ?? null,
+    smtpSecurity: config.SMTP_SECURITY ?? null,
+    smtpUsername: config.SMTP_USERNAME ?? null,
+    smtpPasswordSet: Boolean(config.SMTP_PASSWORD),
+  };
+  for (const problem of checkNotificationSettings({ ...notificationSettings, ...smtpSettings }, { isProduction })) {
+    missing.push({ variable: problem.variable, rule: RULE_TEXT[problem.rule] });
+  }
+  /*
+   * r4 (review R5): one SMTP session — connect, TLS, greeting, login,
+   * envelope, the message and the relay's final reply — must fit in the
+   * notification bound. With SMTP the default is 10000 and anything shorter
+   * is refused: a bound that expires while the relay is still answering
+   * makes a successful submission OUTCOME_UNKNOWN (operator, duplicate risk).
+   */
+  const SMTP_MINIMUM_TIMEOUT_MS = 10_000;
+  const notificationTimeoutMs = config.NOTIFICATION_TIMEOUT_MS ?? (notificationSettings.provider === 'smtp' ? SMTP_MINIMUM_TIMEOUT_MS : 5_000);
+  if (notificationSettings.provider === 'smtp' && notificationTimeoutMs < SMTP_MINIMUM_TIMEOUT_MS) {
+    missing.push({ variable: 'NOTIFICATION_TIMEOUT_MS', rule: RULE_TEXT.SMTP_TIMEOUT_TOO_SHORT });
+  }
+  const smtpSecurity = smtpSettings.smtpSecurity ?? 'implicit-tls';
+  const smtp =
+    notificationSettings.provider === 'smtp'
+      ? Object.freeze(
+          withRedactedSerialisation(
+            {
+              host: smtpSettings.smtpHost,
+              port: smtpSettings.smtpPort ?? (smtpSecurity === 'starttls' ? 587 : 465),
+              security: smtpSecurity,
+              username: smtpSettings.smtpUsername,
+              password: config.SMTP_PASSWORD,
+            },
+            ['password'],
+          ),
+        )
+      : null;
+
   // Every missing requirement is reported at once, so an operator fixes the
   // environment in one pass rather than one restart per variable.
   if (missing.length > 0) {
@@ -577,7 +908,28 @@ export function loadConfig(env = process.env) {
       max: config.APPLICATION_RATE_LIMIT_MAX,
     }),
     // B5 — Doc 09 section 136.
-    notificationTimeoutMs: config.NOTIFICATION_TIMEOUT_MS,
+    notificationTimeoutMs,
+    /*
+     * B6 — transactional email (Doc 14 sections 93-114, 180-186). The API key
+     * is a secret: it is carried for the transport only and is replaced in
+     * every serialised view of the configuration.
+     */
+    notifications: Object.freeze(
+      withRedactedSerialisation(
+        {
+          ...notificationSettings,
+          recipientAllowlist: notificationSettings.recipientAllowlist ? Object.freeze([...notificationSettings.recipientAllowlist]) : null,
+          // r4: null unless TRANSACTIONAL_EMAIL_PROVIDER=smtp. The password is
+          // carried for the transport only and redacted in every serialised view.
+          smtp,
+          retry: Object.freeze({
+            maxAttempts: config.NOTIFICATION_RETRY_MAX_ATTEMPTS,
+            baseDelayMs: config.NOTIFICATION_RETRY_BASE_DELAY_MS,
+          }),
+        },
+        ['apiKey'],
+      ),
+    ),
     // General JSON body limit — Doc 09. Fixed, not configurable: raising it is
     // a security decision, not a deployment knob.
     jsonBodyLimit: '100kb',

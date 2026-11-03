@@ -5,6 +5,7 @@ import { PDF_MIME, syntheticPdf } from './fixtures/resumeFiles.js';
 import {
   QA_CANDIDATE,
   QA_NOW,
+  QA_NOTIFICATION_OPTIONS,
   applyRequest,
   createApplyEnvironment,
   dbUnavailable,
@@ -665,10 +666,22 @@ describe('the notification boundary (Doc 09 sections 128-136; Doc 18 section 127
     expect(env.storedObjects()).toHaveLength(1);
     expect(internalOf()).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'PROVIDER_REJECTED', sentAt: null });
     expect(internalOf().lastAttemptAt).toEqual(QA_NOW);
-    // Only the internal id, the Job and the time reach the transport — no candidate data.
+    // B6 CHANGE (was: the transport received { applicationId, event, job,
+    // submittedAt }). The transport now receives the RENDERED internal email:
+    // to the configured recruitment recipient only, with the internal id, the
+    // Job and the time — still no candidate data, filename or resume.
     expect(transport.calls).toHaveLength(1);
-    expect(Object.keys(transport.calls[0]).sort()).toEqual(['applicationId', 'event', 'job', 'submittedAt']);
-    expect(JSON.stringify(transport.calls[0])).not.toMatch(/QA Synthetic Candidate|example\.invalid|qa-resume/i);
+    const message = transport.calls[0];
+    expect(Object.keys(message).sort()).toEqual(['event', 'from', 'html', 'metadata', 'replyTo', 'subject', 'text', 'to', 'tracking']);
+    expect(message.event).toBe('APPLICATION_RECEIVED_INTERNAL');
+    expect(message.to).toEqual([QA_NOTIFICATION_OPTIONS.internalRecipient]);
+    expect(message.metadata).toEqual({ event: 'APPLICATION_RECEIVED_INTERNAL', applicationId: String(env.applications.all()[0]._id) });
+    expect(message.tracking).toEqual({ opens: false, links: false });
+    expect(JSON.stringify(message)).not.toMatch(/QA Synthetic Candidate|example\.invalid|qa-resume|%PDF/i);
+    for (const value of [QA_CANDIDATE.fullName, QA_CANDIDATE.email, QA_CANDIDATE.phone]) expect(JSON.stringify(message)).not.toContain(value);
+    expect(message.html).not.toMatch(/<a\s|https?:/i);
+    // B6 Stage 2: the only image is the approved logo, inline (CID).
+    expect(message.html.match(/<img\b[^>]*>/g)).toEqual([expect.stringContaining('src="cid:valida-logo.b6@cybervalida.com"')]);
   });
 
   it('an unclassified provider error is recorded as PROVIDER_ERROR, never its text', async () => {
@@ -701,7 +714,13 @@ describe('the notification boundary (Doc 09 sections 128-136; Doc 18 section 127
     env.applications.faults.recordNotification = dbUnavailable('timeout');
     const response = await applyRequest(env.app);
     expect(response.status).toBe(201);
-    expect(events('notification_state_unrecorded')).toEqual([expect.objectContaining({ notification: 'FAILED' })]);
+    // B6 CHANGE: the entry now lists the outcome per channel.
+    expect(events('notification_state_unrecorded')).toEqual([expect.objectContaining({ outcomes: { internal: 'FAILED' } })]);
+    // B6: the claim stays — the attempt reads as in progress / uncertain and
+    // is never re-sent automatically; the count reflects the one real attempt.
+    expect(internalOf()).toMatchObject({ status: 'PENDING', attemptCount: 1, lastErrorCode: 'ATTEMPT_IN_PROGRESS', sentAt: null });
+    expect(env.applications.all()).toHaveLength(1);
+    expect(env.storedObjects()).toHaveLength(1);
   });
 });
 

@@ -1,0 +1,80 @@
+{
+  "templateVersion": "b6-2",
+  "node": "v24.21.0",
+  "generatedFrom": "integrated working copy (approved logo, OD-2026-10-27-01)",
+  "approvedLogoSha256": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a",
+  "fixtures": [
+    {
+      "name": "internal",
+      "subject": "New application — Cybersecurity Specialist | Valida",
+      "htmlBytes": 9675,
+      "textBytes": 364,
+      "emlBytes": 30277,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a",
+        "bytes": 13303,
+        "approved": true
+      }
+    },
+    {
+      "name": "acknowledgement",
+      "subject": "Application received — Cybersecurity Specialist | Valida",
+      "htmlBytes": 5926,
+      "textBytes": 220,
+      "emlBytes": 26096,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a",
+        "bytes": 13303,
+        "approved": true
+      }
+    },
+    {
+      "name": "internal-long-values",
+      "subject": "New application — Principal Offensive Security Engineer, Cloud Infrastructure and Identity Platforms Principal Offensive Security Enginee… | Valida",
+      "htmlBytes": 10005,
+      "textBytes": 596,
+      "emlBytes": 31000,
+      "mimeStructure": {
+        "multipart/alternative": [
+          "text/plain",
+          {
+            "multipart/related": [
+              "text/html",
+              "image/png"
+            ]
+          }
+        ]
+      },
+      "logo": {
+        "contentId": "valida-logo.b6@cybervalida.com",
+        "sha256": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a",
+        "bytes": 13303,
+        "approved": true
+      }
+    }
+  ]
+}

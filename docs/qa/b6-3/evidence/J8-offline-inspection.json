@@ -1,0 +1,596 @@
+{
+ "internal": {
+  "checks": {
+   "S1 identity": {
+    "pass": true,
+    "detail": "c1fa146455fec319f9d5dffa6d586ca104fbbf420f4f98a0b44aa576643e4989"
+   },
+   "S2 MIME": {
+    "pass": true,
+    "detail": {
+     "tree": {
+      "multipart/alternative": [
+       "text/plain",
+       {
+        "multipart/related": [
+         "text/html",
+         "image/png"
+        ]
+       }
+      ]
+     },
+     "transfer_encodings": [
+      "quoted-printable",
+      "quoted-printable",
+      "base64"
+     ],
+     "charsets": [
+      "utf-8",
+      "utf-8",
+      null
+     ],
+     "headers_7bit": true,
+     "max_line_octets": 76
+    }
+   },
+   "S3 wording": {
+    "pass": true,
+    "detail": {
+     "subject_equal": true,
+     "plain_equal": true,
+     "html_equal": true
+    }
+   },
+   "S4 CID": {
+    "pass": true,
+    "detail": {
+     "img_src": "cid:valida-logo.b6@cybervalida.com",
+     "content_id": "valida-logo.b6@cybervalida.com",
+     "disposition": "inline",
+     "filename": "valida-logo.png",
+     "image_sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+     "image_bytes": 15801,
+     "external_resources": 0,
+     "links": 0
+    }
+   },
+   "S5 alt text": {
+    "pass": true,
+    "detail": {
+     "alt": "Valida",
+     "aria_hidden_present": false
+    }
+   },
+   "S6 structure": {
+    "pass": true,
+    "detail": {
+     "lang": "en",
+     "dir": "ltr",
+     "title_equals_subject": true,
+     "h1": 1,
+     "tables": 9,
+     "tables_presentation": 9,
+     "source_order": [
+      "p: RECRUITMENT / NEW APPLICATION",
+      "h1: A new application has arrived.",
+      "p: The application is recorded in Valida.",
+      "p: Role",
+      "p: Cybersecurity Specialist",
+      "p: Role identifier",
+      "p: cybersecurity-specialist",
+      "p: Received (UTC)",
+      "p: 2026-10-26 15:42:00",
+      "p: Application reference",
+      "p: 0123456789abcdef01234567",
+      "p: Candidate details and the resume are stored privately in Val",
+      "p: Valida · Recruitment operations"
+     ]
+    }
+   },
+   "S7 without images": {
+    "pass": true,
+    "detail": {
+     "plain_lines_missing_from_html_text": []
+    }
+   },
+   "S8 PNG chunks": {
+    "pass": true,
+    "detail": [
+     "IHDR",
+     "IDAT",
+     "IEND"
+    ]
+   },
+   "S9 privacy": {
+    "pass": true,
+    "detail": {
+     "addresses": {
+      "8eb9fe7bf3df77a48a2252094a6be39d.b6@synthetic.example.invalid": {
+       "kind": "Message-ID (opaque token, synthetic domain)",
+       "places": [
+        "header Message-ID",
+        "raw message"
+       ]
+      },
+      "careers@synthetic.example.invalid": {
+       "kind": "Reply-To (synthetic careers identity)",
+       "places": [
+        "header Reply-To",
+        "raw message"
+       ]
+      },
+      "hr@synthetic.example.invalid": {
+       "kind": "To of the internal notification (synthetic HR recipient)",
+       "places": [
+        "header To",
+        "raw message"
+       ]
+      },
+      "notifications@synthetic.example.invalid": {
+       "kind": "From (synthetic sender identity)",
+       "places": [
+        "header From",
+        "raw message"
+       ]
+      },
+      "valida-logo.b6@cybervalida.com": {
+       "kind": "Content-ID of the inline logo (a fixed constant, not an address)",
+       "places": [
+        "part 1 body text/html",
+        "part 1 body text/html (references decoded)",
+        "part 2 header Content-ID",
+        "raw message"
+       ]
+      }
+     },
+     "phone_shapes": [],
+     "resume_file_shapes": [],
+     "flagged_words_outside_note": []
+    }
+   }
+  }
+ },
+ "internal-long-values": {
+  "checks": {
+   "S1 identity": {
+    "pass": true,
+    "detail": "b4bfb7c677d7c84ba156b48a982017be7009d1f2ea84027b778d187f2cf76bc0"
+   },
+   "S2 MIME": {
+    "pass": true,
+    "detail": {
+     "tree": {
+      "multipart/alternative": [
+       "text/plain",
+       {
+        "multipart/related": [
+         "text/html",
+         "image/png"
+        ]
+       }
+      ]
+     },
+     "transfer_encodings": [
+      "quoted-printable",
+      "quoted-printable",
+      "base64"
+     ],
+     "charsets": [
+      "utf-8",
+      "utf-8",
+      null
+     ],
+     "headers_7bit": true,
+     "max_line_octets": 76
+    }
+   },
+   "S3 wording": {
+    "pass": true,
+    "detail": {
+     "subject_equal": true,
+     "plain_equal": true,
+     "html_equal": true
+    }
+   },
+   "S4 CID": {
+    "pass": true,
+    "detail": {
+     "img_src": "cid:valida-logo.b6@cybervalida.com",
+     "content_id": "valida-logo.b6@cybervalida.com",
+     "disposition": "inline",
+     "filename": "valida-logo.png",
+     "image_sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+     "image_bytes": 15801,
+     "external_resources": 0,
+     "links": 0
+    }
+   },
+   "S5 alt text": {
+    "pass": true,
+    "detail": {
+     "alt": "Valida",
+     "aria_hidden_present": false
+    }
+   },
+   "S6 structure": {
+    "pass": true,
+    "detail": {
+     "lang": "en",
+     "dir": "ltr",
+     "title_equals_subject": true,
+     "h1": 1,
+     "tables": 9,
+     "tables_presentation": 9,
+     "source_order": [
+      "p: RECRUITMENT / NEW APPLICATION",
+      "h1: A new application has arrived.",
+      "p: The application is recorded in Valida.",
+      "p: Role",
+      "p: Principal Offensive Security Engineer, Cloud Infrastructure ",
+      "p: Role identifier",
+      "p: seg000-seg001-seg002-seg003-seg004-seg005-seg006-seg007-seg0",
+      "p: Received (UTC)",
+      "p: 2026-10-26 15:42:00",
+      "p: Application reference",
+      "p: 0123456789abcdef01234567",
+      "p: Candidate details and the resume are stored privately in Val",
+      "p: Valida · Recruitment operations"
+     ]
+    }
+   },
+   "S7 without images": {
+    "pass": true,
+    "detail": {
+     "plain_lines_missing_from_html_text": []
+    }
+   },
+   "S8 PNG chunks": {
+    "pass": true,
+    "detail": [
+     "IHDR",
+     "IDAT",
+     "IEND"
+    ]
+   },
+   "S9 privacy": {
+    "pass": true,
+    "detail": {
+     "addresses": {
+      "8eb9fe7bf3df77a48a2252094a6be39d.b6@synthetic.example.invalid": {
+       "kind": "Message-ID (opaque token, synthetic domain)",
+       "places": [
+        "header Message-ID",
+        "raw message"
+       ]
+      },
+      "careers@synthetic.example.invalid": {
+       "kind": "Reply-To (synthetic careers identity)",
+       "places": [
+        "header Reply-To",
+        "raw message"
+       ]
+      },
+      "hr@synthetic.example.invalid": {
+       "kind": "To of the internal notification (synthetic HR recipient)",
+       "places": [
+        "header To",
+        "raw message"
+       ]
+      },
+      "notifications@synthetic.example.invalid": {
+       "kind": "From (synthetic sender identity)",
+       "places": [
+        "header From",
+        "raw message"
+       ]
+      },
+      "valida-logo.b6@cybervalida.com": {
+       "kind": "Content-ID of the inline logo (a fixed constant, not an address)",
+       "places": [
+        "part 1 body text/html",
+        "part 1 body text/html (references decoded)",
+        "part 2 header Content-ID",
+        "raw message"
+       ]
+      }
+     },
+     "phone_shapes": [],
+     "resume_file_shapes": [],
+     "flagged_words_outside_note": []
+    }
+   }
+  }
+ },
+ "acknowledgement": {
+  "checks": {
+   "S1 identity": {
+    "pass": true,
+    "detail": "b6ef30bb59d70a9a974307138fae1b6fd1b3558fafd90e098306886ff622fac8"
+   },
+   "S2 MIME": {
+    "pass": true,
+    "detail": {
+     "tree": {
+      "multipart/alternative": [
+       "text/plain",
+       {
+        "multipart/related": [
+         "text/html",
+         "image/png"
+        ]
+       }
+      ]
+     },
+     "transfer_encodings": [
+      "quoted-printable",
+      "quoted-printable",
+      "base64"
+     ],
+     "charsets": [
+      "utf-8",
+      "utf-8",
+      null
+     ],
+     "headers_7bit": true,
+     "max_line_octets": 76
+    }
+   },
+   "S3 wording": {
+    "pass": true,
+    "detail": {
+     "subject_equal": true,
+     "plain_equal": true,
+     "html_equal": true
+    }
+   },
+   "S4 CID": {
+    "pass": true,
+    "detail": {
+     "img_src": "cid:valida-logo.b6@cybervalida.com",
+     "content_id": "valida-logo.b6@cybervalida.com",
+     "disposition": "inline",
+     "filename": "valida-logo.png",
+     "image_sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+     "image_bytes": 15801,
+     "external_resources": 0,
+     "links": 0
+    }
+   },
+   "S5 alt text": {
+    "pass": true,
+    "detail": {
+     "alt": "Valida",
+     "aria_hidden_present": false
+    }
+   },
+   "S6 structure": {
+    "pass": true,
+    "detail": {
+     "lang": "en",
+     "dir": "ltr",
+     "title_equals_subject": true,
+     "h1": 1,
+     "tables": 5,
+     "tables_presentation": 5,
+     "source_order": [
+      "p: APPLICATION RECEIVED",
+      "h1: Thank you for applying.",
+      "p: We’ve received your application for Cybersecurity Specialist",
+      "p: If we need more information or decide to move forward, we’ll",
+      "p: Valida Careers"
+     ]
+    }
+   },
+   "S7 without images": {
+    "pass": true,
+    "detail": {
+     "plain_lines_missing_from_html_text": []
+    }
+   },
+   "S8 PNG chunks": {
+    "pass": true,
+    "detail": [
+     "IHDR",
+     "IDAT",
+     "IEND"
+    ]
+   },
+   "S9 privacy": {
+    "pass": true,
+    "detail": {
+     "addresses": {
+      "1666a0294e9f5026b27af77916f3a622.b6@synthetic.example.invalid": {
+       "kind": "Message-ID (opaque token, synthetic domain)",
+       "places": [
+        "header Message-ID",
+        "raw message"
+       ]
+      },
+      "candidate@synthetic.example.invalid": {
+       "kind": "THE SYNTHETIC CANDIDATE ADDRESS",
+       "places": [
+        "header To",
+        "raw message"
+       ]
+      },
+      "careers@synthetic.example.invalid": {
+       "kind": "Reply-To (synthetic careers identity)",
+       "places": [
+        "header Reply-To",
+        "raw message"
+       ]
+      },
+      "notifications@synthetic.example.invalid": {
+       "kind": "From (synthetic sender identity)",
+       "places": [
+        "header From",
+        "raw message"
+       ]
+      },
+      "valida-logo.b6@cybervalida.com": {
+       "kind": "Content-ID of the inline logo (a fixed constant, not an address)",
+       "places": [
+        "part 1 body text/html",
+        "part 1 body text/html (references decoded)",
+        "part 2 header Content-ID",
+        "raw message"
+       ]
+      }
+     },
+     "phone_shapes": [],
+     "resume_file_shapes": [],
+     "flagged_words_outside_note": []
+    }
+   }
+  }
+ },
+ "acknowledgement-long-values": {
+  "checks": {
+   "S1 identity": {
+    "pass": true,
+    "detail": "fcbe391ab4b44e8a7344bf86c8b56049bbef815e6f6a1fdd519aa0834eaf1f24"
+   },
+   "S2 MIME": {
+    "pass": true,
+    "detail": {
+     "tree": {
+      "multipart/alternative": [
+       "text/plain",
+       {
+        "multipart/related": [
+         "text/html",
+         "image/png"
+        ]
+       }
+      ]
+     },
+     "transfer_encodings": [
+      "quoted-printable",
+      "quoted-printable",
+      "base64"
+     ],
+     "charsets": [
+      "utf-8",
+      "utf-8",
+      null
+     ],
+     "headers_7bit": true,
+     "max_line_octets": 76
+    }
+   },
+   "S3 wording": {
+    "pass": true,
+    "detail": {
+     "subject_equal": true,
+     "plain_equal": true,
+     "html_equal": true
+    }
+   },
+   "S4 CID": {
+    "pass": true,
+    "detail": {
+     "img_src": "cid:valida-logo.b6@cybervalida.com",
+     "content_id": "valida-logo.b6@cybervalida.com",
+     "disposition": "inline",
+     "filename": "valida-logo.png",
+     "image_sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+     "image_bytes": 15801,
+     "external_resources": 0,
+     "links": 0
+    }
+   },
+   "S5 alt text": {
+    "pass": true,
+    "detail": {
+     "alt": "Valida",
+     "aria_hidden_present": false
+    }
+   },
+   "S6 structure": {
+    "pass": true,
+    "detail": {
+     "lang": "en",
+     "dir": "ltr",
+     "title_equals_subject": true,
+     "h1": 1,
+     "tables": 5,
+     "tables_presentation": 5,
+     "source_order": [
+      "p: APPLICATION RECEIVED",
+      "h1: Thank you for applying.",
+      "p: We’ve received your application for Principal Offensive Secu",
+      "p: If we need more information or decide to move forward, we’ll",
+      "p: Valida Careers"
+     ]
+    }
+   },
+   "S7 without images": {
+    "pass": true,
+    "detail": {
+     "plain_lines_missing_from_html_text": []
+    }
+   },
+   "S8 PNG chunks": {
+    "pass": true,
+    "detail": [
+     "IHDR",
+     "IDAT",
+     "IEND"
+    ]
+   },
+   "S9 privacy": {
+    "pass": true,
+    "detail": {
+     "addresses": {
+      "1666a0294e9f5026b27af77916f3a622.b6@synthetic.example.invalid": {
+       "kind": "Message-ID (opaque token, synthetic domain)",
+       "places": [
+        "header Message-ID",
+        "raw message"
+       ]
+      },
+      "candidate@synthetic.example.invalid": {
+       "kind": "THE SYNTHETIC CANDIDATE ADDRESS",
+       "places": [
+        "header To",
+        "raw message"
+       ]
+      },
+      "careers@synthetic.example.invalid": {
+       "kind": "Reply-To (synthetic careers identity)",
+       "places": [
+        "header Reply-To",
+        "raw message"
+       ]
+      },
+      "notifications@synthetic.example.invalid": {
+       "kind": "From (synthetic sender identity)",
+       "places": [
+        "header From",
+        "raw message"
+       ]
+      },
+      "valida-logo.b6@cybervalida.com": {
+       "kind": "Content-ID of the inline logo (a fixed constant, not an address)",
+       "places": [
+        "part 1 body text/html",
+        "part 1 body text/html (references decoded)",
+        "part 2 header Content-ID",
+        "raw message"
+       ]
+      }
+     },
+     "phone_shapes": [],
+     "resume_file_shapes": [],
+     "flagged_words_outside_note": []
+    }
+   }
+  }
+ },
+ "_browser": {
+  "internal-long-values / image shown": "- img \"Valida\"\n- paragraph: RECRUITMENT / NEW APPLICATION\n- heading \"A new application has arrived.\" [level=1]\n- paragraph: The application is recorded in Valida.\n- paragraph: Role\n- paragraph: Principal Offensive Security Engineer, Cloud Infrastructure and Identity Platforms Principal Offensive Security Engineer, Cloud Infrastructure and Identity Plat\n- paragraph: Role identifier\n- paragraph: seg000-seg001-seg002-seg003-seg004-seg005-seg006-seg007-seg008-seg009-seg010-seg011-seg012-seg013-seg014-seg015-seg016-s\n- paragraph: Received (UTC)\n- paragraph: 2026-10-26 15:42:00\n- paragraph: Application reference\n- paragraph: 0123456789abcdef01234567\n- paragraph: Candidate details and the resume are stored privately in Valida and are not included in this email.\n- paragraph: Valida · Recruitment operations",
+  "internal-long-values / image not loaded (cid: unresolvable)": "- img \"Valida\"\n- paragraph: RECRUITMENT / NEW APPLICATION\n- heading \"A new application has arrived.\" [level=1]\n- paragraph: The application is recorded in Valida.\n- paragraph: Role\n- paragraph: Principal Offensive Security Engineer, Cloud Infrastructure and Identity Platforms Principal Offensive Security Engineer, Cloud Infrastructure and Identity Plat\n- paragraph: Role identifier\n- paragraph: seg000-seg001-seg002-seg003-seg004-seg005-seg006-seg007-seg008-seg009-seg010-seg011-seg012-seg013-seg014-seg015-seg016-s\n- paragraph: Received (UTC)\n- paragraph: 2026-10-26 15:42:00\n- paragraph: Application reference\n- paragraph: 0123456789abcdef01234567\n- paragraph: Candidate details and the resume are stored privately in Valida and are not included in this email.\n- paragraph: Valida · Recruitment operations",
+  "acknowledgement / image shown": "- img \"Valida\"\n- paragraph: APPLICATION RECEIVED\n- heading \"Thank you for applying.\" [level=1]\n- paragraph: We’ve received your application for Cybersecurity Specialist.\n- paragraph: If we need more information or decide to move forward, we’ll contact you using the details in your application.\n- paragraph: Valida Careers",
+  "acknowledgement / image not loaded (cid: unresolvable)": "- img \"Valida\"\n- paragraph: APPLICATION RECEIVED\n- heading \"Thank you for applying.\" [level=1]\n- paragraph: We’ve received your application for Cybersecurity Specialist.\n- paragraph: If we need more information or decide to move forward, we’ll contact you using the details in your application.\n- paragraph: Valida Careers"
+ }
+}

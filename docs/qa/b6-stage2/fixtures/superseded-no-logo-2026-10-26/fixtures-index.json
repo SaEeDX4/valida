@@ -1,0 +1,27 @@
+{
+  "templateVersion": "b6-2",
+  "node": "v24.21.0",
+  "generatedFrom": "working copy (pre-approval build: no logo)",
+  "fixtures": [
+    {
+      "name": "internal",
+      "subject": "New application — Cybersecurity Specialist | Valida",
+      "htmlBytes": 9220,
+      "textBytes": 364,
+      "emlBytes": 11183
+    },
+    {
+      "name": "acknowledgement",
+      "subject": "Application received — Cybersecurity Specialist | Valida",
+      "htmlBytes": 5471,
+      "textBytes": 220,
+      "emlBytes": 7008
+    },
+    {
+      "name": "internal-long-values",
+      "subject": "New application — Principal Offensive Security Engineer, Cloud Infrastructure and Identity Platforms Principal Offensive Security Enginee… | Valida",
+      "htmlBytes": 9550,
+      "textBytes": 596
+    }
+  ]
+}

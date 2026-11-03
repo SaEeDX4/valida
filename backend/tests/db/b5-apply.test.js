@@ -17,7 +17,7 @@ import { Readiness, DEPENDENCY_STATE } from '../../src/modules/health/readiness.
 import { capturingLogger, testConfig } from '../helpers.js';
 import { PDF_MIME, DOCX_MIME, syntheticPdf, syntheticDocx } from '../fixtures/resumeFiles.js';
 import { createIntakeEnvironment } from '../fixtures/uploadHarness.js';
-import { QA_CANDIDATE, applyRequest, qaAnswers, recordingTransport } from '../fixtures/applyHarness.js';
+import { QA_CANDIDATE, QA_NOTIFICATION_OPTIONS, applyRequest, qaAnswers, recordingTransport } from '../fixtures/applyHarness.js';
 import { requireTestDatabase, assertConnectedToTestDatabase } from './testDatabase.js';
 
 /**
@@ -125,7 +125,8 @@ function realApp({ transport = null, wrapJobs = (repo) => repo, wrapApplications
     readiness,
     jobRepository: wrapJobs({ ...createJobRepository({ queryTimeoutMs: 5000 }) }),
     applicationRepository: wrapApplications({ ...createApplicationRepository({ timeoutMs: 5000 }) }),
-    notificationService: createNotificationService({ transport, timeoutMs: 2000 }),
+    // B6 CHANGE: the service now needs its (synthetic, undeliverable) recipients.
+    notificationService: createNotificationService({ transport, timeoutMs: 2000, ...QA_NOTIFICATION_OPTIONS }),
     resumeStorage: storage,
     uploadArea: intake.uploadArea,
   });
@@ -449,7 +450,7 @@ describe('the Application write-durability policy over a REAL connection (r2; r1
     expect(fs.existsSync(objectPath(record.resume.storageKey))).toBe(true);
   }, 30_000);
 
-  it('the notification-state update is written under the same policy', async () => {
+  it('the notification-state updates (B6: the claim AND the recorded outcome) are written under the same policy', async () => {
     await publishedJob();
     await mongoose.disconnect();
     const updates = [];
@@ -463,8 +464,10 @@ describe('the Application write-durability policy over a REAL connection (r2; r1
       await mongoose.disconnect();
       await mongoose.connect(TEST_URI, CONNECT);
     }
-    expect(updates).toHaveLength(1);
-    expectApplicationWriteConcern(updates[0]);
+    // B6 CHANGE (was: exactly one update): the claim before the send and the
+    // outcome after it — both under the policy; the attempt is counted once.
+    expect(updates).toHaveLength(2);
+    updates.forEach((writeConcern) => expectApplicationWriteConcern(writeConcern));
     expect((await Application.findOne({}).lean()).notifications.internal).toMatchObject({ status: 'FAILED', attemptCount: 1 });
   }, 30_000);
 });

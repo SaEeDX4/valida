@@ -1,0 +1,637 @@
+diff --git a/backend/README.md b/backend/README.md
+index 6c740bd..73fe57c 100644
+--- a/backend/README.md
++++ b/backend/README.md
+@@ -1423,11 +1423,13 @@ for narrow screens; it has no links, scripts, remote resources, web fonts or
+ tracking, and open and click tracking are requested off. The service message
+ has no attachment field.
+ 
+-**Logo — pending.** The official dark logo, inline as a CID image, is the
+-approved delivery choice, but the derived 316 × 72 file needs the owner's own
+-approval before it is integrated. Until then this build renders **no image**.
+-The prepared integration, NOT applied, is
+-`docs/qa/b6-stage2/logo/logo-integration.NOT-APPLIED.patch`.
++**Logo.** The official dark logo travels inline as ONE CID related part
++(`src/integrations/notifications/emailLogo.js`): the derived 316 × 72 file the
++owner approved, shown at 158 × 36 with alt text `Valida`, its bytes pinned by
++SHA-256 (`assets/SHA256SUMS.txt`) — a mismatched asset fails composition and is
++never replaced. File name and Content-ID are constants; nothing is fetched from
++anywhere. Only an HTML part that references the logo gets it; nothing else is
++ever attached.
+ 
+ Tests: `tests/b6-stage2-templates.test.js` (T-01…T-12; part of `verify:b6`).
+ Review fixtures and browser previews (not email-client evidence):
+diff --git a/backend/src/integrations/notifications/assets/SHA256SUMS.txt b/backend/src/integrations/notifications/assets/SHA256SUMS.txt
+new file mode 100644
+index 0000000..93cffdc
+--- /dev/null
++++ b/backend/src/integrations/notifications/assets/SHA256SUMS.txt
+@@ -0,0 +1 @@
++b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a  valida-logo-email-316x72.png
+diff --git a/backend/src/integrations/notifications/assets/valida-logo-email-316x72.png b/backend/src/integrations/notifications/assets/valida-logo-email-316x72.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f25f026ed76629e8630f1f50358bab634fb8fa0
+GIT binary patch
+literal 13303
+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
+NvVw+u8RAXI{{WZK`ZE9k
+
+literal 0
+HcmV?d00001
+
+diff --git a/backend/src/integrations/notifications/emailLogo.js b/backend/src/integrations/notifications/emailLogo.js
+new file mode 100644
+index 0000000..2b01b82
+--- /dev/null
++++ b/backend/src/integrations/notifications/emailLogo.js
+@@ -0,0 +1,41 @@
++import crypto from 'node:crypto';
++import fs from 'node:fs';
++
++/**
++ * The email logo — Milestone B6 Stage 2, integrated after the owner approved
++ * the specific derived file (see docs/qa/b6-stage2/logo/).
++ *
++ * The official dark horizontal lockup (frontend/public/brand/
++ * valida-logo-horizontal-dark.png, SHA-256 920db434…dc5e), resampled ONLY to
++ * 316 x 72 px and shown at 158 x 36 (Concept A specification section 7). It
++ * travels inline, as a CID related part: nothing is fetched from anywhere, so
++ * it cannot signal an open (Doc 14 section 138).
++ *
++ * The bytes are pinned: they are read once and must match the approved
++ * SHA-256, or composing the message fails (a defect, never a substitute
++ * image). The file name and Content-ID are constants and carry no candidate
++ * or Application data.
++ */
++export const EMAIL_LOGO = Object.freeze({
++  file: 'valida-logo-email-316x72.png',
++  sha256: 'b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a',
++  contentId: 'valida-logo.b6@cybervalida.com',
++  filename: 'valida-logo.png',
++  contentType: 'image/png',
++  width: 158,
++  height: 36,
++  alt: 'Valida',
++});
++
++let verifiedBytes = null;
++
++/** The approved logo bytes; throws if the asset is missing or does not match its approved hash. */
++export function emailLogoBytes() {
++  if (verifiedBytes) return verifiedBytes;
++  const bytes = fs.readFileSync(new URL(`./assets/${EMAIL_LOGO.file}`, import.meta.url));
++  if (crypto.createHash('sha256').update(bytes).digest('hex') !== EMAIL_LOGO.sha256) {
++    throw new Error('email logo asset does not match its approved SHA-256');
++  }
++  verifiedBytes = bytes;
++  return verifiedBytes;
++}
+diff --git a/backend/src/integrations/notifications/smtpTransport.js b/backend/src/integrations/notifications/smtpTransport.js
+index a81fcfc..0450f7a 100644
+--- a/backend/src/integrations/notifications/smtpTransport.js
++++ b/backend/src/integrations/notifications/smtpTransport.js
+@@ -4,6 +4,7 @@ import tls from 'node:tls';
+ import { Readable } from 'node:stream';
+ import SMTPConnection from 'nodemailer/lib/smtp-connection';
+ import MailComposer from 'nodemailer/lib/mail-composer';
++import { EMAIL_LOGO, emailLogoBytes } from './emailLogo.js';
+ 
+ /**
+  * SMTP transport adapter — Milestone B6 r4.
+@@ -62,6 +63,9 @@ import MailComposer from 'nodemailer/lib/mail-composer';
+  * Message-ID derived from the idempotency key (the same for every attempt of
+  * one logical message — a correlation aid, NOT an exactly-once guarantee),
+  * Auto-Submitted: auto-generated (RFC 3834: no auto-replies), no X-Mailer.
++ * B6 Stage 2: an HTML part that references the approved email logo by its
++ * Content-ID gets that logo as ONE inline related part (fixed name and
++ * Content-ID, bytes pinned by SHA-256); nothing else is ever attached.
+  * The envelope asks, where the server supports DSN (RFC 3461), for
+  * failure/delay reports with headers only and an ENVID equal to the
+  * Message-ID token, so a bounce can be matched without its content.
+@@ -446,6 +450,7 @@ export function createSmtpTransport({
+ 
+   /** The message, composed once, before any connection is opened. */
+   async function compose(message, reference) {
++    const usesLogo = typeof message.html === 'string' && message.html.includes(`cid:${EMAIL_LOGO.contentId}`);
+     const composer = new MailComposer({
+       from: { name: message.from.name, address: message.from.address },
+       to: message.to[0],
+@@ -456,6 +461,19 @@ export function createSmtpTransport({
+       messageId: `<${reference}.b6@${senderDomain}>`,
+       date: clock(),
+       headers: { 'Auto-Submitted': 'auto-generated' },
++      ...(usesLogo
++        ? {
++            attachments: [
++              {
++                filename: EMAIL_LOGO.filename,
++                content: emailLogoBytes(),
++                contentType: EMAIL_LOGO.contentType,
++                cid: EMAIL_LOGO.contentId,
++                contentDisposition: 'inline',
++              },
++            ],
++          }
++        : {}),
+       xMailer: false,
+       disableFileAccess: true,
+       disableUrlAccess: true,
+diff --git a/backend/src/integrations/notifications/templates.js b/backend/src/integrations/notifications/templates.js
+index d2df950..f9a9202 100644
+--- a/backend/src/integrations/notifications/templates.js
++++ b/backend/src/integrations/notifications/templates.js
+@@ -40,12 +40,15 @@
+  * plain-text part carries the same information (section 136); the
+  * presentational labels CAREERS and the eyebrow are omitted from it.
+  *
+- * LOGO. The official dark logo, inline as a CID image, is APPROVED as the
+- * delivery choice (OD-2026-10-26-02), but the DERIVED FILE needs its own owner
+- * approval before it is integrated (OD-2026-10-26-03). Until then this build
+- * renders no image at all; the header carries the CAREERS label only.
++ * LOGO. The official dark logo, inline as a CID image (OD-2026-10-26-02), from
++ * the derived file the owner approved (emailLogo.js): 158 x 36, alt "Valida",
++ * on its own dark field; it carries no information that the text lacks
++ * (Doc 14 section 137). The header label CAREERS follows it and is hidden on
++ * narrow screens where the client honours the media query.
+  */
+ 
++import { EMAIL_LOGO } from './emailLogo.js';
++
+ export const TEMPLATE_VERSION = 'b6-2';
+ 
+ /** Longest Job title in a subject, in extended grapheme clusters, the ellipsis included (spec section 6.2). */
+@@ -139,6 +142,9 @@ const STYLE = Object.freeze({
+ 
+ const TABLE = 'role="presentation" cellpadding="0" cellspacing="0" border="0"';
+ 
++/** The approved logo, inline (CID). Alt-text styling for clients that show the alt text (spec section 7.1). */
++const LOGO_IMAGE = `<img src="cid:${EMAIL_LOGO.contentId}" width="${EMAIL_LOGO.width}" height="${EMAIL_LOGO.height}" alt="${EMAIL_LOGO.alt}" style="display:block;width:${EMAIL_LOGO.width}px;height:${EMAIL_LOGO.height}px;border:0;outline:none;text-decoration:none;font-family:${FONT_BODY};font-size:16px;line-height:${EMAIL_LOGO.height}px;font-weight:600;color:${COLOR.text};">`;
++
+ /** A cell that holds text declares its background twice: attribute and inline style (spec section 4). */
+ function cell(background, style, content, className = '', attributes = '') {
+   const classAttribute = className ? ` class="${className}"` : '';
+@@ -192,6 +198,7 @@ function conceptADocument({ subject, preheader, bodyRows }) {
+     '.v-bottom{padding-bottom:28px !important;}',
+     '.v-h1{font-size:28px !important;line-height:34px !important;margin-bottom:20px !important;}',
+     '.v-lead{line-height:25px !important;}',
++    '.v-label{display:none !important;}',
+     '}',
+     '</style>',
+     '<!--[if mso]><style>h1,p,td{font-family:\'Segoe UI\',Arial,sans-serif !important;}</style><![endif]-->',
+@@ -202,10 +209,11 @@ function conceptADocument({ subject, preheader, bodyRows }) {
+     `<tr><td align="center" bgcolor="${COLOR.canvas}" style="background-color:${COLOR.canvas};">`,
+     '<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->',
+     `<table ${TABLE} width="100%" align="center" style="width:100%;max-width:600px;margin:0 auto;">`,
+-    // Header: the CAREERS label (the logo is added only after its derived file is approved).
++    // Header: the logo, then the CAREERS label (hidden on narrow screens).
+     `<tr>${cell(COLOR.canvas, 'padding:36px 40px;', [
+       `<table ${TABLE} width="100%" style="width:100%;"><tr>`,
+-      cell(COLOR.canvas, 'padding:0 0 0 8px;text-align:right;', `<p style="${STYLE.headerLabel}">CAREERS</p>`, 'v-label', ' align="right"'),
++      cell(COLOR.canvas, `padding:0;width:${EMAIL_LOGO.width}px;`, LOGO_IMAGE, '', ` width="${EMAIL_LOGO.width}" valign="middle"`),
++      cell(COLOR.canvas, 'padding:0 0 0 8px;text-align:right;', `<p style="${STYLE.headerLabel}">CAREERS</p>`, 'v-label', ' align="right" valign="middle"'),
+       '</tr></table>',
+     ].join(''), 'v-gutter v-header')}</tr>`,
+     // The single accent rule, flush with the left gutter, at the bottom edge of the header.
+diff --git a/backend/tests/apply-failures.test.js b/backend/tests/apply-failures.test.js
+index 44b41f1..2ff7c2b 100644
+--- a/backend/tests/apply-failures.test.js
++++ b/backend/tests/apply-failures.test.js
+@@ -679,7 +679,9 @@ describe('the notification boundary (Doc 09 sections 128-136; Doc 18 section 127
+     expect(message.tracking).toEqual({ opens: false, links: false });
+     expect(JSON.stringify(message)).not.toMatch(/QA Synthetic Candidate|example\.invalid|qa-resume|%PDF/i);
+     for (const value of [QA_CANDIDATE.fullName, QA_CANDIDATE.email, QA_CANDIDATE.phone]) expect(JSON.stringify(message)).not.toContain(value);
+-    expect(message.html).not.toMatch(/<a\s|<img\s|https?:/i);
++    expect(message.html).not.toMatch(/<a\s|https?:/i);
++    // B6 Stage 2: the only image is the approved logo, inline (CID).
++    expect(message.html.match(/<img\b[^>]*>/g)).toEqual([expect.stringContaining('src="cid:valida-logo.b6@cybervalida.com"')]);
+   });
+ 
+   it('an unclassified provider error is recorded as PROVIDER_ERROR, never its text', async () => {
+diff --git a/backend/tests/b6-apply-notifications.test.js b/backend/tests/b6-apply-notifications.test.js
+index b99b177..8d60ea0 100644
+--- a/backend/tests/b6-apply-notifications.test.js
++++ b/backend/tests/b6-apply-notifications.test.js
+@@ -74,7 +74,9 @@ describe('candidate acknowledgement ENABLED (provider double, identity configure
+     // No resume, link or candidate data in the internal email; no tracking anywhere.
+     for (const message of transport.calls) {
+       expect(message.tracking).toEqual({ opens: false, links: false });
+-      expect(message.html).not.toMatch(/<a\s|<img\s|https?:/i);
++      expect(message.html).not.toMatch(/<a\s|https?:/i);
++      // Stage 2: the only image is the approved logo, inline (CID).
++      expect(message.html.match(/<img\b[^>]*>/g)).toEqual([expect.stringContaining('src="cid:valida-logo.b6@cybervalida.com"')]);
+       expect(JSON.stringify(message)).not.toMatch(/%PDF|qa-resume|resumes\//);
+     }
+     expect(JSON.stringify(byEvent.APPLICATION_RECEIVED_INTERNAL)).not.toContain(QA_CANDIDATE.email);
+diff --git a/backend/tests/b6-notification-service.test.js b/backend/tests/b6-notification-service.test.js
+index f839b66..d537e39 100644
+--- a/backend/tests/b6-notification-service.test.js
++++ b/backend/tests/b6-notification-service.test.js
+@@ -70,7 +70,9 @@ describe('templates (Doc 14 sections 136-144; SEC-049)', () => {
+     expect(rendered.html).toMatch(/^<!doctype html>/);
+     expect(rendered.html).toContain('>QA Synthetic Apply Role</p>');
+     expect(rendered.html).toContain(`>${APPLICATION_ID}</p>`);
+-    expect(rendered.html).not.toMatch(/<a\s|<img\s|<link\s|<script|https?:|src=|url\(/i);
++    expect(rendered.html).not.toMatch(/<a\s|<link\s|<script|https?:|url\(/i);
++    // Stage 2: the only image is the approved logo, inline (CID) — no remote resource.
++    expect(rendered.html.match(/<img\b[^>]*>/g)).toEqual([expect.stringContaining('src="cid:valida-logo.b6@cybervalida.com"')]);
+     expect(JSON.stringify(rendered)).not.toMatch(/qa\.candidate|resume\.pdf|storageKey/i);
+   });
+ 
+@@ -82,7 +84,8 @@ describe('templates (Doc 14 sections 136-144; SEC-049)', () => {
+     expect(rendered.text).toContain('If we need more information or decide to move forward, we’ll contact you using the details in your application.');
+     expect(rendered.text).toContain('Valida Careers');
+     expect(`${rendered.text}${rendered.html}`).not.toMatch(/interview|shortlist|selected|within \d|business days|guarantee/i);
+-    expect(rendered.html).not.toMatch(/<a\s|<img\s|https?:/i);
++    expect(rendered.html).not.toMatch(/<a\s|https?:/i);
++    expect(rendered.html.match(/<img\b[^>]*>/g)).toEqual([expect.stringContaining('src="cid:valida-logo.b6@cybervalida.com"')]);
+     // The acknowledgement does not repeat what the candidate submitted.
+     expect(JSON.stringify(rendered)).not.toMatch(/qa\.candidate|65f0c0ffee/);
+   });
+diff --git a/backend/tests/b6-stage2-templates.test.js b/backend/tests/b6-stage2-templates.test.js
+index cd62f85..1d4e207 100644
+--- a/backend/tests/b6-stage2-templates.test.js
++++ b/backend/tests/b6-stage2-templates.test.js
+@@ -1,4 +1,5 @@
+-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
++import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
++import crypto from 'node:crypto';
+ import fs from 'node:fs';
+ import { spawnSync } from 'node:child_process';
+ import { dirname, join } from 'node:path';
+@@ -19,6 +20,7 @@ import { startLocalSmtpServer } from './fixtures/localSmtpServer.js';
+ import { QA_NOTIFICATION_OPTIONS, QA_TEXT_QUESTION_ID, applyRequest, createApplyEnvironment, qaAnswers } from './fixtures/applyHarness.js';
+ import { PDF_MIME, syntheticPdf } from './fixtures/resumeFiles.js';
+ import { decodeHtmlEntities, headerValue, leaves, parseMime, structure, surfaces } from './fixtures/mimeInspect.js';
++import { EMAIL_LOGO } from '../src/integrations/notifications/emailLogo.js';
+ 
+ /**
+  * B6 Stage 2 — template version b6-2 (Concept A — Graphite Letter).
+@@ -35,12 +37,14 @@ import { decodeHtmlEntities, headerValue, leaves, parseMime, structure, surfaces
+  * What they do NOT prove: how any email client renders the message (Stage 3),
+  * delivery, or anything about Titan. The local server is test infrastructure.
+  *
+- * PENDING: the derived logo is not yet approved (OD-2026-10-26-03 section 4),
+- * so this build has no image; the asset-dependent checks are listed as todo.
++ * LOGO: the derived logo file approved by the owner travels inline (CID); its
++ * bytes are pinned by SHA-256 (emailLogo.js) and checked on the wire (T-08).
+  */
+ 
+ const here = dirname(fileURLToPath(import.meta.url));
+ const TEMPLATES_FILE = join(here, '..', 'src', 'integrations', 'notifications', 'templates.js');
++const LOGO_FILE = join(here, '..', 'src', 'integrations', 'notifications', 'assets', EMAIL_LOGO.file);
++const MESSAGE_STRUCTURE = { 'multipart/alternative': ['text/plain', { 'multipart/related': ['text/html', 'image/png'] }] };
+ const cp = (...codes) => String.fromCodePoint(...codes);
+ const unit = (code) => String.fromCharCode(code); // one UTF-16 code unit — may be a lone surrogate
+ 
+@@ -222,8 +226,12 @@ describe('T-02 — HTML structure and prohibited resources (spec sections 6, 9)'
+       expect(html).not.toMatch(/https?:|\/\/|url\(|@import|@font-face|background-image|background=/i);
+       expect(html).not.toMatch(/display:\s*(?:flex|grid|inline-flex|inline-grid)|var\(|clamp\(|calc\(|animation|transition|rgba\(/i);
+       expect(html).not.toMatch(/\son[a-z]+=/i); // no event handlers
+-      // No image in this build: the derived logo awaits its own approval (OD-2026-10-26-03).
+-      expect(html).not.toMatch(/<img\b|src=|cid:/i);
++      // The only image is the approved logo, inline (CID), 158 x 36, alt "Valida".
++      const images = html.match(/<img\b[^>]*>/g);
++      expect(images).toHaveLength(1);
++      expect(images[0]).toContain(`src="cid:${EMAIL_LOGO.contentId}"`);
++      expect(images[0]).toContain('width="158" height="36" alt="Valida"');
++      expect(html.match(/src=/g)).toHaveLength(1);
+       // The Outlook-only parts are a fixed-width wrapper and a font override; nothing else.
+       const conditional = html.match(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g);
+       expect(conditional).toHaveLength(3);
+@@ -403,8 +411,9 @@ describe('T-06 — long values wrap; no width over 600 px; no fixed text heights
+       for (const [, width] of document.matchAll(/width="(\d+)"/g)) expect(Number(width)).toBeLessThanOrEqual(600);
+       for (const [, width] of document.matchAll(/(?:max-)?width:(\d+)px/g)) expect(Number(width)).toBeLessThanOrEqual(600);
+       for (const element of document.match(/<(?:p|h1)\b[^>]*>/g)) expect(element).not.toMatch(/(?<![-\w])height:\s*\d/);
+-      // Fixed heights exist only on the decorative 1 px hairlines and the 2 px accent rule.
+-      for (const [declaration] of document.matchAll(/(?<![-\w])height:\s*\d+px/g)) expect(['height:1px', 'height:2px']).toContain(declaration);
++      // Fixed heights exist only on the decorative 1 px hairlines, the 2 px accent rule and the 36 px logo image.
++      for (const [declaration] of document.matchAll(/(?<![-\w])height:\s*\d+px/g)) expect(['height:1px', 'height:2px', 'height:36px']).toContain(declaration);
++      expect(document.match(/(?<![-\w])height:36px/g)).toHaveLength(1);
+     }
+   });
+ });
+@@ -488,29 +497,63 @@ describe('T-07 — privacy, per message: raw AND decoded output, and the SMTP en
+         expect(received.rcptTo).toEqual([HR]);
+         expect(headerValue(mime, 'to')).toBe(HR);
+       }
+-      // Structure: text and HTML only (no attachment of any kind in this build).
+-      expect(structure(mime)).toEqual({ 'multipart/alternative': ['text/plain', 'text/html'] });
++      // Structure: text, HTML and the one inline logo — nothing else.
++      expect(structure(mime)).toEqual(MESSAGE_STRUCTURE);
+     }
+   });
+ });
+ 
+-describe('T-08 — MIME structure and size (this build: no image)', () => {
+-  it('multipart/alternative of text/plain and text/html, UTF-8, quoted-printable; HTML <= 20 KB; message <= 40 KB', async () => {
++describe('T-08 — MIME structure, the approved logo bytes and size', () => {
++  it('alternative(text/plain, related(text/html, image/png)); the logo is the approved file, inline, constant name and Content-ID; HTML <= 20 KB; message <= 40 KB', async () => {
++    const approved = fs.readFileSync(LOGO_FILE);
++    expect(crypto.createHash('sha256').update(approved).digest('hex')).toBe(EMAIL_LOGO.sha256);
+     for (const event of [NOTIFICATION_EVENTS.APPLICATION_RECEIVED_INTERNAL, NOTIFICATION_EVENTS.APPLICATION_ACKNOWLEDGEMENT]) {
+       const { received, mime } = await viaLocalServer(event);
+-      expect(structure(mime)).toEqual({ 'multipart/alternative': ['text/plain', 'text/html'] });
+-      for (const leaf of leaves(mime)) {
++      expect(structure(mime)).toEqual(MESSAGE_STRUCTURE);
++      for (const leaf of leaves(mime).filter((part) => part.type.startsWith('text/'))) {
+         expect(leaf.params.charset).toBe('utf-8');
+         expect(leaf.transferEncoding).toBe('quoted-printable');
+         expect(leaf.disposition).toBeNull();
+       }
++      const logo = partOf(mime, 'image/png');
++      expect(crypto.createHash('sha256').update(logo.bytes).digest('hex')).toBe(EMAIL_LOGO.sha256);
++      expect(logo.bytes.equals(approved)).toBe(true);
++      expect(logo.transferEncoding).toBe('base64');
++      expect(headerValue(logo, 'content-id')).toBe(`<${EMAIL_LOGO.contentId}>`);
++      expect(logo.disposition).toEqual({ value: 'inline', params: { filename: EMAIL_LOGO.filename } });
++      expect(logo.params.name).toBe(EMAIL_LOGO.filename);
+       expect(Buffer.byteLength(partOf(mime, 'text/html').text)).toBeLessThanOrEqual(20 * 1024);
+       expect(received.raw.length).toBeLessThanOrEqual(40 * 1024);
+     }
+   });
+ 
+-  it.todo('T-08 (PENDING derived-logo approval): multipart/related holds text/html and exactly one image/png whose bytes equal the approved asset (SHA-256), with a constant filename and Content-ID; the whole message stays <= 40 KB');
+-  it.todo('T-02 (PENDING derived-logo approval): the only img is the CID logo, 158 x 36, alt "Valida"');
++  it('a logo asset that does not match its approved hash is refused — never a substitute image', async () => {
++    vi.resetModules();
++    const fsModule = await import('node:fs');
++    const spy = vi.spyOn(fsModule.default, 'readFileSync').mockReturnValue(Buffer.from('not the approved logo'));
++    const { emailLogoBytes } = await import('../src/integrations/notifications/emailLogo.js');
++    expect(() => emailLogoBytes()).toThrow(/approved SHA-256/);
++    spy.mockRestore();
++  });
++
++  it('a message whose HTML does not reference the logo gets no attachment at all', async () => {
++    const local = await localServer();
++    const transport = smtpTransport(local.port);
++    await transport.send(
++      {
++        event: 'APPLICATION_RECEIVED_INTERNAL',
++        from: { address: USERNAME, name: 'Valida Careers' },
++        to: [HR],
++        replyTo: CAREERS,
++        subject: 'QA',
++        text: 'QA text',
++        html: '<p>QA html</p>',
++        metadata: { applicationId: SYNTHETIC.applicationId },
++      },
++      { idempotencyKey: `APPLICATION_RECEIVED_INTERNAL/${SYNTHETIC.applicationId}` },
++    );
++    expect(structure(parseMime(local.record.messages[0].raw))).toEqual({ 'multipart/alternative': ['text/plain', 'text/html'] });
++  });
+ });
+ 
+ describe('T-09 — the transport headers and parameters are unchanged', () => {

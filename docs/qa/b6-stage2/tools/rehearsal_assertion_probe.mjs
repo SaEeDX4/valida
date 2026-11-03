@@ -1,0 +1,18 @@
+import path from 'node:path';
+const backendRoot = process.argv[2];
+const imp = (rel) => import(path.join(backendRoot, rel));
+const { createNotificationService, NOTIFICATION_EVENTS } = await imp('src/integrations/notifications/notificationService.js');
+const { createSmtpTransport } = await imp('src/integrations/notifications/smtpTransport.js');
+const { startLocalSmtpServer } = await imp('tests/fixtures/localSmtpServer.js');
+const { createTestCertificates } = await imp('tests/fixtures/testCertificates.js');
+const USERNAME = 'notifications@qa-valida.example.test', PASSWORD = 'synthetic-local-test-password';
+const certificates = createTestCertificates();
+const local = await startLocalSmtpServer({ certificate: certificates.localhost, credentials: { username: USERNAME, password: PASSWORD }, behaviour: { dsn: true } });
+const transport = createSmtpTransport({ host: 'localhost', port: local.port, security: 'implicit-tls', username: USERNAME, password: PASSWORD, timeoutMs: 5000, trustedCa: certificates.ca });
+const service = createNotificationService({ transport, timeoutMs: 5000, fromAddress: USERNAME, fromName: 'Valida Careers', replyTo: 'careers@qa-valida.example.test', internalRecipient: 'recruitment@qa-valida.example.test', acknowledgementEnabled: true, recipientAllowlist: null });
+const input = { applicationId: '0123456789abcdef01234567', job: { title: process.argv[3], slug: 'qa-smoke-test-role' }, submittedAt: new Date(), candidateEmail: 'qa.inbox@qa-valida.example.test' };
+const outcome = await service.deliver(NOTIFICATION_EVENTS.APPLICATION_ACKNOWLEDGEMENT, input);
+const raw = local.record.messages[0].raw.toString('utf8');
+console.log('outcome', outcome.status);
+const { parseMime, headerValue, leaves } = await imp('tests/fixtures/mimeInspect.js'); const m = parseMime(local.record.messages[0].raw); const re = /QA SMOKE TEST ROLE - NOT A REAL VACANCY/; console.log('old raw assertion:', re.test(raw), '| new: subject', re.test(headerValue(m, 'subject')), 'text/plain', re.test(leaves(m).find((l) => l.type === 'text/plain').text), 'text/html', re.test(leaves(m).find((l) => l.type === 'text/html').text));
+await transport.close(); await local.stop();

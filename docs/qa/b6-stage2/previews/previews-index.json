@@ -1,0 +1,288 @@
+{
+  "renderer": "Chromium 153.0.8010.12 (Playwright, headless) \u2014 BROWSER PREVIEW, NOT EMAIL-CLIENT EVIDENCE",
+  "build": "integrated (approved logo, OD-2026-10-27-01)",
+  "fonts_note": "Inter is installed on this machine, so these previews show Inter; Space Grotesk is not installed and is not delivered (no web fonts). Most email clients fall back to Segoe UI / Arial (see the fallback-font simulation).",
+  "shots": [
+    {
+      "file": "as-built-internal-desktop-680.png",
+      "source": "previews/as-built-internal.from-eml.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": true
+    },
+    {
+      "file": "as-built-internal-mobile-390.png",
+      "source": "previews/as-built-internal.from-eml.html",
+      "viewport": 390,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": false
+    },
+    {
+      "file": "as-built-internal-mobile-320.png",
+      "source": "previews/as-built-internal.from-eml.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": false
+    },
+    {
+      "file": "as-built-acknowledgement-desktop-680.png",
+      "source": "previews/as-built-acknowledgement.from-eml.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": true
+    },
+    {
+      "file": "as-built-acknowledgement-mobile-390.png",
+      "source": "previews/as-built-acknowledgement.from-eml.html",
+      "viewport": 390,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": false
+    },
+    {
+      "file": "as-built-acknowledgement-mobile-320.png",
+      "source": "previews/as-built-acknowledgement.from-eml.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": false
+    },
+    {
+      "file": "as-built-internal-long-values-desktop-680.png",
+      "source": "previews/as-built-internal-long-values.from-eml.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 852,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": true
+    },
+    {
+      "file": "as-built-internal-long-values-mobile-320.png",
+      "source": "previews/as-built-internal-long-values.from-eml.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 952,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": false
+    },
+    {
+      "file": "as-built-internal-fallback-font-desktop-680.png",
+      "source": "previews/as-built-internal.from-eml.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "fallback": true,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Arial"
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "natural": [
+            316,
+            72
+          ],
+          "alt": "Valida",
+          "srcScheme": "data"
+        }
+      ],
+      "careersLabelVisible": true
+    },
+    {
+      "file": "as-built-acknowledgement-images-not-loaded-680.png",
+      "source": "fixtures/SYNTHETIC-acknowledgement.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "images_not_loaded": true,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "images": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": false,
+          "natural": [
+            0,
+            0
+          ],
+          "alt": "Valida",
+          "srcScheme": "cid"
+        }
+      ],
+      "careersLabelVisible": true
+    }
+  ]
+}

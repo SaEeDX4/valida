@@ -1,0 +1,252 @@
+{
+  "renderer": "Chromium 153.0.8010.12 (Playwright, headless) \u2014 BROWSER PREVIEW, NOT EMAIL-CLIENT EVIDENCE",
+  "fonts_note": "Inter is installed on this machine, so the as-built previews show Inter; most email clients do not have it and fall back to Segoe UI / Arial (see the fallback-font simulation).",
+  "shots": [
+    {
+      "file": "as-built-internal-desktop-680.png",
+      "source": "fixtures/SYNTHETIC-internal.html",
+      "viewport": 680,
+      "deviceScaleFactor": 1,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-internal-mobile-390.png",
+      "source": "fixtures/SYNTHETIC-internal.html",
+      "viewport": 390,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-internal-mobile-320.png",
+      "source": "fixtures/SYNTHETIC-internal.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-acknowledgement-desktop-680.png",
+      "source": "fixtures/SYNTHETIC-acknowledgement.html",
+      "viewport": 680,
+      "deviceScaleFactor": 1,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-acknowledgement-mobile-390.png",
+      "source": "fixtures/SYNTHETIC-acknowledgement.html",
+      "viewport": 390,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-acknowledgement-mobile-320.png",
+      "source": "fixtures/SYNTHETIC-acknowledgement.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-internal-long-values-mobile-320.png",
+      "source": "fixtures/SYNTHETIC-internal-long-values.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 932,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-internal-long-values-desktop-680.png",
+      "source": "fixtures/SYNTHETIC-internal-long-values.html",
+      "viewport": 680,
+      "deviceScaleFactor": 1,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 832,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "as-built-internal-fallback-font-desktop-680.png",
+      "source": "fixtures/SYNTHETIC-internal.html",
+      "viewport": 680,
+      "deviceScaleFactor": 1,
+      "fallback": true,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Arial"
+      ],
+      "imagesShown": []
+    },
+    {
+      "file": "PREVIEW-ONLY-candidate-logo-internal-desktop-680.png",
+      "source": "previews/PREVIEW-ONLY-with-candidate-logo-internal.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "alt": "Valida"
+        }
+      ]
+    },
+    {
+      "file": "PREVIEW-ONLY-candidate-logo-acknowledgement-desktop-680.png",
+      "source": "previews/PREVIEW-ONLY-with-candidate-logo-acknowledgement.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "alt": "Valida"
+        }
+      ]
+    },
+    {
+      "file": "PREVIEW-ONLY-candidate-logo-acknowledgement-mobile-390.png",
+      "source": "previews/PREVIEW-ONLY-with-candidate-logo-acknowledgement.html",
+      "viewport": 390,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "alt": "Valida"
+        }
+      ]
+    },
+    {
+      "file": "PREVIEW-ONLY-candidate-logo-internal-mobile-320.png",
+      "source": "previews/PREVIEW-ONLY-with-candidate-logo-internal.html",
+      "viewport": 320,
+      "deviceScaleFactor": 2,
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": true,
+          "alt": "Valida"
+        }
+      ]
+    },
+    {
+      "file": "PREVIEW-ONLY-candidate-logo-acknowledgement-images-blocked-680.png",
+      "source": "previews/PREVIEW-ONLY-with-candidate-logo-acknowledgement.html",
+      "viewport": 680,
+      "deviceScaleFactor": 2,
+      "block_images": true,
+      "horizontalOverflow": false,
+      "scrollWidth": 680,
+      "clientWidth": 680,
+      "height": 800,
+      "fonts": [
+        "Inter",
+        "\"Space Grotesk\""
+      ],
+      "imagesShown": [
+        {
+          "w": 158,
+          "h": 36,
+          "loaded": false,
+          "alt": "Valida"
+        }
+      ]
+    }
+  ]
+}

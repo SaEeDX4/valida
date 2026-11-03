@@ -1,0 +1,58 @@
+{
+  "sources": {
+    "frontend/public/brand/valida-logo-horizontal-transparent.png": "f274e8ba03aa54b710e07ec17fa70e68d568abdfc7b2504c40b49e7ca4393377",
+    "backend/src/integrations/notifications/assets/valida-logo-email-316x72.png": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a"
+  },
+  "pillow": "12.3.0",
+  "status": "PROPOSED review mockups \u2014 not approved, not integrated",
+  "candidates": [
+    {
+      "file": "C0-current-316x72.png",
+      "note": "current integrated asset, unchanged copy",
+      "size_px": [
+        316,
+        72
+      ],
+      "mode": "RGB",
+      "bytes": 13303,
+      "base64_bytes": 17740,
+      "sha256": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a"
+    },
+    {
+      "file": "C1-transparent-lockup-316x72.png",
+      "note": "approved transparent lockup, resampled only",
+      "size_px": [
+        316,
+        72
+      ],
+      "mode": "RGBA",
+      "bytes": 18156,
+      "base64_bytes": 24208,
+      "sha256": "ecfcf240474116bab58c5946e0fddbeae46edf48f81971843f38ded5672a6966"
+    },
+    {
+      "file": "C2-masthead-1200x216.png",
+      "note": "header row as one image: #05070A + transparent lockup at the current position; no text",
+      "size_px": [
+        1200,
+        216
+      ],
+      "mode": "RGB",
+      "bytes": 15801,
+      "base64_bytes": 21068,
+      "sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b"
+    },
+    {
+      "file": "C3-plate-412x144.png",
+      "note": "transparent lockup on a #05070A plate, 24/18 px clear space, 8 px radius, transparent corners",
+      "size_px": [
+        412,
+        144
+      ],
+      "mode": "RGBA",
+      "bytes": 16340,
+      "base64_bytes": 21788,
+      "sha256": "73adbe4c3d49697fefc52b7779ec2946898cf39be32b31baabd4f535edfbb95a"
+    }
+  ]
+}

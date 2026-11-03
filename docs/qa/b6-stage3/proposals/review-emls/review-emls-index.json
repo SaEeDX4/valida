@@ -1,0 +1,60 @@
+{
+  "status": "PROPOSED review mockups and one control \u2014 NOT product output; open locally, offline; never send",
+  "python": "3.13.17",
+  "files": [
+    {
+      "file": "REVIEW-MOCKUP-C2-P04-acknowledgement.eml",
+      "variant": "C2+P04",
+      "from_fixture": "SYNTHETIC-acknowledgement.eml",
+      "fixture_sha256": "0c46841170246cd580ccee273efa983b023048541d01ccd80eee1cc18ad9f02a",
+      "image": "C2-masthead-1200x216.png",
+      "image_sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+      "html_bytes": 5345,
+      "eml_bytes": 28945,
+      "fixture_eml_bytes": 26096,
+      "sha256": "f6e536f710571105e4ac9f820cccab15e4de6bcfccc35706d53298ddaae23e9f"
+    },
+    {
+      "file": "REVIEW-MOCKUP-C2-P04-internal-long-values.eml",
+      "variant": "C2+P04",
+      "from_fixture": "SYNTHETIC-internal-long-values.eml",
+      "fixture_sha256": "ec4972fdf19268bd7c73e4ce03c50b2ce5f0fd76caf51824f5b51ea3bfa8530a",
+      "image": "C2-masthead-1200x216.png",
+      "image_sha256": "ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b",
+      "html_bytes": 9424,
+      "eml_bytes": 33806,
+      "fixture_eml_bytes": 31000,
+      "sha256": "595651cbce42efbd7f8016bc6a9dda2d1cc16e43dcfe468001e0bebcfbe08525"
+    },
+    {
+      "file": "REVIEW-MOCKUP-C3-P04-acknowledgement.eml",
+      "variant": "C3+P04",
+      "from_fixture": "SYNTHETIC-acknowledgement.eml",
+      "fixture_sha256": "0c46841170246cd580ccee273efa983b023048541d01ccd80eee1cc18ad9f02a",
+      "image": "C3-plate-412x144.png",
+      "image_sha256": "73adbe4c3d49697fefc52b7779ec2946898cf39be32b31baabd4f535edfbb95a",
+      "html_bytes": 5926,
+      "eml_bytes": 30322,
+      "fixture_eml_bytes": 26096,
+      "sha256": "bddfa3ce3ca15924392ace858253725dcd7acd60b524a7b8247ad28f25ff369f"
+    },
+    {
+      "file": "REVIEW-MOCKUP-C3-P04-internal-long-values.eml",
+      "variant": "C3+P04",
+      "from_fixture": "SYNTHETIC-internal-long-values.eml",
+      "fixture_sha256": "ec4972fdf19268bd7c73e4ce03c50b2ce5f0fd76caf51824f5b51ea3bfa8530a",
+      "image": "C3-plate-412x144.png",
+      "image_sha256": "73adbe4c3d49697fefc52b7779ec2946898cf39be32b31baabd4f535edfbb95a",
+      "html_bytes": 10005,
+      "eml_bytes": 35183,
+      "fixture_eml_bytes": 31000,
+      "sha256": "6b9af82d879393a913e8f996084bdd9f93c1d9537e2cadfd0c9faba0ca57d1cd"
+    },
+    {
+      "file": "CONTROL-F02-plain-layout.eml",
+      "variant": "F-02 control",
+      "eml_bytes": 1531,
+      "sha256": "ef2f0e6df97a9ec5096d4833d4f12ff4772a30ebe0286bea0684ebe050f42355"
+    }
+  ]
+}

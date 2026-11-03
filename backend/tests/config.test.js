@@ -103,9 +103,13 @@ describe('configuration', () => {
     // so `resumeStorage` is a real setting — but only its two B4 variables
     // are read, it stays optional, and an unrelated storage variable (a
     // production bucket name, which belongs to C6) is still ignored.
+    // B6 CHANGE: transactional email is now owned and read (tests/b6-config.test.js
+    // covers its variables, including an API key without a provider being
+    // refused), so TRANSACTIONAL_EMAIL_API_KEY is no longer a "later milestone"
+    // variable here; an unrelated future email variable is still ignored.
     const config = loadWithDatabase({
       RESUME_STORAGE_BUCKET: 'unused',
-      TRANSACTIONAL_EMAIL_API_KEY: 'unused',
+      TRANSACTIONAL_EMAIL_WEBHOOK_SECRET: 'unused',
       PUBLIC_SITE_URL: 'unused',
     });
     const keys = Object.keys(config).join(' ').toLowerCase();

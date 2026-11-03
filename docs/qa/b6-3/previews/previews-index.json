@@ -1,0 +1,3106 @@
+{
+ "renderer": "Chromium 153.0.8010.12 (Playwright, headless) \u2014 DEVELOPMENT PREVIEW: not an email client, not Outlook, not a phone",
+ "labels": {
+  "page-zoom": "whole-page zoom EMULATED (narrower viewport, higher device scale) in a browser",
+  "text-200": "text-only enlargement EMULATED by doubling computed font sizes and line heights",
+  "images-off": "image NOT LOADED (cid: cannot resolve in a browser) \u2014 simulation of blocked images",
+  "ol-light": "Outlook classic light rendering SIMULATED with measured colours (EV-S3-OC1, EV-S3-OC3)",
+  "mso-markup": "Outlook-only markup uncommented and laid out by a BROWSER \u2014 not Word, not Outlook"
+ },
+ "shots": [
+  {
+   "name": "acknowledgement-width-280",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 280,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-width-280.png",
+   "viewport": 280,
+   "scrollWidth": 280,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 280,
+    "h": 50,
+    "ratio": 5.6,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 280,
+   "approxCharsPerBodyLine": 28,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-320",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-width-320.png",
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-360",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 360,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 360,
+   "scrollWidth": 360,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 360,
+    "h": 65,
+    "ratio": 5.538,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 360,
+   "approxCharsPerBodyLine": 41,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-390",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-width-390.png",
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-430",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 430,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 430,
+   "scrollWidth": 430,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 430,
+    "h": 77,
+    "ratio": 5.584,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 430,
+   "approxCharsPerBodyLine": 51,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-600",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 600,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 600,
+   "scrollWidth": 600,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-680",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-1024",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 1024,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1024,
+   "scrollWidth": 1024,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-width-1440",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-width-1440.png",
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-page-zoom-200-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 640,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 640,
+   "scrollWidth": 640,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-page-zoom-200-window-800",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 4,
+   "png": "shots/acknowledgement-page-zoom-200-window-800.png",
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-page-zoom-200-window-600",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 300,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 300,
+   "scrollWidth": 300,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 300,
+    "h": 54,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 300,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-page-zoom-400-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 8,
+   "png": "shots/acknowledgement-page-zoom-400-window-1280.png",
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-text-200-width-680",
+   "scenario": "text-200",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-images-off-width-680",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-acknowledgement.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-images-off-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "acknowledgement-text-200-width-390",
+   "scenario": "text-200",
+   "source": "previews/as-built-acknowledgement.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-text-200-width-390.png",
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 22,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-images-off-width-390",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-acknowledgement.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "acknowledgement-ol-light-width-680",
+   "scenario": "ol-light",
+   "source": "previews/derived-ol-light-acknowledgement.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-ol-light-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "APPLICATION RECEIVED",
+    "r": 4.716029228245793,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-mso-markup-b6-3-width-1440",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-acknowledgement.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-mso-markup-b6-3-width-1440.png",
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-mso-markup-b6-3-width-680",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-acknowledgement.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-mso-markup-b6-3-width-400",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-acknowledgement.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 2,
+   "png": "shots/acknowledgement-mso-markup-b6-3-width-400.png",
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-280",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 280,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 280,
+   "scrollWidth": 280,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 280,
+    "h": 50,
+    "ratio": 5.6,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 280,
+   "approxCharsPerBodyLine": 28,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-320",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-360",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 360,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 360,
+   "scrollWidth": 360,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 360,
+    "h": 65,
+    "ratio": 5.538,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 360,
+   "approxCharsPerBodyLine": 41,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-390",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-430",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 430,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 430,
+   "scrollWidth": 430,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 430,
+    "h": 77,
+    "ratio": 5.584,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 430,
+   "approxCharsPerBodyLine": 51,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-600",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 600,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 600,
+   "scrollWidth": 600,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-680",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-1024",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 1024,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1024,
+   "scrollWidth": 1024,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-width-1440",
+   "scenario": "width",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-page-zoom-200-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 640,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 640,
+   "scrollWidth": 640,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-page-zoom-200-window-800",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-page-zoom-200-window-600",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 300,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 300,
+   "scrollWidth": 300,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 300,
+    "h": 54,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 300,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-page-zoom-400-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 8,
+   "png": null,
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-text-200-width-680",
+   "scenario": "text-200",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-images-off-width-680",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-acknowledgement-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "acknowledgement-long-values-text-200-width-390",
+   "scenario": "text-200",
+   "source": "previews/as-built-acknowledgement-long-values.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 22,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-images-off-width-390",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-acknowledgement-long-values.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "acknowledgement-long-values-ol-light-width-680",
+   "scenario": "ol-light",
+   "source": "previews/derived-ol-light-acknowledgement-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "APPLICATION RECEIVED",
+    "r": 4.716029228245793,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-mso-markup-b6-3-width-1440",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-acknowledgement-long-values.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-mso-markup-b6-3-width-680",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-acknowledgement-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 62,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "acknowledgement-long-values-mso-markup-b6-3-width-400",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-acknowledgement-long-values.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "We\u2019ve received your applicatio",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 42,
+   "privacyNotePresent": false,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-280",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 280,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 280,
+   "scrollWidth": 280,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 280,
+    "h": 50,
+    "ratio": 5.6,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 280,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-320",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-360",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 360,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 360,
+   "scrollWidth": 360,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 360,
+    "h": 65,
+    "ratio": 5.538,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 360,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-390",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-430",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 430,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 430,
+   "scrollWidth": 430,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 430,
+    "h": 77,
+    "ratio": 5.584,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 430,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-600",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 600,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 600,
+   "scrollWidth": 600,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-680",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-1024",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 1024,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1024,
+   "scrollWidth": 1024,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-width-1440",
+   "scenario": "width",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-page-zoom-200-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 640,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 640,
+   "scrollWidth": 640,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-page-zoom-200-window-800",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-page-zoom-200-window-600",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 300,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 300,
+   "scrollWidth": 300,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 300,
+    "h": 54,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 300,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-page-zoom-400-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 8,
+   "png": null,
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-text-200-width-680",
+   "scenario": "text-200",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-images-off-width-680",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-internal.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "internal-text-200-width-390",
+   "scenario": "text-200",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 19,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-images-off-width-390",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-internal.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "internal-ol-light-width-680",
+   "scenario": "ol-light",
+   "source": "previews/derived-ol-light-internal.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "RECRUITMENT / NEW APPLICATION",
+    "r": 4.716029228245793,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-mso-markup-b6-3-width-1440",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-internal.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-mso-markup-b6-3-width-680",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-internal.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-mso-markup-b6-3-width-400",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-internal.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-280",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 280,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-width-280.png",
+   "viewport": 280,
+   "scrollWidth": 280,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 280,
+    "h": 50,
+    "ratio": 5.6,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 280,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-320",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-width-320.png",
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-360",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 360,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 360,
+   "scrollWidth": 360,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 360,
+    "h": 65,
+    "ratio": 5.538,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 360,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-390",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-width-390.png",
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-430",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 430,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 430,
+   "scrollWidth": 430,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 430,
+    "h": 77,
+    "ratio": 5.584,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 430,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-600",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 600,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 600,
+   "scrollWidth": 600,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-680",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-1024",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 1024,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 1024,
+   "scrollWidth": 1024,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-width-1440",
+   "scenario": "width",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-width-1440.png",
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-page-zoom-200-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 640,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 640,
+   "scrollWidth": 640,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-page-zoom-200-window-800",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 4,
+   "png": "shots/internal-long-values-page-zoom-200-window-800.png",
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-page-zoom-200-window-600",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 300,
+   "device_scale_factor": 4,
+   "png": null,
+   "viewport": 300,
+   "scrollWidth": 300,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 300,
+    "h": 54,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 300,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-page-zoom-400-window-1280",
+   "scenario": "page-zoom",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 320,
+   "device_scale_factor": 8,
+   "png": "shots/internal-long-values-page-zoom-400-window-1280.png",
+   "viewport": 320,
+   "scrollWidth": 320,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 320,
+    "h": 58,
+    "ratio": 5.517,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 320,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-text-200-width-680",
+   "scenario": "text-200",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 31,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-images-off-width-680",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-internal-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-images-off-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "internal-long-values-text-200-width-390",
+   "scenario": "text-200",
+   "source": "previews/as-built-internal-long-values.from-eml.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-text-200-width-390.png",
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 24,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 32
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 19,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-images-off-width-390",
+   "scenario": "images-off",
+   "source": "fixtures/SYNTHETIC-internal-long-values.html",
+   "viewport_css_px": 390,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 390,
+   "scrollWidth": 390,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 390,
+    "h": 70,
+    "ratio": 5.571,
+    "loaded": false,
+    "natural": [
+     0,
+     0
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 390,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": true
+  },
+  {
+   "name": "internal-long-values-ol-light-width-680",
+   "scenario": "ol-light",
+   "source": "previews/derived-ol-light-internal-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-ol-light-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "RECRUITMENT / NEW APPLICATION",
+    "r": 4.716029228245793,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-mso-markup-b6-3-width-1440",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-internal-long-values.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-mso-markup-b6-3-width-1440.png",
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-mso-markup-b6-3-width-680",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-internal-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": null,
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-mso-markup-b6-3-width-400",
+   "scenario": "mso-markup",
+   "source": "previews/derived-mso-b6-3-internal-long-values.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-mso-markup-b6-3-width-400.png",
+   "viewport": 400,
+   "scrollWidth": 400,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 400,
+    "h": 72,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 400,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-fallback-font-width-680",
+   "scenario": "fallback-font",
+   "source": "previews/as-built-internal.from-eml.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/internal-fallback-font-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 600,
+    "h": 108,
+    "ratio": 5.556,
+    "loaded": true,
+    "natural": [
+     1200,
+     216
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "The application is recorded in",
+    "r": 10.644926196210678,
+    "px": 16
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-mso-markup-b6-2-for-comparison-width-1440",
+   "scenario": "mso-markup (b6-2, comparison)",
+   "source": "previews/derived-mso-b6-2-for-comparison-internal-long-values.html",
+   "viewport_css_px": 1440,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-mso-markup-b6-2-for-comparison-width-1440.png",
+   "viewport": 1440,
+   "scrollWidth": 1440,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 158,
+    "h": 36,
+    "ratio": 4.389,
+    "loaded": true,
+    "natural": [
+     316,
+     72
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "Role",
+    "r": 5.520278789778885,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": true,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-mso-markup-b6-2-for-comparison-width-680",
+   "scenario": "mso-markup (b6-2, comparison)",
+   "source": "previews/derived-mso-b6-2-for-comparison-internal-long-values.html",
+   "viewport_css_px": 680,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-mso-markup-b6-2-for-comparison-width-680.png",
+   "viewport": 680,
+   "scrollWidth": 680,
+   "horizontalOverflow": false,
+   "textBeyondRightEdge": [],
+   "image": {
+    "w": 158,
+    "h": 36,
+    "ratio": 4.389,
+    "loaded": true,
+    "natural": [
+     316,
+     72
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "Role",
+    "r": 5.520278789778885,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": true,
+   "altTextVisible": false
+  },
+  {
+   "name": "internal-long-values-mso-markup-b6-2-for-comparison-width-400",
+   "scenario": "mso-markup (b6-2, comparison)",
+   "source": "previews/derived-mso-b6-2-for-comparison-internal-long-values.html",
+   "viewport_css_px": 400,
+   "device_scale_factor": 2,
+   "png": "shots/internal-long-values-mso-markup-b6-2-for-comparison-width-400.png",
+   "viewport": 400,
+   "scrollWidth": 600,
+   "horizontalOverflow": true,
+   "textBeyondRightEdge": [
+    "RECRUITMENT / NEW APPLICATION",
+    "A new application has arrived.",
+    "The application is recorded in Valida.",
+    "Role",
+    "Principal Offensive Security Engineer, C",
+    "Role identifier",
+    "seg000-seg001-seg002-seg003-seg004-seg00",
+    "Received (UTC)",
+    "2026-10-26 15:42:00",
+    "Application reference",
+    "0123456789abcdef01234567",
+    "Candidate details and the resume are sto",
+    "Valida \u00b7 Recruitment operations"
+   ],
+   "image": {
+    "w": 158,
+    "h": 36,
+    "ratio": 4.389,
+    "loaded": true,
+    "natural": [
+     316,
+     72
+    ],
+    "alt": "Valida"
+   },
+   "smallestFontPx": 12,
+   "lowestContrast": {
+    "t": "Role",
+    "r": 5.520278789778885,
+    "px": 12
+   },
+   "columnWidth": 600,
+   "approxCharsPerBodyLine": 38,
+   "privacyNotePresent": true,
+   "footerPresent": true,
+   "careersLabelPresent": false,
+   "altTextVisible": false
+  }
+ ]
+}

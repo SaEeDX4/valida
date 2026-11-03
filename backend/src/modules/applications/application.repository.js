@@ -192,6 +192,78 @@ export function classifyWriteFailure(error) {
 export function createApplicationRepository({ model = Application, timeoutMs = 5_000 } = {}) {
   let indexesVerified = false;
 
+  /*
+   * B6 r3 — CLAIM OWNERSHIP. The attempts THIS repository instance acquired,
+   * keyed by the document the claim was made through (never exported, never
+   * persisted). An entry is created only after the claim's conditional save
+   * was acknowledged and matched; it names the exact channels, their attempt
+   * numbers and the claim time. recordNotificationOutcomes requires it, so a
+   * lost, failed or unconfirmed claim can never record an outcome — even
+   * though its local copy may carry an attempt number that the WINNER's
+   * stored state matches (the r2 defect). Uniqueness across processes needs
+   * no extra state: MongoDB lets only one conditional claim of attempt n
+   * match, so at most one process anywhere holds an entry for it.
+   */
+  const heldClaims = new WeakMap();
+  /*
+   * A document is used for at most ONE claim. After any claim through it —
+   * won, lost, failed or unconfirmed — its local channel state may no longer
+   * be what was read, and a second claim conditioned on that state could
+   * match someone else's attempt in progress. Load a fresh document instead.
+   */
+  const claimedThrough = new WeakSet();
+  const NOTIFICATION_CHANNEL_NAMES = ['internal', 'candidateAcknowledgement'];
+
+  /**
+   * A validated save of an existing Application, conditional on `where`
+   * (doc.$where), under the write-durability policy and the time bound.
+   * true = applied; false = the condition no longer matched (LOST).
+   * Rejects with DatabaseUnavailableError when the outcome is unknown or the
+   * database is unavailable — the caller then sends nothing.
+   */
+  async function conditionalSave(document, where) {
+    if (model.db?.readyState !== 1) throw new DatabaseUnavailableError('disconnected');
+    // Mongoose reports the number of documents the update matched with the
+    // document's 'save' event (emitted before save() resolves). As for the
+    // insert (B5 r2), success is claimed only for an ACKNOWLEDGED write that
+    // matched the document; a mismatch is DocumentNotFoundError (LOST).
+    let matched;
+    const onSaved = (_document, numAffected) => {
+      matched = numAffected;
+    };
+    document.$once('save', onSaved);
+    document.$where = where;
+    const saving = document.save({ writeConcern: applicationWriteConcern(timeoutMs) });
+    const settled = saving.then(
+      () => {
+        if (!(typeof matched === 'number' && matched >= 1)) throw new UnacknowledgedWriteError();
+        return true;
+      },
+      (error) => {
+        if (error instanceof mongoose.Error.DocumentNotFoundError) return false;
+        throw error;
+      },
+    );
+    // Reset only once the save has settled: it reads $where when it builds its filter.
+    settled.catch(() => {}).finally(() => {
+      document.$where = null;
+      document.removeListener('save', onSaved);
+    });
+    let timer;
+    const expired = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new DatabaseUnavailableError('timeout')), timeoutMs);
+    });
+    try {
+      return await Promise.race([settled, expired]);
+    } catch (error) {
+      if (error instanceof DatabaseUnavailableError || error instanceof mongoose.Error.ValidationError) throw error;
+      // Anything else (a server or network failure): the write may or may not have applied.
+      throw new DatabaseUnavailableError('write_failed');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   return Object.freeze({
     /**
      * The Application created with this idempotency-key hash, if any
@@ -325,40 +397,195 @@ export function createApplicationRepository({ model = Application, timeoutMs = 5
       return runBounded(model, () => model.findOne({ _id: { $eq: id } }).maxTimeMS(timeoutMs), timeoutMs);
     },
 
-    /**
-     * Records the outcome of one internal-notification attempt — Doc 10
-     * sections 118-122 — through the validated document save, under the same
-     * write concern as the insert. Notification state is mutable operational
-     * data (section 139); the submission-history guard of the model still
-     * rejects any change to the submission itself. A failure here never
-     * affects the accepted Application (the caller logs it).
+    /*
+     * NOTIFICATION STATE — Milestone B6 (Doc 10 sections 117-122; Doc 09
+     * sections 131-134; Doc 14 sections 120-121).
      *
-     * @param {import('mongoose').Document} document the persisted Application
-     * @param {{ status: 'SENT' | 'FAILED', attemptedAt: Date, sentAt?: Date, errorCode?: string }} outcome
+     * Every change goes through the validated document save (B2) under the
+     * write-durability policy, and is CONDITIONAL: Mongoose's documented
+     * `doc.$where` adds the expected current state to the update's filter, so
+     * the write applies only if nobody changed that state in between. A
+     * mismatch is Mongoose's DocumentNotFoundError (no document matched) and is
+     * reported as LOST — never retried blindly. No schema, enum or index
+     * changes: the canonical channel fields carry everything.
+     *
+     *   claim  (before a send)  PENDING|FAILED, attemptCount n, code c
+     *                           -> PENDING, attemptCount n+1, lastAttemptAt now,
+     *                              lastErrorCode ATTEMPT_IN_PROGRESS
+     *   record (after a send)   attemptCount n+1, ATTEMPT_IN_PROGRESS
+     *                           -> SENT (sentAt) | FAILED (safe code)
+     *
+     * So an attempt is recorded BEFORE anything is sent, two processes can
+     * never send the same attempt (only one claim matches), and an attempt
+     * that was interrupted after its claim stays visible as
+     * ATTEMPT_IN_PROGRESS — an uncertain outcome, never re-sent automatically.
+     * Only the claimant that ACQUIRED an attempt can record its outcome
+     * (heldClaims, r3).
      */
-    async recordInternalNotification(document, outcome) {
-      const internal = document.notifications.internal;
-      internal.status = outcome.status;
-      internal.attemptCount = (internal.attemptCount ?? 0) + 1;
-      internal.lastAttemptAt = outcome.attemptedAt;
-      if (outcome.status === 'SENT') {
-        internal.sentAt = outcome.sentAt;
-        internal.lastErrorCode = null;
-      } else {
-        internal.lastErrorCode = outcome.errorCode;
+
+    /**
+     * Claims the next attempt of each channel. Mutates `document`. Only a
+     * CLAIMED result (an acknowledged save that matched) makes the caller the
+     * owner of those attempts — see heldClaims. A document can be used for
+     * one claim only: a second claim through it is LOST, nothing is written;
+     * so is a claim of a channel that is not PENDING or FAILED in the copy.
+     * (The record filter needs no claim time: every claim increments the
+     * attempt number under the conditional save, so attempt n of a channel
+     * is acquired at most once.)
+     *
+     * @param {import('mongoose').Document} document a freshly loaded Application
+     * @param {Array<'internal' | 'candidateAcknowledgement'>} channels
+     * @param {{ now: Date }} options
+     * @returns {Promise<'CLAIMED' | 'LOST'>} rejects with DatabaseUnavailableError if the outcome is unknown
+     */
+    async claimNotificationAttempts(document, channels, { now }) {
+      if (
+        !Array.isArray(channels) ||
+        channels.length === 0 ||
+        new Set(channels).size !== channels.length ||
+        !channels.every((channel) => NOTIFICATION_CHANNEL_NAMES.includes(channel))
+      ) {
+        throw new TypeError('claimNotificationAttempts: channels must be distinct notification channels');
       }
-      if (model.db?.readyState !== 1) throw new DatabaseUnavailableError('disconnected');
-      let timer;
-      const expired = new Promise((_resolve, reject) => {
-        timer = setTimeout(() => reject(new DatabaseUnavailableError('timeout')), timeoutMs);
-      });
-      const saving = document.save({ writeConcern: applicationWriteConcern(timeoutMs) });
-      saving.catch(() => {});
-      try {
-        await Promise.race([saving, expired]);
-      } finally {
-        clearTimeout(timer);
+      if (claimedThrough.has(document)) return 'LOST';
+      // Only a PENDING or FAILED channel has an attempt to claim; nothing is written otherwise.
+      if (!channels.every((channel) => ['PENDING', 'FAILED'].includes(document.notifications?.[channel]?.status))) return 'LOST';
+      claimedThrough.add(document);
+
+      const where = {};
+      const attempts = {};
+      for (const channel of channels) {
+        const state = document.notifications[channel];
+        where[`notifications.${channel}.status`] = state.status;
+        where[`notifications.${channel}.attemptCount`] = state.attemptCount;
+        where[`notifications.${channel}.lastErrorCode`] = state.lastErrorCode ?? null;
+        state.status = 'PENDING';
+        state.attemptCount = state.attemptCount + 1;
+        state.lastAttemptAt = now;
+        state.lastErrorCode = 'ATTEMPT_IN_PROGRESS';
+        attempts[channel] = state.attemptCount;
       }
+      // Rejects (no ownership) when the outcome is unknown or the database failed.
+      if (!(await conditionalSave(document, where))) return 'LOST';
+      heldClaims.set(document, Object.freeze({ attempts: Object.freeze(attempts), claimedAt: now }));
+      return 'CLAIMED';
+    },
+
+    /**
+     * Records the outcome of each claimed attempt. Mutates `document`.
+     *
+     * AUTHORIZED ONLY BY A HELD CLAIM (r3): `document` must be the document a
+     * CLAIMED claim was made through, and `outcomes` must name exactly the
+     * channels it acquired. Otherwise — a lost, failed or unconfirmed claim,
+     * another channel, or a claim already used — the answer is LOST and
+     * NOTHING is written. The write targets the acquired attempt numbers and
+     * time (not whatever the copy holds now) and is still conditional on that
+     * attempt being in progress, so it cannot overwrite a newer attempt. A
+     * claim authorizes one record.
+     *
+     * @param {import('mongoose').Document} document the document the claim was made on
+     * @param {Record<string, { status: 'SENT', sentAt: Date } | { status: 'FAILED', errorCode: string }>} outcomes
+     * @returns {Promise<'RECORDED' | 'LOST'>}
+     */
+    async recordNotificationOutcomes(document, outcomes) {
+      const claim = heldClaims.get(document);
+      const channels = Object.keys(outcomes ?? {});
+      const claimed = claim ? Object.keys(claim.attempts) : [];
+      if (!claim || channels.length === 0 || channels.length !== claimed.length || !channels.every((channel) => claimed.includes(channel))) {
+        return 'LOST';
+      }
+      heldClaims.delete(document);
+
+      const where = {};
+      for (const [channel, outcome] of Object.entries(outcomes)) {
+        const state = document.notifications[channel];
+        where[`notifications.${channel}.attemptCount`] = claim.attempts[channel];
+        where[`notifications.${channel}.lastErrorCode`] = 'ATTEMPT_IN_PROGRESS';
+        // The acquired attempt is what gets recorded.
+        state.attemptCount = claim.attempts[channel];
+        state.lastAttemptAt = claim.claimedAt;
+        if (outcome.status === 'SENT') {
+          state.status = 'SENT';
+          state.sentAt = outcome.sentAt;
+          state.lastErrorCode = null;
+        } else {
+          state.status = 'FAILED';
+          state.lastErrorCode = outcome.errorCode;
+        }
+      }
+      return (await conditionalSave(document, where)) ? 'RECORDED' : 'LOST';
+    },
+
+    /**
+     * The retry command's scan (Doc 09 section 134): Applications matching
+     * `filter` — built by notificationDueFilter
+     * (application.notifications.js) from notification-state paths and
+     * submittedAt only — oldest first, bounded by `limit` and maxTimeMS. Lean
+     * rows with the notification state only: no candidate data. No index
+     * covers this filter (Doc 10 defines none for it).
+     *
+     * @param {{ limit: number, filter: { $or: object[] } }} options
+     */
+    findNotificationCandidates({ limit, filter }) {
+      if (!filter || !Array.isArray(filter.$or) || Object.keys(filter).length !== 1) {
+        return Promise.reject(new TypeError('findNotificationCandidates: filter must be a single $or of channel clauses'));
+      }
+      return runBounded(
+        model,
+        () =>
+          model
+            .find(filter, { _id: 1, submittedAt: 1, notifications: 1 })
+            .sort({ submittedAt: 1, _id: 1 })
+            .limit(limit)
+            .maxTimeMS(timeoutMs)
+            .lean(),
+        timeoutMs,
+      );
+    },
+
+    /**
+     * Counts of every notification state, per channel, for the retry report:
+     * what is sent, pending, failed and how (status + fixed code). Read-only
+     * aggregation, bounded by maxTimeMS.
+     *
+     * `exhausted` counts the channels still PENDING / FAILED that reached
+     * `maxAttempts` (the retry command no longer attempts them).
+     *
+     * @param {{ maxAttempts: number }} options
+     * @returns {Promise<Record<string, { states: Array<{ status: string, code: string | null, count: number }>, exhausted: number }>>}
+     */
+    async summarizeNotificationStates({ maxAttempts }) {
+      const summary = {};
+      for (const channel of ['internal', 'candidateAcknowledgement']) {
+        const rows = await runBounded(
+          model,
+          () =>
+            model
+              .aggregate([
+                { $group: { _id: { status: `$notifications.${channel}.status`, code: `$notifications.${channel}.lastErrorCode` }, count: { $sum: 1 } } },
+              ])
+              .option({ maxTimeMS: timeoutMs }),
+          timeoutMs,
+        );
+        const exhausted = await runBounded(
+          model,
+          () =>
+            model
+              .countDocuments({
+                [`notifications.${channel}.status`]: { $in: ['PENDING', 'FAILED'] },
+                [`notifications.${channel}.attemptCount`]: { $gte: maxAttempts },
+              })
+              .maxTimeMS(timeoutMs),
+          timeoutMs,
+        );
+        summary[channel] = {
+          states: rows
+            .map((row) => ({ status: row._id?.status ?? null, code: row._id?.code ?? null, count: row.count }))
+            .sort((a, b) => `${a.status}/${a.code}`.localeCompare(`${b.status}/${b.code}`)),
+          exhausted,
+        };
+      }
+      return summary;
     },
   });
 }

@@ -13,9 +13,9 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | Item      | Status                                                               |
 | --------- | -------------------------------------------------------------------- |
 | Release   | B — Recruitment Backend (Release A approved)                         |
-| Milestone | B5 — Application Submission Workflow: **submitted for review (final-r2, correcting the r1 review), not verified** |
+| Milestone | B6 — Notification Integration: **submitted for review (final-r9: the SMTP adapter for the selected provider, Bluehost Professional Email / Titan, with r5 corrections to the live smoke-test procedure and the archive proposal, the r6 ownership-verified smoke-test cleanup, r7: a dependency-security update — nodemailer 10.1.4, body-parser 2.4.0, zod 4.6.6, ip-address 10.7.4, vitest 5.0.3 / vite 8.3.3 — and a recoverable cleanup receipt, r8: test corrections for the first Windows run — deterministic local SMTP addressing and colour-independent output checks, and r9: the smoke-cleanup tests' fixtures corrected for MongoDB's unique indexes — complete synthetic Applications with distinct keys, index prerequisites applied and verified), not yet accepted** — the r9 Windows + MongoDB 8.0.9 rerun and the owner's live Titan tests have been reported (evidence: [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md)); acceptance awaits the remaining items in [`docs/review/B6_DECISION_PACKAGE.md`](docs/review/B6_DECISION_PACKAGE.md) and [`docs/review/B6_ACCEPTANCE_CHECKLIST.md`](docs/review/B6_ACCEPTANCE_CHECKLIST.md); the owner's decisions of 2026-10-26 (Titan long term, manual bounce monitoring, the suppression approach, the Concept A email direction, the manual-check-5 evidence) are recorded in [`docs/review/OWNER_DECISION_2026-10-26_B6_EMAIL.md`](docs/review/OWNER_DECISION_2026-10-26_B6_EMAIL.md); B6 is not accepted |
 | Frontend  | Release A public frontend. Not yet connected to the backend API — that is Release C1. |
-| Backend   | B1–B4 approved and merged. B5 adds the Apply endpoint, `POST /api/v1/jobs/:jobSlug/applications`: validated, eligibility-checked, idempotent submissions persisted to MongoDB with the resume in private storage. No email is sent (B6): the internal notification stays pending. Readiness answers 503 until B6. See [`backend/README.md`](backend/README.md). |
+| Backend   | B1–B5 approved and merged (B5: the Apply endpoint, `POST /api/v1/jobs/:jobSlug/applications`). B6 integrates notifications with Apply — events, templates, failure classification, a conditional claim against duplicate sends, a bounded retry command, truthful readiness — and (r4) an SMTP adapter over verified TLS for the selected provider (Bluehost Professional Email / Titan), tested against a local SMTP test server. Real sending happens only when configured (`TRANSACTIONAL_EMAIL_PROVIDER=smtp`); **live Titan evidence** (relay acceptance, Inbox delivery, SPF/DKIM/DMARC as reported, Reply-To routing, an observed bounce, and no Sent copy of SMTP submissions) is recorded in [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md); the former seven-year email archive request is **superseded** by the owner's decision of 2026-10-25 to keep Titan and make a monthly offline backup ([`docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md`](docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md); design: [`docs/architecture/EMAIL_BACKUP_PROPOSAL.md`](docs/architecture/EMAIL_BACKUP_PROPOSAL.md), proposed, not yet set up). Automated messages have no Sent copy; a copy design is proposed ([`docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`](docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md), not implemented). See [`backend/README.md`](backend/README.md). |
 | Database  | MongoDB (B2). The real initial role is provisioned only as a DRAFT — its content is AWAITING INPUT. |
 
 | Milestone | Status |
@@ -25,7 +25,8 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | B2 — MongoDB models & indexes | **Verified and merged** |
 | B3 — Job provisioning & public Jobs API | **Verified and GPT-approved** (Windows Node v24.21.0; 917 offline tests + 82 real-MongoDB tests; audit: 0 vulnerabilities) |
 | B4 — Private resume storage & validation | **Approved and merged** (final-r3; Windows Node 24: 1504 offline tests passed + 5 skipped, B4 acceptance 580 passed + 5 skipped, 89 real-MongoDB tests; audit: 0 vulnerabilities) |
-| B5 — Application submission workflow | **Submitted for review (final-r2) — not verified** (the Windows Node 24 run and the real-MongoDB `verify:b5` gate are pending) |
+| B5 — Application submission workflow | **Approved and merged** (final-r2; Windows Node 24.21.0: 1743 offline tests passed + 5 skipped, B5 acceptance 232/232, 110 real-MongoDB tests; audit: 0 vulnerabilities) |
+| B6 — Notification integration | **Submitted for review (final-r9) — not yet accepted** (owner-reported, GPT-reviewed: r9 on Windows Node 24.21.0 with MongoDB 8.0.9 — real-database suite 145/145, smoke cleanup 11/11, rehearsal + cleanup 17/17, `verify:b6` exit 2 with only the live gate pending by design, audits 0, `npm audit signatures` verified; live Titan runs `e4e60b91` and `7fcb590e` passed their automated checks; the owner reported manual checks 1–4, 6 and 7, and check 5 is recorded as PASS for the visible body of one received internal notification (owner-supplied screenshot, GPT-inspected) — see the evidence addendum. Pending: the Doc 14 deviation decisions (including the Doc 14 §120 suppression gap and its production gate), the bounce-monitoring and copy decisions) |
 | C1 — Frontend ↔ Jobs API integration | Not started |
 | Phase 1 | **Not verified** — only after Release B and Release C |
 
@@ -102,6 +103,10 @@ valida/
 │   └── package.json
 │
 ├── docs/              repository documentation, A6 Windows QA matrix
+│   ├── qa/            evidence records (B6 evidence addendum; evidence files kept byte-for-byte)
+│   ├── review/        milestone decision packages and owner decision records
+│   ├── operations/    draft operating procedures (not approved), incl. the Persian monthly email-backup guide
+│   └── architecture/  design proposals (email backup, automated-message copy; the superseded archive proposal kept as history)
 ├── scripts/           controlled operational utilities
 ├── .github/           reserved for CI configuration
 ├── .gitignore
@@ -359,21 +364,23 @@ and C.
 These are scheduled, not forgotten. Each is owned by a named milestone in
 `18_IMPLEMENTATION_ROADMAP.md`. (B1–B4 — the Express foundation, MongoDB models
 and indexes, the public Jobs API and Job provisioning, and private resume
-storage and validation — are approved and merged, and B5 — the application
-submission workflow — is built and submitted for review; see
+storage and validation, and the application submission workflow — are
+approved and merged, and B6 — notification integration, with the SMTP adapter
+for the selected provider — is submitted for review; see
 [`backend/README.md`](backend/README.md).)
 
 | Capability                                                                                                           | Milestone |
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
-| Transactional notifications                                                                                          | B6        |
+| Monthly offline email backup (owner decision 2026-10-25; setup not yet verified); automated-message Sent-copy preservation (design proposed, not implemented); bounce processing beyond manual mailbox monitoring (a review decision) | Backup: owner's operational task; copy: B7 candidate; bounce handling: decision pending |
 | Production deployment, domain, HTTPS                                                                                 | C         |
 | Production SEO: canonical host, sitemap, robots.txt, JobPosting data (need the production domain and real Jobs)      | C         |
 
 Awaiting input rather than scheduled: the production API origin, real approved
 Job content and per-market compensation, a corporate contact mechanism, a
-smaller approved transparent logo export, the production private-storage
-provider (selected at deployment, C6) and a malware-scanning provider (needed
-before resume review, E4).
+smaller approved transparent logo export, the email-backup setup inputs (Outlook
+version, `shervin@` access, encryption, second device), the production private-storage provider (selected at
+deployment, C6) and a malware-scanning provider (needed before resume review,
+E4).
 
 ---
 

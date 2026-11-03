@@ -1,0 +1,340 @@
+{
+  "renderer": "Chromium 153.0.8010.12 (Playwright) \u2014 BROWSER MOCKUP, NOT OUTLOOK, NOT EMAIL-CLIENT EVIDENCE",
+  "ol_light": "simulation by colour substitution measured from EV-S3-OC1; #83C6FF is PREDICTED",
+  "status": "PROPOSED",
+  "measured_map": {
+    "#05070A": "#ECEEF0",
+    "#080C11": "#E9EBEF",
+    "#F4F7FA": "#2C3034",
+    "#B6C0CC": "#5D6875",
+    "#7E8997": "#8D97A5",
+    "#66B3FF": "#007CC5",
+    "#1E242B": "#DADEE3",
+    "#328FFF": "#3490FF"
+  },
+  "predicted_map": {
+    "#83C6FF": "#00689D"
+  },
+  "shots": [
+    {
+      "file": "acknowledgement-C0-source-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C0",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          158,
+          36,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C0-ol-light-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C0",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          158,
+          36,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C1-source-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C1",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          158,
+          36,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C1-ol-light-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C1",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          158,
+          36,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C2-source-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C2",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          600,
+          108,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C2-source-390.png",
+      "fixture": "acknowledgement",
+      "variant": "C2",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 390,
+      "overflow": false,
+      "images": [
+        [
+          390,
+          70,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C2-source-320.png",
+      "fixture": "acknowledgement",
+      "variant": "C2",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 320,
+      "overflow": false,
+      "images": [
+        [
+          320,
+          58,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C2-ol-light-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C2",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          600,
+          108,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C2-ol-light-390.png",
+      "fixture": "acknowledgement",
+      "variant": "C2",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 390,
+      "overflow": false,
+      "images": [
+        [
+          390,
+          70,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C2-ol-light-320.png",
+      "fixture": "acknowledgement",
+      "variant": "C2",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 320,
+      "overflow": false,
+      "images": [
+        [
+          320,
+          58,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C3-source-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C3",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          206,
+          72,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C3-source-390.png",
+      "fixture": "acknowledgement",
+      "variant": "C3",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 390,
+      "overflow": false,
+      "images": [
+        [
+          206,
+          72,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C3-source-320.png",
+      "fixture": "acknowledgement",
+      "variant": "C3",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 320,
+      "overflow": false,
+      "images": [
+        [
+          206,
+          72,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C3-ol-light-680.png",
+      "fixture": "acknowledgement",
+      "variant": "C3",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          206,
+          72,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C3-ol-light-390.png",
+      "fixture": "acknowledgement",
+      "variant": "C3",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 390,
+      "overflow": false,
+      "images": [
+        [
+          206,
+          72,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "acknowledgement-C3-ol-light-320.png",
+      "fixture": "acknowledgement",
+      "variant": "C3",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 320,
+      "overflow": false,
+      "images": [
+        [
+          206,
+          72,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "internal-C2-P04-source-680.png",
+      "fixture": "internal",
+      "variant": "C2",
+      "p04": true,
+      "treatment": "source",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          600,
+          108,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "internal-C2-P04-ol-light-680.png",
+      "fixture": "internal",
+      "variant": "C2",
+      "p04": true,
+      "treatment": "ol-light",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          600,
+          108,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "internal-C0-source-680.png",
+      "fixture": "internal",
+      "variant": "C0",
+      "p04": false,
+      "treatment": "source",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          158,
+          36,
+          true
+        ]
+      ]
+    },
+    {
+      "file": "internal-C0-ol-light-680.png",
+      "fixture": "internal",
+      "variant": "C0",
+      "p04": false,
+      "treatment": "ol-light",
+      "viewport": 680,
+      "overflow": false,
+      "images": [
+        [
+          158,
+          36,
+          true
+        ]
+      ]
+    }
+  ]
+}

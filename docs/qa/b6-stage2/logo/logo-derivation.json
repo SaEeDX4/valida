@@ -1,0 +1,103 @@
+{
+  "tool": "Pillow 12.3.0, Python 3.13.17",
+  "operation": "Image.resize((316, 72), Image.Resampling.LANCZOS) on the 8-bit RGB source; saved as PNG (optimize=True). No crop, recolour, sharpen, effect, redraw or margin.",
+  "source": {
+    "path": "frontend/public/brand/valida-logo-horizontal-dark.png",
+    "sha256": "920db434d9e20eb99ec8ba417b1e164eb2e72db8e31eb6a8f04f99f814d2dc5e",
+    "bytes": 68770,
+    "size": [
+      1009,
+      230
+    ],
+    "mode": "RGB",
+    "png_chunks": [
+      "IDAT",
+      "IEND",
+      "IHDR"
+    ]
+  },
+  "derived": {
+    "sha256": "b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a",
+    "bytes": 13303,
+    "base64_bytes": 17740,
+    "size": [
+      316,
+      72
+    ],
+    "mode": "RGB",
+    "png_chunks": [
+      "IDAT",
+      "IEND",
+      "IHDR"
+    ]
+  },
+  "aspect": {
+    "source": 4.387,
+    "derived": 4.3889,
+    "difference_percent": 0.044,
+    "scale_x": 0.31318,
+    "scale_y": 0.31304
+  },
+  "check_vs_box_reduction": {
+    "mean_abs_diff_per_channel": [
+      1.42,
+      1.47,
+      1.48
+    ],
+    "max_abs_diff_per_channel": [
+      51,
+      51,
+      51
+    ]
+  },
+  "corner_pixels": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "source_extrema": [
+    [
+      0,
+      255
+    ],
+    [
+      0,
+      255
+    ],
+    [
+      0,
+      255
+    ]
+  ],
+  "derived_extrema": [
+    [
+      0,
+      255
+    ],
+    [
+      0,
+      255
+    ],
+    [
+      0,
+      255
+    ]
+  ]
+}

@@ -1,0 +1,38 @@
+From: F-02 control <control@synthetic.example.invalid>
+To: reviewer@synthetic.example.invalid
+Subject:
+ [REVIEW CONTROL F-02] plain layout control (synthetic, no Valida template)
+Date: Mon, 26 Oct 2026 15:42:05 +0000
+Message-ID: <f02-control.review@synthetic.example.invalid>
+X-Valida-Review:
+ control message for finding F-02; not product output; do not send
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============6423322252137644195=="
+
+--===============6423322252137644195==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+F-02 control: a full-width table on a dark body. No Valida template markup, n=
+o fixed widths, no images.
+
+--===============6423322252137644195==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<!doctype html>
+<html lang=3D"en"><head><meta charset=3D"utf-8"><title>F-02 control</title></=
+head>
+<body bgcolor=3D"#05070A" style=3D"margin:0;padding:0;background-color:#05070=
+A;">
+<table role=3D"presentation" width=3D"100%" cellpadding=3D"0" cellspacing=3D"=
+0" border=3D"0" bgcolor=3D"#1E242B" style=3D"width:100%;background-color:#1E2=
+42B;"><tr><td style=3D"padding:24px;font-family:'Segoe UI',Arial,sans-serif;f=
+ont-size:16px;line-height:24px;color:#F4F7FA;">F-02 control: a full-width tab=
+le on a dark body. No Valida template markup, no fixed widths, no images.</td=
+></tr></table>
+</body></html>
+
+--===============6423322252137644195==--

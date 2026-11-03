@@ -9,6 +9,8 @@ import { mongoDatabase, DatabaseConnectionError } from './db/mongoose.js';
 import { createPrivateStorage, StorageInitializationError } from './integrations/storage/privateStorage.js';
 import { TempUploadArea } from './lib/multipart/tempUploadArea.js';
 import { serveUnlessConnectionClosing } from './lib/http/stagedClose.js';
+import { createNotificationService, notificationServiceOptions } from './integrations/notifications/notificationService.js';
+import { createNotificationTransport } from './integrations/notifications/transport.js';
 
 /**
  * Backend process entry point — Doc 09 section 8, Doc 15 section 50.
@@ -72,6 +74,11 @@ export function settleWithin(task, ms) {
  * HTTP lifecycle tests can run without a MongoDB server; persistence and
  * uniqueness are proven only by the real-database suite (tests/db).
  */
+/** r4: delays of the background re-check of the email relay after a transient startup failure (the last repeats). */
+export const NOTIFICATION_RECHECK_DELAYS_MS = Object.freeze([30_000, 60_000, 120_000, 300_000, 600_000, 900_000]);
+/** Startup verification reasons worth checking again: the relay was not reached, or answered inconclusively. Nothing is sent by a check. */
+const RECHECKABLE_VERIFY_REASONS = new Set(['PROVIDER_UNAVAILABLE', 'RATE_LIMITED', 'TIMEOUT', 'PROVIDER_ERROR']);
+
 export async function startServer({
   env = process.env,
   database = mongoDatabase,
@@ -84,6 +91,19 @@ export async function startServer({
   // for startup-failure tests. Production passes neither.
   uploadTempBaseDirectory,
   storageFactory = createPrivateStorage,
+  // B6 test seam: a transport factory (the default reads TRANSACTIONAL_EMAIL_PROVIDER,
+  // which has no adapter yet). Production never passes one.
+  notificationTransportFactory = createNotificationTransport,
+  // r4 (review R4): when the startup check of the email relay fails for a
+  // transient reason, it is repeated in the background with these delays (the
+  // last one repeats) until it passes. Tests shorten them; production never
+  // passes it.
+  notificationRecheckDelaysMs = NOTIFICATION_RECHECK_DELAYS_MS,
+  // r5: the interface to listen on. Omitted (production, `npm start`): Node's
+  // default — every interface, exactly as before. The opt-in live smoke test
+  // passes '127.0.0.1' so its throw-away server is reachable from this
+  // machine only.
+  listenHost,
 } = {}) {
   const config = loadConfig(env);
   const logger =
@@ -116,18 +136,27 @@ export async function startServer({
   async function runShutdownHooks(budgetMs) {
     const deadline = Date.now() + budgetMs;
     const outcome = { closed: [], failed: [], timedOut: [] };
+    // r2: a logger that throws must not stop the remaining hooks or replace a
+    // startup failure with its own error.
+    const report = (level, fields, message) => {
+      try {
+        logger[level](fields, message);
+      } catch {
+        // The outcome is still returned; nothing else can be done here.
+      }
+    };
     for (const { name, handler } of shutdownHooks) {
       const remainingMs = Math.max(0, deadline - Date.now());
       const result = await settleWithin(handler, remainingMs);
       if (result.status === 'closed') {
         outcome.closed.push(name);
-        logger.info({ dependency: name }, 'dependency closed');
+        report('info', { dependency: name }, 'dependency closed');
       } else if (result.status === 'failed') {
         outcome.failed.push(name);
-        logger.error({ dependency: name, err: safeErrorSummary(result.error) }, 'dependency failed to close');
+        report('error', { dependency: name, err: safeErrorSummary(result.error) }, 'dependency failed to close');
       } else {
         outcome.timedOut.push(name);
-        logger.error({ dependency: name, timeoutMs: budgetMs }, 'dependency close timed out');
+        report('error', { dependency: name, timeoutMs: budgetMs }, 'dependency close timed out');
       }
     }
     return outcome;
@@ -183,9 +212,10 @@ export async function startServer({
    * sets the `database` readiness dependency from the real connection events
    * and keeps it current if the connection drops later.
    *
-   * Notifications (B6) remain not_implemented, so overall readiness still
-   * answers the canonical 503 "Service is not ready." Marking a dependency
-   * ready to obtain a 200 would be a false claim.
+   * Notifications (B6) are set below, truthfully: without an approved
+   * provider they stay not_implemented, so overall readiness still answers
+   * the canonical 503 "Service is not ready." Marking a dependency ready to
+   * obtain a 200 would be a false claim.
    */
   try {
     await database.connect({ config, logger, readiness });
@@ -198,25 +228,119 @@ export async function startServer({
   onShutdown('mongodb', () => database.disconnect({ logger, readiness }));
 
   /*
-   * The storage and upload area are handed to the application for the Apply
-   * route (B5). No B4 route uses them: B4 adds no public upload endpoint.
+   * B6 — transactional email (Doc 14 sections 93-114).
+   *
+   * Readiness requires the transactional email integration (Doc 15). It is
+   * reported truthfully:
+   *   - no transport (TRANSACTIONAL_EMAIL_PROVIDER=none, the default):
+   *     `not_implemented`. The backend still serves; accepted Applications
+   *     keep their notifications PENDING for ops:notifications:retry; overall
+   *     readiness answers 503.
+   *   - a transport (r4: smtp): `ready` only after its bounded verify()
+   *     succeeds — for SMTP: connection, TLS and login, nothing sent;
+   *     otherwise `unavailable` (still 503), with a fixed reason in the log.
+   *     A login refused later (the adapter's latch) turns it `unavailable`.
+   * A transport injected by a test is not production evidence (Doc 15
+   * section 146; Doc 17 section 388).
+   *
+   * r2: everything from here until the socket is bound runs INSIDE the
+   * startup cleanup protection. The storage, the upload area and the database
+   * connection are already open; if building the transport (or the app)
+   * throws, the registered hooks run once, within the same cleanup deadline,
+   * and the ORIGINAL error is rethrown (formatStartupFailure keeps its
+   * message out of the output). The transport's own close is registered the
+   * moment it exists, before anything else can fail.
    */
-  const app = createApp({ config, logger, readiness, resumeStorage, uploadArea });
-  /*
-   * B4 r3: a request pipelined behind an upload refused before its body was
-   * read (413/503, connection closed in stages) never reaches the app
-   * (RFC 9112 section 9.6; lib/http/stagedClose.js). Outside the app, so the
-   * Express middleware order (Doc 09 section 13) is unchanged.
-   */
-  const server = http.createServer(serveUnlessConnectionClosing(app));
+  let app;
+  let server;
+  // The service to verify again after startup (only after a transient failure).
+  let notificationsToRecheck = null;
+  try {
+    const notificationTransport = notificationTransportFactory({
+      config,
+      logger,
+      // r4: the SMTP adapter stops logging in after a definitive refusal (the
+      // provider blocks an IP after repeated failures); readiness says so.
+      onAuthenticationRejected: () => {
+        readiness.set('notifications', DEPENDENCY_STATE.UNAVAILABLE);
+        try {
+          logger.error(
+            { dependency: 'notifications', event: 'notification_authentication_rejected' },
+            'the email relay refused the configured credentials; no further login is attempted until the process restarts',
+          );
+        } catch {
+          // Logging must not change the outcome.
+        }
+      },
+    });
+    if (notificationTransport !== null && notificationTransport !== undefined) {
+      onShutdown('notifications', async () => {
+        if (typeof notificationTransport.close === 'function') await notificationTransport.close();
+      });
+    }
+    const notificationService = createNotificationService({
+      transport: notificationTransport ?? null,
+      timeoutMs: config.notificationTimeoutMs,
+      ...notificationServiceOptions(config.notifications),
+    });
+    if (!notificationService.configured) {
+      readiness.set('notifications', DEPENDENCY_STATE.NOT_IMPLEMENTED);
+      logger.warn(
+        { dependency: 'notifications', state: DEPENDENCY_STATE.NOT_IMPLEMENTED },
+        'no transactional email provider is configured (AWAITING INPUT); application notifications stay PENDING',
+      );
+    } else {
+      // Bounded by NOTIFICATION_TIMEOUT_MS (+ the abort grace); never throws.
+      // r4: for SMTP this connects, verifies TLS and authenticates — nothing
+      // is sent. `ready` means exactly that; it is not evidence that a message
+      // can be relayed or delivered (that is the live acceptance test).
+      const verified = await notificationService.verify();
+      readiness.set('notifications', verified.ok ? DEPENDENCY_STATE.READY : DEPENDENCY_STATE.UNAVAILABLE);
+      if (verified.ok) {
+        logger.info(
+          { dependency: 'notifications', provider: notificationService.providerName, verified: 'connection-and-authentication' },
+          'transactional email: connection, TLS and authentication verified (no message sent; relay acceptance and delivery are not verified by this check)',
+        );
+      } else {
+        logger.error(
+          { dependency: 'notifications', reason: verified.reason, ...(verified.diagnostic ? { diagnostic: verified.diagnostic } : {}) },
+          'the transactional email provider could not be verified',
+        );
+        // A passing outage at boot must not leave the service unready until a
+        // restart: transient reasons are checked again after startup. Refused
+        // credentials (latched), TLS and configuration failures are not —
+        // they need an operator.
+        if (RECHECKABLE_VERIFY_REASONS.has(verified.reason)) notificationsToRecheck = notificationService;
+      }
+    }
+
+    /*
+     * The storage and upload area are handed to the application for the Apply
+     * route (B5). No B4 route uses them: B4 adds no public upload endpoint.
+     */
+    app = createApp({ config, logger, readiness, resumeStorage, uploadArea, notificationService });
+    /*
+     * B4 r3: a request pipelined behind an upload refused before its body was
+     * read (413/503, connection closed in stages) never reaches the app
+     * (RFC 9112 section 9.6; lib/http/stagedClose.js). Outside the app, so the
+     * Express middleware order (Doc 09 section 13) is unchanged.
+     */
+    server = http.createServer(serveUnlessConnectionClosing(app));
+  } catch (error) {
+    readiness.beginShutdown();
+    await runShutdownHooks(cleanupTimeoutMs);
+    throw error;
+  }
 
   try {
     await new Promise((resolve, reject) => {
       server.once('error', reject);
-      server.listen(config.port, () => {
+      const listening = () => {
         server.removeListener('error', reject);
         resolve();
-      });
+      };
+      if (listenHost === undefined) server.listen(config.port, listening);
+      else server.listen(config.port, listenHost, listening);
     });
   } catch (error) {
     /*
@@ -267,9 +391,53 @@ export async function startServer({
    * nothing.
    */
   let shuttingDown = false;
+
+  /*
+   * r4 (review R4) — background re-check of the email relay after a transient
+   * startup failure: connect + TLS + login, nothing sent, with backoff, until
+   * it passes, the reason stops being transient, or shutdown begins. The timer
+   * never keeps the process alive and is cleared by shutdown.
+   */
+  let notificationRecheckTimer = null;
+  function scheduleNotificationRecheck(attempt) {
+    const delays = notificationRecheckDelaysMs;
+    const delay = delays[Math.min(attempt, delays.length - 1)];
+    notificationRecheckTimer = setTimeout(async () => {
+      notificationRecheckTimer = null;
+      if (shuttingDown) return;
+      let result;
+      try {
+        result = await notificationsToRecheck.verify();
+      } catch {
+        result = { ok: false, reason: 'PROVIDER_ERROR' };
+      }
+      if (shuttingDown) return;
+      try {
+        if (result.ok) {
+          readiness.set('notifications', DEPENDENCY_STATE.READY);
+          logger.info(
+            { dependency: 'notifications', recheck: attempt + 1, verified: 'connection-and-authentication' },
+            'transactional email verified on re-check (no message sent; relay acceptance and delivery are not verified by this check)',
+          );
+          return;
+        }
+        logger.warn(
+          { dependency: 'notifications', recheck: attempt + 1, reason: result.reason, ...(result.diagnostic ? { diagnostic: result.diagnostic } : {}) },
+          'the transactional email provider could still not be verified',
+        );
+      } catch {
+        // Logging must not stop the re-check.
+      }
+      if (RECHECKABLE_VERIFY_REASONS.has(result.reason)) scheduleNotificationRecheck(attempt + 1);
+    }, delay);
+    notificationRecheckTimer.unref?.();
+  }
+  if (notificationsToRecheck) scheduleNotificationRecheck(0);
+
   async function shutdown(reason, { timeoutMs = 10_000, dependencyTimeoutMs = timeoutMs } = {}) {
     if (shuttingDown) return undefined;
     shuttingDown = true;
+    if (notificationRecheckTimer) clearTimeout(notificationRecheckTimer);
 
     logger.info({ reason }, 'shutdown started');
     readiness.beginShutdown();

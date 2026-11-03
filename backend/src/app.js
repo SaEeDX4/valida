@@ -16,7 +16,8 @@ import { createJobRepository } from './modules/jobs/job.repository.js';
 import { applicationsRouter } from './modules/applications/application.routes.js';
 import { createApplicationRepository } from './modules/applications/application.repository.js';
 import { createApplicationSubmissionService } from './modules/applications/application.submission.js';
-import { createNotificationService } from './integrations/notifications/notificationService.js';
+import { createNotificationService, notificationServiceOptions } from './integrations/notifications/notificationService.js';
+import { createApplicationNotifier } from './modules/applications/application.notifications.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -94,11 +95,17 @@ export function createApp({
    */
   applicationRepository = createApplicationRepository({ timeoutMs: config?.databaseQueryTimeoutMs }),
   /**
-   * B5 — the notification boundary. No transport exists until B6 (the
-   * provider is AWAITING INPUT, Doc 14 section 94): nothing is attempted and
-   * nothing is claimed sent. Tests inject transports to exercise the boundary.
+   * B5/B6 — the Notification Service. server.js passes the one built from
+   * the configured transport (r4: the SMTP adapter when
+   * TRANSACTIONAL_EMAIL_PROVIDER=smtp). This default has none: nothing is
+   * attempted and nothing is claimed sent. Tests inject transports.
    */
-  notificationService = createNotificationService({ transport: null, timeoutMs: config?.notificationTimeoutMs ?? 5_000, clock }),
+  notificationService = createNotificationService({
+    transport: null,
+    timeoutMs: config?.notificationTimeoutMs ?? 5_000,
+    clock,
+    ...notificationServiceOptions(config?.notifications),
+  }),
 } = {}) {
   const app = express();
 
@@ -162,11 +169,13 @@ export function createApp({
   // B3 — public Jobs API (Doc 09 sections 48-70).
   api.use('/jobs', jobsRouter({ repository: jobRepository, clock, logger }));
   // B5 — Apply (Doc 09 sections 71-150): POST /jobs/:jobSlug/applications only.
+  // B6 — the claim / send / record cycle shared with ops:notifications:retry.
+  const notifier = createApplicationNotifier({ applications: applicationRepository, notifications: notificationService, clock, logger });
   const applicationSubmission = createApplicationSubmissionService({
     jobs: jobRepository,
     applications: applicationRepository,
     storage: resumeStorage,
-    notifications: notificationService,
+    notifier,
     clock,
     logger,
   });

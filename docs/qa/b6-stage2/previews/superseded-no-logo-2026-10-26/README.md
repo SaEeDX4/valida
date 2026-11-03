@@ -1,0 +1,3 @@
+# Superseded — browser previews of the pre-approval build without the logo (2026-10-26)
+
+Chromium screenshots of the 2026-10-26 fixtures (no image), kept unchanged as the record of that review; `previews-index.json` still names their sources by their old paths (`fixtures/SYNTHETIC-*.html`, now in `../../fixtures/superseded-no-logo-2026-10-26/`). Browser previews are **not** email-client evidence. The current previews, of the integrated build, are in the parent folder; the `PREVIEW-ONLY-candidate-logo-*` files there are the material on which the owner approved the logo (OD-2026-10-27-01) and are also unchanged.

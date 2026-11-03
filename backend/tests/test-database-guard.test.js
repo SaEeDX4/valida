@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { checkTestDatabaseTarget, readDotEnvMongoUri } from '../scripts/test-database.mjs';
+import { plainText, hasVTControlSequences, withColourMode, COLOUR_MODES } from './fixtures/terminalOutput.js';
 
 /**
  * The destructive-test safety guard (B2 correction, finding 2) — OFFLINE.
@@ -264,14 +265,21 @@ describe('every destructive entry point refuses before touching a database', () 
     MONGODB_TEST_URI: 'mongodb://127.0.0.1:1/valida_latest',
     MONGODB_CONNECT_TIMEOUT_MS: '1000',
   };
-  const launch = (args, extraEnv = {}) => {
+  /*
+   * r8: `output` is the child's text with VT control sequences removed (fixtures/terminalOutput.js) — every
+   * assertion below, positive or negative, runs on it; `raw` is what the child wrote. `colour` makes the
+   * child's colouring explicit ('plain' or 'coloured'); without it the child decides (Windows: coloured).
+   */
+  const launch = (args, extraEnv = {}, colour = null) => {
+    const environment = { ...process.env, ...UNSAFE, ...extraEnv };
     const result = spawnSync(process.execPath, args, {
       cwd: backendRoot,
-      env: { ...process.env, ...UNSAFE, ...extraEnv },
+      env: colour ? withColourMode(environment, colour) : environment,
       encoding: 'utf8',
       timeout: 60_000,
     });
-    return { code: result.status, output: `${result.stdout}${result.stderr}` };
+    const raw = `${result.stdout}${result.stderr}`;
+    return { code: result.status, raw, output: plainText(raw) };
   };
 
   it('verify:b2 refuses immediately and runs nothing', () => {
@@ -288,12 +296,51 @@ describe('every destructive entry point refuses before touching a database', () 
     expect(output).toMatch(/explicitly disposable/);
   }, 60_000);
 
-  it('test:db aborts in its global setup, before any test file is loaded', () => {
-    const { code, output } = launch(['node_modules/vitest/vitest.mjs', 'run', '--config', 'vitest.db.config.js']);
+  /*
+   * test:db — the test runner itself, refusing in its global setup.
+   *
+   * B6 r7: with vitest >= 5.0.4 and vite 8.3.5 the runner's own error printer
+   * failed while printing this refusal (vite's source-map lookup received the
+   * global-setup module's code as a Buffer), so the reason was replaced by
+   * "Startup Error: TypeError: code.charCodeAt is not a function" — the run
+   * still exited 1, but nobody could see why. A refusal is only useful if it is
+   * reported, so each case also requires that the RUNNER reported the guard's
+   * own error (no runner crash), and that no connection string or credential
+   * appears anywhere in the output.
+   */
+  const CREDENTIALS = 'qa-guard-user:qa-guard-secret';
+  const REFUSALS = [
+    ['the launching environment declares production', {}, /\[test:db\] Refusing to run: the launching environment declares production/],
+    [
+      'a database name that is not explicitly disposable (credentials in the URI)',
+      { APP_ENV: 'local', NODE_ENV: 'development', MONGODB_URI: 'mongodb://127.0.0.1:1/valida_app', MONGODB_TEST_URI: `mongodb://${CREDENTIALS}@127.0.0.1:1/valida` },
+      /\[test:db\] Refusing to run: the MONGODB_TEST_URI database must be an explicitly disposable test/,
+    ],
+    [
+      'the same database as the application (credentials in both URIs)',
+      { APP_ENV: 'local', NODE_ENV: 'development', MONGODB_URI: `mongodb://${CREDENTIALS}@127.0.0.1:1/valida_test`, MONGODB_TEST_URI: `mongodb://${CREDENTIALS}@127.0.0.1:1/valida_test` },
+      /\[test:db\] Refusing to run: MONGODB_TEST_URI names the same database as MONGODB_URI in the environment/,
+    ],
+    ['no test database at all', { APP_ENV: 'local', NODE_ENV: 'development', MONGODB_TEST_URI: '' }, /\[test:db\] MONGODB_TEST_URI is not set\./],
+  ];
+  /*
+   * r8 (the first Windows run): the runner COLOURS its output there even when it is piped, and the literal
+   * `Error: [test:db] ` was split by escape sequences. Every case now runs with the child's colours forced
+   * ON and forced OFF, and asserts on the normalised text; the coloured run must really contain escape
+   * sequences (so that form is exercised on every platform), the plain run none.
+   */
+  it.each(COLOUR_MODES.flatMap((colour) => REFUSALS.map(([label, extraEnv, reason]) => [label, colour, extraEnv, reason])))('test:db aborts in its global setup — %s (%s output): nonzero exit, the guard\'s own reason reported by the runner, no test file loaded, nothing disclosed', (_case, colour, extraEnv, reason) => {
+    const { code, raw, output } = launch(['node_modules/vitest/vitest.mjs', 'run', '--config', 'vitest.db.config.js'], extraEnv, colour);
+    expect(hasVTControlSequences(raw), `${colour} output`).toBe(colour === 'coloured');
     expect(code).not.toBe(0);
-    expect(output).toMatch(/\[test:db\] Refusing to run/);
+    expect(output).toMatch(reason);
+    // The runner reported the guard's error itself — it did not crash while reporting it.
+    expect(output).toMatch(/Error: \[test:db\] /);
+    expect(output).not.toMatch(/Startup Error|charCodeAt|is not a function/);
     // No database test file was collected or run.
-    expect(output).not.toMatch(/database\.test\.js|index-commands|restart-persistence|server-lifecycle/);
+    expect(output).not.toMatch(/database\.test\.js|index-commands|restart-persistence|server-lifecycle|b6-notifications|b5-apply/);
+    // Sanitised: no connection string, user name or password.
+    expect(output).not.toMatch(/mongodb:\/\/|qa-guard-user|qa-guard-secret|127\.0\.0\.1:1\b/);
   }, 60_000);
 
   it('the restart-persistence child refuses and exits 2 without connecting', () => {
@@ -310,4 +357,30 @@ describe('every destructive entry point refuses before touching a database', () 
     expect(code).toBe(2);
     expect(output).toMatch(/MONGODB_TEST_URI is not set/);
   }, 60_000);
+});
+
+describe('r8 — terminal output is normalised before it is judged (fixtures/terminalOutput.js)', () => {
+  // The form the runner writes when its colours are on (here with FORCE_COLOR; on Windows by default): "Error" wrapped in SGR codes.
+  const coloured = '\u001b[31m\u001b[1mError\u001b[22m: [test:db] Refusing to run: the launching environment declares production\u001b[39m';
+
+  it('the coloured refusal does not match literally, and does once the escape sequences are removed', () => {
+    expect(coloured).not.toMatch(/Error: \[test:db\] /);
+    expect(plainText(coloured)).toMatch(/^Error: \[test:db\] Refusing to run: the launching environment declares production$/);
+    expect(hasVTControlSequences(coloured)).toBe(true);
+    expect(hasVTControlSequences(plainText(coloured))).toBe(false);
+  });
+
+  it('a disclosure split by escape sequences passes a "must not contain" check on the raw text, and is caught on the normalised text', () => {
+    const leaked = 'connecting to mongo\u001b[1mdb://qa-guard-user:\u001b[22mqa-guard-secret@127.0.0.1:1/valida';
+    expect(leaked).not.toMatch(/mongodb:\/\/|qa-guard-user:qa-guard-secret/); // the raw check would be fooled …
+    expect(plainText(leaked)).toMatch(/mongodb:\/\//); // … the normalised one is not
+    expect(plainText(leaked)).toMatch(/qa-guard-user:qa-guard-secret/);
+  });
+
+  it('withColourMode makes the colouring explicit and never leaves both switches set', () => {
+    const base = { KEEP: 'x', NO_COLOR: '1', FORCE_COLOR: '0' };
+    expect(withColourMode(base, 'plain')).toEqual({ KEEP: 'x', NO_COLOR: '1' });
+    expect(withColourMode(base, 'coloured')).toEqual({ KEEP: 'x', FORCE_COLOR: '1' });
+    expect(() => withColourMode(base, 'auto')).toThrow(TypeError);
+  });
 });

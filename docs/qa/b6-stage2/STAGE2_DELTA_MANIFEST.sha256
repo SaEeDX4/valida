@@ -1,0 +1,711 @@
+# B6 Stage 2 delta: every file Stage 2 adds (A) or modifies (M) against the recovered baseline
+# baseline = ec15048980c9e3e8134de4b3d7eeadc89b1aef96 + valida-B6-final-r9.zip + rev4 docs ZIP + rev6 overlay (in that order); no file is deleted
+# format: <sha256>  <repository path>; this manifest does not list itself
+# M backend/README.md
+# M backend/scripts/verify-b6.mjs
+# A backend/src/integrations/notifications/assets/SHA256SUMS.txt
+# A backend/src/integrations/notifications/assets/valida-email-masthead-1200x216.png
+# A backend/src/integrations/notifications/emailLogo.js
+# M backend/src/integrations/notifications/smtpTransport.js
+# M backend/src/integrations/notifications/templates.js
+# M backend/tests/apply-failures.test.js
+# M backend/tests/b6-apply-notifications.test.js
+# M backend/tests/b6-gate.test.js
+# M backend/tests/b6-notification-service.test.js
+# M backend/tests/b6-smtp-integration.test.js
+# A backend/tests/b6-stage2-templates.test.js
+# M backend/tests/db/b6-smoke-rehearsal.test.js
+# M backend/tests/fixtures/localSmtpServer.js
+# A backend/tests/fixtures/mimeInspect.js
+# M docs/design/EMAIL_CONCEPT_A_SPEC.md
+# M docs/design/EMAIL_COPY_PROPOSAL.md
+# M docs/operations/B6_BOUNCE_PROCEDURE_DRAFT.md
+# M docs/operations/BOUNCE_PROCEDURE_FA.md
+# A docs/qa/b6-3/B6-3_IMPLEMENTATION_REPORT.md
+# A docs/qa/b6-3/OFFLINE_COMPLETION_R9.md
+# A docs/qa/b6-3/R6_PACKAGE_AND_RECONSTRUCTION.md
+# A docs/qa/b6-3/R7_PACKAGE_AND_RECONSTRUCTION.md
+# A docs/qa/b6-3/R8_PACKAGE_AND_RECONSTRUCTION.md
+# A docs/qa/b6-3/README.md
+# A docs/qa/b6-3/WINDOWS_EVIDENCE_R6.md
+# A docs/qa/b6-3/evidence/J1-focused-verbose.log
+# A docs/qa/b6-3/evidence/J2-verify-b6.log
+# A docs/qa/b6-3/evidence/J3-mutation-checks.log
+# A docs/qa/b6-3/evidence/J4-asset-mismatch-probe.log
+# A docs/qa/b6-3/evidence/J5-fixtures.log
+# A docs/qa/b6-3/evidence/J6-previews.log
+# A docs/qa/b6-3/evidence/J7-word-constraint-model.log
+# A docs/qa/b6-3/evidence/J8-negative-control.log
+# A docs/qa/b6-3/evidence/J8-offline-inspection.first-run-tool-defects.log
+# A docs/qa/b6-3/evidence/J8-offline-inspection.json
+# A docs/qa/b6-3/evidence/J8-offline-inspection.log
+# A docs/qa/b6-3/evidence/windows/received-vs-original-comparison.DERIVED.txt
+# A docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.ORIGINAL-DECODED.DERIVED.txt
+# A docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.READING-COPY.DERIVED.txt
+# A docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.RECEIVED-COPY.log
+# A docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.log
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.eml
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.html
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.subject.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.eml
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.html
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.subject.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.eml
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.html
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.subject.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal.eml
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal.html
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal.subject.txt
+# A docs/qa/b6-3/fixtures/SYNTHETIC-internal.txt
+# A docs/qa/b6-3/fixtures/fixtures-index.json
+# A docs/qa/b6-3/previews/as-built-acknowledgement-long-values.from-eml.html
+# A docs/qa/b6-3/previews/as-built-acknowledgement.from-eml.html
+# A docs/qa/b6-3/previews/as-built-internal-long-values.from-eml.html
+# A docs/qa/b6-3/previews/as-built-internal.from-eml.html
+# A docs/qa/b6-3/previews/derived-mso-b6-2-for-comparison-internal-long-values.html
+# A docs/qa/b6-3/previews/derived-mso-b6-3-acknowledgement-long-values.html
+# A docs/qa/b6-3/previews/derived-mso-b6-3-acknowledgement.html
+# A docs/qa/b6-3/previews/derived-mso-b6-3-internal-long-values.html
+# A docs/qa/b6-3/previews/derived-mso-b6-3-internal.html
+# A docs/qa/b6-3/previews/derived-ol-light-acknowledgement-long-values.html
+# A docs/qa/b6-3/previews/derived-ol-light-acknowledgement.html
+# A docs/qa/b6-3/previews/derived-ol-light-internal-long-values.html
+# A docs/qa/b6-3/previews/derived-ol-light-internal.html
+# A docs/qa/b6-3/previews/previews-index.json
+# A docs/qa/b6-3/previews/shots/acknowledgement-images-off-width-680.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-mso-markup-b6-3-width-1440.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-mso-markup-b6-3-width-400.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-ol-light-width-680.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-page-zoom-200-window-800.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-page-zoom-400-window-1280.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-text-200-width-390.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-width-1440.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-width-280.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-width-320.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-width-390.png
+# A docs/qa/b6-3/previews/shots/acknowledgement-width-680.png
+# A docs/qa/b6-3/previews/shots/internal-fallback-font-width-680.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-images-off-width-680.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-2-for-comparison-width-1440.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-2-for-comparison-width-400.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-2-for-comparison-width-680.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-3-width-1440.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-3-width-400.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-ol-light-width-680.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-page-zoom-200-window-800.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-page-zoom-400-window-1280.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-text-200-width-390.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-width-1440.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-width-280.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-width-320.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-width-390.png
+# A docs/qa/b6-3/previews/shots/internal-long-values-width-680.png
+# A docs/qa/b6-3/previews/word-model-index.json
+# A docs/qa/b6-3/previews/word-model/acknowledgement-b6-3-browser-image-scaling.html
+# A docs/qa/b6-3/previews/word-model/acknowledgement-b6-3-outlook-rules.html
+# A docs/qa/b6-3/previews/word-model/acknowledgement-fixed-600-browser-image-scaling.html
+# A docs/qa/b6-3/previews/word-model/acknowledgement-fixed-600-outlook-rules.html
+# A docs/qa/b6-3/previews/word-model/acknowledgement-fluid-100-browser-image-scaling.html
+# A docs/qa/b6-3/previews/word-model/acknowledgement-fluid-100-outlook-rules.html
+# A docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-browser-image-scaling-width-510.png
+# A docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-browser-image-scaling.html
+# A docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-outlook-rules-width-510.png
+# A docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-outlook-rules.html
+# A docs/qa/b6-3/previews/word-model/internal-long-values-fixed-600-browser-image-scaling.html
+# A docs/qa/b6-3/previews/word-model/internal-long-values-fixed-600-outlook-rules.html
+# A docs/qa/b6-3/previews/word-model/internal-long-values-fluid-100-browser-image-scaling.html
+# A docs/qa/b6-3/previews/word-model/internal-long-values-fluid-100-outlook-rules.html
+# A docs/qa/b6-3/tools/asset_mismatch_probe.mjs
+# A docs/qa/b6-3/tools/compare_windows_log_copies.py
+# A docs/qa/b6-3/tools/fixture_privacy_check.mjs
+# A docs/qa/b6-3/tools/make_fixtures_b6_3.mjs
+# A docs/qa/b6-3/tools/make_previews_b6_3.py
+# A docs/qa/b6-3/tools/mutation_b6_3.py
+# A docs/qa/b6-3/tools/offline_inspection_r9.py
+# A docs/qa/b6-3/tools/word_constraint_model.py
+# A docs/qa/b6-stage2/README.md
+# A docs/qa/b6-stage2/STAGE2_IMPLEMENTATION_REPORT.md
+# A docs/qa/b6-stage2/WINDOWS_EVIDENCE_ADDENDUM_2026-10-27.md
+# A docs/qa/b6-stage2/evidence/baseline-offline.log
+# A docs/qa/b6-stage2/evidence/environment.txt
+# A docs/qa/b6-stage2/evidence/integrated/I0-patch-apply.log
+# A docs/qa/b6-stage2/evidence/integrated/I1-focused-verbose.log
+# A docs/qa/b6-stage2/evidence/integrated/I2-verify-b6.log
+# A docs/qa/b6-stage2/evidence/integrated/I3-mutation-checks.log
+# A docs/qa/b6-stage2/evidence/integrated/I4-logo-mismatch-probe.log
+# A docs/qa/b6-stage2/evidence/integrated/I5-rehearsal-assertion-probe.log
+# A docs/qa/b6-stage2/evidence/integrated/I6-node-check.log
+# A docs/qa/b6-stage2/evidence/integrated/I7-fixtures.log
+# A docs/qa/b6-stage2/evidence/integrated/I8-previews.log
+# A docs/qa/b6-stage2/evidence/lock-before.txt
+# A docs/qa/b6-stage2/evidence/mutation-checks.log
+# A docs/qa/b6-stage2/evidence/node-check.log
+# A docs/qa/b6-stage2/evidence/npm-ci-backend.log
+# A docs/qa/b6-stage2/evidence/patch-apply-check.log
+# A docs/qa/b6-stage2/evidence/patch-scratch-vs-current.log
+# A docs/qa/b6-stage2/evidence/patch-validate-offline.log
+# A docs/qa/b6-stage2/evidence/rehearsal-assertion-probe.log
+# A docs/qa/b6-stage2/evidence/verify-b6-stage2.log
+# A docs/qa/b6-stage2/evidence/windows/dep0190-trigger-probe.log
+# A docs/qa/b6-stage2/evidence/windows/owner-package-verification-transcript-20261027.txt
+# A docs/qa/b6-stage2/evidence/windows/verify-b6-stage2-logo-windows-20261027-050012.log
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.eml
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.html
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.subject.txt
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.txt
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.eml
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.html
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.subject.txt
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.txt
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.eml
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.html
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.subject.txt
+# A docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.txt
+# A docs/qa/b6-stage2/fixtures/fixtures-index.json
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/README.md
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.eml
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.html
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.subject.txt
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.txt
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal-long-values.html
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal-long-values.subject.txt
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal-long-values.txt
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.eml
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.html
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.subject.txt
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.txt
+# A docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/fixtures-index.json
+# A docs/qa/b6-stage2/logo/logo-derivation.json
+# A docs/qa/b6-stage2/logo/logo-display-size-preview-dpr1.png
+# A docs/qa/b6-stage2/logo/logo-display-size-preview-dpr2.png
+# A docs/qa/b6-stage2/logo/logo-display-size-preview.html
+# A docs/qa/b6-stage2/logo/logo-integration.patch
+# A docs/qa/b6-stage2/logo/logo-side-by-side.png
+# A docs/qa/b6-stage2/logo/valida-logo-email-316x72.candidate.png
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-acknowledgement-desktop-680.png
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-acknowledgement-images-blocked-680.png
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-acknowledgement-mobile-390.png
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-internal-desktop-680.png
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-internal-mobile-320.png
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-with-candidate-logo-acknowledgement.html
+# A docs/qa/b6-stage2/previews/PREVIEW-ONLY-with-candidate-logo-internal.html
+# A docs/qa/b6-stage2/previews/as-built-acknowledgement-desktop-680.png
+# A docs/qa/b6-stage2/previews/as-built-acknowledgement-images-not-loaded-680.png
+# A docs/qa/b6-stage2/previews/as-built-acknowledgement-mobile-320.png
+# A docs/qa/b6-stage2/previews/as-built-acknowledgement-mobile-390.png
+# A docs/qa/b6-stage2/previews/as-built-acknowledgement.from-eml.html
+# A docs/qa/b6-stage2/previews/as-built-internal-desktop-680.png
+# A docs/qa/b6-stage2/previews/as-built-internal-fallback-font-desktop-680.png
+# A docs/qa/b6-stage2/previews/as-built-internal-long-values-desktop-680.png
+# A docs/qa/b6-stage2/previews/as-built-internal-long-values-mobile-320.png
+# A docs/qa/b6-stage2/previews/as-built-internal-long-values.from-eml.html
+# A docs/qa/b6-stage2/previews/as-built-internal-mobile-320.png
+# A docs/qa/b6-stage2/previews/as-built-internal-mobile-390.png
+# A docs/qa/b6-stage2/previews/as-built-internal.from-eml.html
+# A docs/qa/b6-stage2/previews/previews-index.json
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/README.md
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-acknowledgement-desktop-680.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-acknowledgement-mobile-320.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-acknowledgement-mobile-390.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-desktop-680.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-fallback-font-desktop-680.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-long-values-desktop-680.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-long-values-mobile-320.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-mobile-320.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-mobile-390.png
+# A docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/previews-index.json
+# A docs/qa/b6-stage2/tools/dep0190_trigger_probe.mjs
+# A docs/qa/b6-stage2/tools/derive_logo.py
+# A docs/qa/b6-stage2/tools/fixture_privacy_check.mjs
+# A docs/qa/b6-stage2/tools/logo_mismatch_probe.mjs
+# A docs/qa/b6-stage2/tools/logo_sheet.py
+# A docs/qa/b6-stage2/tools/make_fixtures.mjs
+# A docs/qa/b6-stage2/tools/make_fixtures_integrated.mjs
+# A docs/qa/b6-stage2/tools/make_previews.py
+# A docs/qa/b6-stage2/tools/make_previews_integrated.py
+# A docs/qa/b6-stage2/tools/mutation_integrated.py
+# A docs/qa/b6-stage2/tools/mutation_t07.py
+# A docs/qa/b6-stage2/tools/package_stage2.py
+# A docs/qa/b6-stage2/tools/rehearsal_assertion_probe.mjs
+# A docs/qa/b6-stage3/EV-S3-OC1_OUTLOOK_CLASSIC_OFFLINE_ADDENDUM.md
+# A docs/qa/b6-stage3/F01-F04_FINDINGS_AND_PROPOSAL.md
+# A docs/qa/b6-stage3/LIVE_TEST_PROPOSAL_R1.md
+# A docs/qa/b6-stage3/R5_CORRECTION_AND_PACKAGE_NOTE.md
+# A docs/qa/b6-stage3/README.md
+# A docs/qa/b6-stage3/STAGE3_EMAIL_CLIENT_VERIFICATION_PLAN.md
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/measurements.json.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S1-c83e9689-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S2-9fcbb9cb-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S3-3a183618-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S4-e75ba3ba-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S5-e052b21d-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S6-a7ca6229-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S7-dc2e8650-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/owner-instruction-2026-10-27-1610.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/measurements.json.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M1-67347845-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M2-66d35a91-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M3-e7a21878-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M4-dbf0529e-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M5-985e7ca7-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M6-2d1ecfb1-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/owner-instruction-2026-11-01.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/measurements.json.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N1-ec1470df-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N2-8c55b8a2-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N3-28899f4e-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N4-dbdb4c4e-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N5-531c33aa-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/owner-instruction-2026-11-02.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/derived-title-crops/Z1-title.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/derived-title-crops/Z2-title.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/derived-title-crops/Z3-title.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/measurements.json.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/original-screenshots/Z1-88773f01-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/original-screenshots/Z2-a1d58126-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/original-screenshots/Z3-a1b8b6fc-image.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/owner-instruction-2026-11-02-r6-windows-outlook.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O1-subject-line.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O1-title-bar.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O2-subject-line.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O2-title-bar.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O3-subject-line.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O3-title-bar.png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/measurements.json.txt
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/original-screenshots/image(20261102-151219).png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/original-screenshots/image(20261102-151223).png
+# A docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/original-screenshots/image(20261102-151235).png
+# A docs/qa/b6-stage3/proposals/f01-logo/C0-current-316x72.png
+# A docs/qa/b6-stage3/proposals/f01-logo/C1-transparent-lockup-316x72.png
+# A docs/qa/b6-stage3/proposals/f01-logo/C2-masthead-1200x216.png
+# A docs/qa/b6-stage3/proposals/f01-logo/C3-plate-412x144.png
+# A docs/qa/b6-stage3/proposals/f01-logo/F01-F04-review-sheet.png
+# A docs/qa/b6-stage3/proposals/f01-logo/candidates.json
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-ol-light-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-ol-light.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-source-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-source.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-ol-light-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-ol-light.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-source-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-source.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light-320.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light-390.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source-320.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source-390.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light-320.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light-390.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source-320.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source-390.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-ol-light-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-ol-light.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-source-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-source.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-ol-light-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-ol-light.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-source-680.png
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-source.html
+# A docs/qa/b6-stage3/proposals/f01-logo/previews/previews-index.json
+# A docs/qa/b6-stage3/proposals/review-emls/CONTROL-F02-plain-layout.eml
+# A docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C2-P04-acknowledgement.eml
+# A docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C2-P04-internal-long-values.eml
+# A docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C3-P04-acknowledgement.eml
+# A docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C3-P04-internal-long-values.eml
+# A docs/qa/b6-stage3/proposals/review-emls/review-emls-index.json
+# A docs/qa/b6-stage3/stage3-cell-log-template.csv
+# A docs/qa/b6-stage3/tools/f01_variants.py
+# A docs/qa/b6-stage3/tools/make_f01_candidates.py
+# A docs/qa/b6-stage3/tools/make_f01_previews.py
+# A docs/qa/b6-stage3/tools/make_f01_sheet.py
+# A docs/qa/b6-stage3/tools/make_review_emls.py
+# A docs/qa/b6-stage3/tools/measure_ev_s3_oc1.py
+# A docs/qa/b6-stage3/tools/measure_ev_s3_oc2.py
+# A docs/qa/b6-stage3/tools/measure_ev_s3_oc3.py
+# A docs/qa/b6-stage3/tools/measure_ev_s3_oc4.py
+# A docs/qa/b6-stage3/tools/measure_ev_s3_oc5.py
+# A docs/qa/b6-stage3/tools/outlook_light_model.py
+# M docs/review/B6_ACCEPTANCE_CHECKLIST.md
+# A docs/review/B6_ACCEPTANCE_PACKAGE_R10.md
+# A docs/review/B6_BOUNCE_PROCEDURE_DECISION_SHEET.md
+# M docs/review/B6_DECISION_PACKAGE.md
+# A docs/review/B6_FINAL_REVIEW_PACKAGE.md
+# A docs/review/B6_PUBLICATION_MANIFEST.md
+# A docs/review/B6_REMAINING_BLOCKERS.md
+# A docs/review/B6_REMAINING_OWNER_APPROVALS.md
+# M docs/review/B6_TITAN_AMENDMENTS.md
+# M docs/review/IMPLEMENTATION_PLANS_B6_TEMPLATES_B7_SUPPRESSION.md
+# A docs/review/OWNER_DECISION_2026-10-26-03_B6_STAGE2_AUTHORISATION.md
+# A docs/review/OWNER_DECISION_2026-10-27-01_B6_LOGO_ASSET.md
+# A docs/review/OWNER_DECISION_2026-11-02-01_B6_C2_P04.md
+# A docs/review/OWNER_DECISION_2026-11-02-02_B6_D6.md
+# A docs/review/OWNER_DECISION_2026-11-02-03_B6_APPROVALS_D1_D3_D2_D4.md
+# A docs/review/OWNER_FEEDBACK_2026-10-27_B6_LOGO_LIGHT_RENDERING.md
+# A docs/review/OWNER_RECORD_2026-11-01_B6_STAGE3_OUTLOOK_OFFLINE.md
+# A docs/review/OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md
+# A docs/review/owner-sources/OD-2026-11-02-02/B6_D6_OWNER_DECISION_AND_EVIDENCE_RECONCILIATION.md
+# A docs/review/owner-sources/OD-2026-11-02-03/owner-instruction-2026-11-02-b6-offline-completion.txt
+5de46af739f54a97502aefce3a91738292ab7452cbb3085c4eb502dde11165ba  backend/README.md
+f04e11147fda8d68e841366f2b67e2401a2ca779ebff897dab44cc6462d666c4  backend/scripts/verify-b6.mjs
+5acfaaac1a1da2c2a9b779667623548b579fda4571acd02bae08814484e3e2bf  backend/src/integrations/notifications/assets/SHA256SUMS.txt
+ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b  backend/src/integrations/notifications/assets/valida-email-masthead-1200x216.png
+b52996c76f67c2b0b1b604e6fc700e888d3a4695fb26f7ea3eef3fbc3ca9e2dc  backend/src/integrations/notifications/emailLogo.js
+4e42097758795f66037d350387be3525597f14cdac8b4a30f0ef8e8b8bc2f014  backend/src/integrations/notifications/smtpTransport.js
+46d0df76a9f9301e775637a5c7ba930ab52c40a0f1c25005583903d79e57a3a9  backend/src/integrations/notifications/templates.js
+bf11f19dd71fdff3adbedc8b34db017f2414fe609a2afca5859838d8004f0f7a  backend/tests/apply-failures.test.js
+888b3ef0dd459bf8151ce2a440ba3db537a27f22bea533acf581f7c3782a8863  backend/tests/b6-apply-notifications.test.js
+029f36b88f4e35a3067abd0bcd4b573040459074f383402e131f05917a052444  backend/tests/b6-gate.test.js
+06ed6c4a6e18a210f0dd924bada38bb14ab15fdc0346e06966a5865e2cfdb9ad  backend/tests/b6-notification-service.test.js
+b8821ef762cbf528a4cc53fbf953a6c37e5939c44f3e5b818ecbcf427f4f232d  backend/tests/b6-smtp-integration.test.js
+94bc4bd60196716331b0a26f20e4aa68d2c1a2dc43c0304b7c27550f370d87a7  backend/tests/b6-stage2-templates.test.js
+dd08a516e575010ae3d22da6c9f52dd398441f7291397b8c0e4cd1465bca1286  backend/tests/db/b6-smoke-rehearsal.test.js
+c5e425f7b1f94bf4f7118b31098b8b998b0d97d3c28561e6b0e6eee0b0059658  backend/tests/fixtures/localSmtpServer.js
+ecb7267a4ec0d6a64a143921d6535ac908b0e2d6e9883921e927c3d76bc9352a  backend/tests/fixtures/mimeInspect.js
+9232b39e98e8d836d7f2b22d1773444419cad23bf93ee68aa4c06062932e800d  docs/design/EMAIL_CONCEPT_A_SPEC.md
+92c11876648e0bac220377de5cd2d9a8bea24b321eacf533f7148cb0bfe696c5  docs/design/EMAIL_COPY_PROPOSAL.md
+d0b472a10de584a807fb916914d0cf216adbd259da5697ca8c0427afdc071830  docs/operations/B6_BOUNCE_PROCEDURE_DRAFT.md
+b7b8120dd6904d74c6cfd708d8d96d097ac8228ff503bad588ba7b747390596d  docs/operations/BOUNCE_PROCEDURE_FA.md
+5886ca6633b3a883d742892231ce8c4546f9e3274e96eccd95ee0b50ef9685c8  docs/qa/b6-3/B6-3_IMPLEMENTATION_REPORT.md
+ccb1f59dd80d17a701bd2e3cdb287da295d15bbfee51c7569d8d9a685110ad3b  docs/qa/b6-3/OFFLINE_COMPLETION_R9.md
+ac59658d4b0e86a577babd3d2b19d8afe6b349b4d1b6bb1d30c4ae0095a383b0  docs/qa/b6-3/R6_PACKAGE_AND_RECONSTRUCTION.md
+0996990dd8f509a59ba05297446dcebe2840890785b3ec7868722caaac6453f1  docs/qa/b6-3/R7_PACKAGE_AND_RECONSTRUCTION.md
+b9114c9708e5ded4969b10c527da64bf49fc5e4cd339586d7c7e01a7e9f7c617  docs/qa/b6-3/R8_PACKAGE_AND_RECONSTRUCTION.md
+a87aed776cd35763f1ca6c09369ec49ae4e4c159d7afeadfed2f5173b423e671  docs/qa/b6-3/README.md
+afb4ad7c4a20dd4f3e71237db873554736420b1e350a593fef5f9ba48ff4d5b1  docs/qa/b6-3/WINDOWS_EVIDENCE_R6.md
+078297215f31e03507e366e634b67285f01718e2ca8a47539ab8e960b282e34c  docs/qa/b6-3/evidence/J1-focused-verbose.log
+61d2725a33e357aa3fe980d9122773e5eaa62fc0be2823a9b1063fc250ed14c0  docs/qa/b6-3/evidence/J2-verify-b6.log
+51c4901b4fa1efd14ef7717759aa22b9a362e2434d22d031c1ed4a583d12fc92  docs/qa/b6-3/evidence/J3-mutation-checks.log
+c5fe1264de49dc16c53bb6cfa2681c3a947a2a10a0d27b682af412bc11472c94  docs/qa/b6-3/evidence/J4-asset-mismatch-probe.log
+8bacb3e0480d7fcbacd2b40524aaf38d18baa07590aa5a4a8a69707a4d696cbe  docs/qa/b6-3/evidence/J5-fixtures.log
+36e4864ff1d72fbf0d72cb39ffafd1a5e9ea66c17093eef6cc1cf31695ce4b67  docs/qa/b6-3/evidence/J6-previews.log
+33b8be7247378dc69011e46a96662535d934b850b6b270737271bfa69e1918cf  docs/qa/b6-3/evidence/J7-word-constraint-model.log
+f7a4109dfa325e7ec1109b6ac4a5b4a08b5b21e6073d07f61554178b20fa7bf0  docs/qa/b6-3/evidence/J8-negative-control.log
+e2a4beeb8741602856ae0e5eb33cc3a8e7e55ddd46667a27c9e670145f48c4ac  docs/qa/b6-3/evidence/J8-offline-inspection.first-run-tool-defects.log
+a5f95322e3744a011efe6d02387f207bedf7ad8026dceb9cc091310dfc291966  docs/qa/b6-3/evidence/J8-offline-inspection.json
+aa0f8b666765a4d0088e298ae29d0af65e719406b73cc7162d9be479ca5dbcc4  docs/qa/b6-3/evidence/J8-offline-inspection.log
+4d7881fcc8c9422abc40e4f8cb4c512d07ef78a4bad31129a536545266c56fda  docs/qa/b6-3/evidence/windows/received-vs-original-comparison.DERIVED.txt
+971c02d6e65374c7ec6f7a6117389cba2f41139da74fad35873ea6d71a45c00d  docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.ORIGINAL-DECODED.DERIVED.txt
+e0c2ca4094b64c344d9482463dae5ab57959cc529a6d9f9ba41415390a4750a2  docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.READING-COPY.DERIVED.txt
+646223480910f446a7c554aa376d8fa0e2867fa82a6e6a5cf9832ce8727437ea  docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.RECEIVED-COPY.log
+f1b4ee6622aea254f032d2ce65d43fa432fe603c30390ff4fe635634bc97e897  docs/qa/b6-3/evidence/windows/verify-b6-r6-windows.log
+fcbe391ab4b44e8a7344bf86c8b56049bbef815e6f6a1fdd519aa0834eaf1f24  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.eml
+03716aced97ea58b80f4e5f7f83d02cd91c829dbdea570f011e3515349da7e6b  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.html
+1139687847fed5adc406e214e4b3020c14bf15a5b23830f1c5b53176990a29be  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.subject.txt
+f89c0822b1f84e12a26686194c00a97df61248041a21787b69f275117d9d092b  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement-long-values.txt
+b6ef30bb59d70a9a974307138fae1b6fd1b3558fafd90e098306886ff622fac8  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.eml
+720faf92bbd70f2c48963d0135ec73ed8de55d4224d4ab46d842a3912ee8666c  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.html
+12dfa58dad29b9e1d226c5b0aea016b52772601da7e0adeebdd86e22f3d76100  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.subject.txt
+7e392cbb92a967adedd7a1c98603fbacab14c793eacdd98b0e353a24e03e0f6c  docs/qa/b6-3/fixtures/SYNTHETIC-acknowledgement.txt
+b4bfb7c677d7c84ba156b48a982017be7009d1f2ea84027b778d187f2cf76bc0  docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.eml
+e9714c0106c52c21cd186c412ba22eeb4ce47b4ef3587858c76489fa81a083a9  docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.html
+d69dd8f42f939189139f956d526d7b9ef08c423fcc9d4ea8b7b32680be09b379  docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.subject.txt
+d9caab72c3476d0143e3547a822e6a8427f2d2401ee2e8ae8dd204850f26cb7b  docs/qa/b6-3/fixtures/SYNTHETIC-internal-long-values.txt
+c1fa146455fec319f9d5dffa6d586ca104fbbf420f4f98a0b44aa576643e4989  docs/qa/b6-3/fixtures/SYNTHETIC-internal.eml
+7fae111366cd3572d00feff6afd67c2c676eb95c75a03ae32774cb5d018f5398  docs/qa/b6-3/fixtures/SYNTHETIC-internal.html
+2ebeac51821c477ae63f734d99528c4adcb50480b5ae8a9094d8578483aaf169  docs/qa/b6-3/fixtures/SYNTHETIC-internal.subject.txt
+79bf2d8ef50b23a84199beda442a94deb46d12bff892d521944ce6431bde6152  docs/qa/b6-3/fixtures/SYNTHETIC-internal.txt
+94253d2cd208f90543efd9b197eecaf57079e1f56af28969a239eea2746ecfcb  docs/qa/b6-3/fixtures/fixtures-index.json
+7a5a01b72f48b28fa13a2239e3629931b3b0f1d330959f666d0a1e03b2bfe7e2  docs/qa/b6-3/previews/as-built-acknowledgement-long-values.from-eml.html
+cfac09f7070f9fe786468689948cc66f37bc2fb6aff4c7a443bd3bd4af8c808e  docs/qa/b6-3/previews/as-built-acknowledgement.from-eml.html
+6d4e3d9e30c86be1e19ae47851fd3fb21839bbd5f4946e11fc98cb0b3d4b9c96  docs/qa/b6-3/previews/as-built-internal-long-values.from-eml.html
+4e4bd477e5da2fb31e41f33bf83baa3a3e1a5f48142981c757dd6c7abbd75d3d  docs/qa/b6-3/previews/as-built-internal.from-eml.html
+a21c3cb8fe8fee2c8cd1a422da52fddad2b97480e879e898aaccc5174400f61a  docs/qa/b6-3/previews/derived-mso-b6-2-for-comparison-internal-long-values.html
+bf56c7ae72ffc4ac25e692a8afdf05848e94fb57c9bac021d76fb15d47681176  docs/qa/b6-3/previews/derived-mso-b6-3-acknowledgement-long-values.html
+164048961b481c3c3ba10c596de3519393d68a4d6165e63c7d54edb5262ae80a  docs/qa/b6-3/previews/derived-mso-b6-3-acknowledgement.html
+50c11b1fcba0517267022565b77ac144477f6bf935d41b0b15d7773028574866  docs/qa/b6-3/previews/derived-mso-b6-3-internal-long-values.html
+790085c4a5f3080c3663f1a7a07cd95707ce5f7858dd2f3113a309c248fb2a44  docs/qa/b6-3/previews/derived-mso-b6-3-internal.html
+0f11ec1c5b45c6d88f12575e81d07f133a6200dea9122c98ec1161e26f5a726e  docs/qa/b6-3/previews/derived-ol-light-acknowledgement-long-values.html
+f26a68cf1a9378140c199f450b0ab41e568c664ff42a8f94b5789060b62caff8  docs/qa/b6-3/previews/derived-ol-light-acknowledgement.html
+20ff85d926e891d902a2e256d3b8adbc7b7108335d02578a88e28c778a4b50c1  docs/qa/b6-3/previews/derived-ol-light-internal-long-values.html
+550a2af8c80f8233581a3a2051d23bf1f288129714fbe59b19f99a694e86e9b9  docs/qa/b6-3/previews/derived-ol-light-internal.html
+c2da444ad2d2cc65923c6aa47a11469f5d98f8532929659161011ecd56059556  docs/qa/b6-3/previews/previews-index.json
+9ea3f9b799c4680ae7fe77ad29b705c32c1148469f0e1d6bab2a8ca80f66af07  docs/qa/b6-3/previews/shots/acknowledgement-images-off-width-680.png
+ba759835b27844a55276a5e98e1e1d56492bd3e7e20afd2f63e8446f754b238f  docs/qa/b6-3/previews/shots/acknowledgement-mso-markup-b6-3-width-1440.png
+136d7d6826d8d1ecc9d461c628ff25212a6989e3d190ab2cfe6dc1bde0e96538  docs/qa/b6-3/previews/shots/acknowledgement-mso-markup-b6-3-width-400.png
+b123717c0d8372624dc4c40b083626e3ca73f1908d1df109cbcc96a50a928eab  docs/qa/b6-3/previews/shots/acknowledgement-ol-light-width-680.png
+9427bb67d22ef45af8889389863132d8117cb1706399beaf385f50eda7fc5db0  docs/qa/b6-3/previews/shots/acknowledgement-page-zoom-200-window-800.png
+fa188506cd812b5dcabf454cd3be2073baf3af25461050e55c1fc0b8293f868f  docs/qa/b6-3/previews/shots/acknowledgement-page-zoom-400-window-1280.png
+7018fd7654e712823ca0771b5304ad25af442969e82265e4fdada290181f2681  docs/qa/b6-3/previews/shots/acknowledgement-text-200-width-390.png
+ba759835b27844a55276a5e98e1e1d56492bd3e7e20afd2f63e8446f754b238f  docs/qa/b6-3/previews/shots/acknowledgement-width-1440.png
+dd7620a2d0b13f39a9dc358f37431dc76dbd6dee6ad88113e90eb54aad501e12  docs/qa/b6-3/previews/shots/acknowledgement-width-280.png
+1c955d3e29680a8f8b61773ea83bffe250a047c044a459cd205abd863a76a506  docs/qa/b6-3/previews/shots/acknowledgement-width-320.png
+5b8a2c622977b45313c1e96c94d083707189ec52b8d3350af70be5a23e239435  docs/qa/b6-3/previews/shots/acknowledgement-width-390.png
+64c3df829932dedfa6a18fe36b04f91dc88773a50198699a30188fa95e6a4748  docs/qa/b6-3/previews/shots/acknowledgement-width-680.png
+ac744201ada823dd06cbd5e2dade5d87385718a0842757f8394cd2b116c1b202  docs/qa/b6-3/previews/shots/internal-fallback-font-width-680.png
+ff9ee9abe9a882c915082efb7ba300cd295afce3a4de41323a0cbe73e044007d  docs/qa/b6-3/previews/shots/internal-long-values-images-off-width-680.png
+5dab3ead274267bbde6c080cbfb9ecd6c50b86fed8d53ed8797c76edc7e0cfd4  docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-2-for-comparison-width-1440.png
+fc067ae7b4c4f945b71713ceb09d4526bf4d204a9a7f43dfc331b8a716a79b9a  docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-2-for-comparison-width-400.png
+fb11e967fc72a1802b5e9f577ea642e725984694e7d6f5f2500d7701f5ae786b  docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-2-for-comparison-width-680.png
+5c0e4327ecfb0421326464ecee6d9308e9c0eb5d61a089f81f4167568a14468f  docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-3-width-1440.png
+bd23fe904c34a5c0224bec6fa5afbd70aaf0eb4fea20463fd6b004c2ce9c6016  docs/qa/b6-3/previews/shots/internal-long-values-mso-markup-b6-3-width-400.png
+05d6f4671e8e5ffedb66d137f07522f8d8c540c51582c46cdff47850754cea3c  docs/qa/b6-3/previews/shots/internal-long-values-ol-light-width-680.png
+7224c7d898448bd43ee9d3e3a3dc4cd47a624f3d64ab4c58b45e10b100795f87  docs/qa/b6-3/previews/shots/internal-long-values-page-zoom-200-window-800.png
+ab5bd8a6d17780796bb0ac4b4e13f0d391220c835d10dfe0526e5f75d174d868  docs/qa/b6-3/previews/shots/internal-long-values-page-zoom-400-window-1280.png
+dc8a0afce55aecbc2086f06e6dd973c083db05cdb7975276297c77e0b060aada  docs/qa/b6-3/previews/shots/internal-long-values-text-200-width-390.png
+5c0e4327ecfb0421326464ecee6d9308e9c0eb5d61a089f81f4167568a14468f  docs/qa/b6-3/previews/shots/internal-long-values-width-1440.png
+c4b69a3e1fe8bb95be4dd9411981a7015881b1aa8f2bc4f4639957933e72ba88  docs/qa/b6-3/previews/shots/internal-long-values-width-280.png
+b8be75efed20b9f6c13471d64694ee201db8a7171d2d4836effe9d0a773df069  docs/qa/b6-3/previews/shots/internal-long-values-width-320.png
+4e0efd6c66f5f145c0ac44fd824b866d94ce672af28b89999a3aaf224f39c471  docs/qa/b6-3/previews/shots/internal-long-values-width-390.png
+fe91ef43101119eb1c3690536725ed9dde63d4a255133c8c5090511661af3ecd  docs/qa/b6-3/previews/shots/internal-long-values-width-680.png
+f6897d596df1ed1653e3c6b1bdb9847b05d9d1892e5fd4a83a09a840ceb61809  docs/qa/b6-3/previews/word-model-index.json
+8c3ce49e308b24e445934d00edeef1dd98dacb8c7dea5330431d90f4cfa7226f  docs/qa/b6-3/previews/word-model/acknowledgement-b6-3-browser-image-scaling.html
+cc6d3846f61720e1ffbb965ff10d0ce267a3884e88f27c16539d74f8b2cc649d  docs/qa/b6-3/previews/word-model/acknowledgement-b6-3-outlook-rules.html
+ec6bb73752623a9f71ea4a95b2a15813bb89393a4f456e47ad12d59e9f686b9e  docs/qa/b6-3/previews/word-model/acknowledgement-fixed-600-browser-image-scaling.html
+550ec46501d55f3dcba7c1d62546031bee82ce22e2bd8509de667fd36ed5973e  docs/qa/b6-3/previews/word-model/acknowledgement-fixed-600-outlook-rules.html
+a25afb823ad6a75b1c6b39eed59d43495d40b93f33dd5ffaef2058e75972cdd8  docs/qa/b6-3/previews/word-model/acknowledgement-fluid-100-browser-image-scaling.html
+e444cd666257d77f9047ddba424b1fafda3b3111875329751097491631a6e0c8  docs/qa/b6-3/previews/word-model/acknowledgement-fluid-100-outlook-rules.html
+c216c8ab4b20c549b31e0f929ca89e48e1e63c580e5393b4a34baabc0766e4de  docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-browser-image-scaling-width-510.png
+f4c0f82eac3417ba4ed4a41d148cdf9575aa4ab8e04b7c7fa8e12d1092cf9a83  docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-browser-image-scaling.html
+95acf152c69a165b916da05feeda01e8f092af196e2fd0e1ef30203b1de22d77  docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-outlook-rules-width-510.png
+1f91c13a023a6c5b332efbaf43c297c3e036459146cbfe1a8b60c8b778cd4dd2  docs/qa/b6-3/previews/word-model/internal-long-values-b6-3-outlook-rules.html
+1506865c3e2ddfcf244486b0859f96734845a6fe53a041d561d13902fb35c102  docs/qa/b6-3/previews/word-model/internal-long-values-fixed-600-browser-image-scaling.html
+f6525af738c198a6400ea777b0b52e4d270acd774b6a6d7d33ccfdc0d9375fca  docs/qa/b6-3/previews/word-model/internal-long-values-fixed-600-outlook-rules.html
+4aed8ff1f3c1fc73e3daf6eb9cc7e38b06474c1b42d5daff5034231af31f503b  docs/qa/b6-3/previews/word-model/internal-long-values-fluid-100-browser-image-scaling.html
+5eae27f2998763c6d33224f7019e0d63e91c5e53db9bcb8dc70742ba5257ef4c  docs/qa/b6-3/previews/word-model/internal-long-values-fluid-100-outlook-rules.html
+8eb9d035a4be8d269ebcc8a1b9fd03e60fca523abd2e2f9371566ec692b0682f  docs/qa/b6-3/tools/asset_mismatch_probe.mjs
+c8b2adf11b9b3e861c8081cc3e57c0e4d2542501c7f147111451a2e8863c6ffd  docs/qa/b6-3/tools/compare_windows_log_copies.py
+b4da9ae798d923a4a3ac2633d736fb128152b92ef5e91e826d894a12f4176955  docs/qa/b6-3/tools/fixture_privacy_check.mjs
+f5db902954a6bcf539736e24c946f69346466f168f8fb85dad44534c367984f2  docs/qa/b6-3/tools/make_fixtures_b6_3.mjs
+feaf8ea1fc01f3ce5a3126cbea4e801e95b525fe9b3a64241258274cec7f692c  docs/qa/b6-3/tools/make_previews_b6_3.py
+b9c5314657acb05d332440e85bbb940beeae41124ab93d3f2a3474149b028cfa  docs/qa/b6-3/tools/mutation_b6_3.py
+2dea37ab6c7935ef3c4364916da63a4142dc3f52165edf702413f50e49003fc1  docs/qa/b6-3/tools/offline_inspection_r9.py
+f377c677fca9dc87b315ccd83d85072b4b46c3a3d9c15cddcb572de3c0bce53f  docs/qa/b6-3/tools/word_constraint_model.py
+a884f2a47bb4f85fae7f5667aa0760d75fff11407ddf3ae99b74892a499e28c7  docs/qa/b6-stage2/README.md
+61b8b2c1e7c5e9cab7a213138bf352bebab02c62384e4b44cb27dcf789fa9cd0  docs/qa/b6-stage2/STAGE2_IMPLEMENTATION_REPORT.md
+cb507dba44438e8d3dcb51b12b7a51e98b85c0690226ae0f7c8dac184a8685ce  docs/qa/b6-stage2/WINDOWS_EVIDENCE_ADDENDUM_2026-10-27.md
+d99282c26f7817c08d1e0fda20453cdc5129a4008f04ffa63b5e195c43ed04a0  docs/qa/b6-stage2/evidence/baseline-offline.log
+336ecfe050208956d96c6ba5042477bbea10430c8f6626621dd5dab762e5186d  docs/qa/b6-stage2/evidence/environment.txt
+cc0f1d7a04d60717524002900a7e3aa0db727008085e44f575c2c7abc6cb8ab8  docs/qa/b6-stage2/evidence/integrated/I0-patch-apply.log
+3f4103c2ef9125757c99f6c72db2caeb28a8da5fe777b2f62d71f53268e18b43  docs/qa/b6-stage2/evidence/integrated/I1-focused-verbose.log
+f96f9cae61815b1dc2d80849266800893d1091bbe36679d234e540da04af7665  docs/qa/b6-stage2/evidence/integrated/I2-verify-b6.log
+060d585644f3d67bc41cab2039efa9f572a267a4a9e006e36c39f6e9771c9e28  docs/qa/b6-stage2/evidence/integrated/I3-mutation-checks.log
+75d0a7716c71f0fba7facb869006aa31bb775f11f691697b20d7a259a309d948  docs/qa/b6-stage2/evidence/integrated/I4-logo-mismatch-probe.log
+1b68befec30c053b6027f61b2d16215200f80f241977bd608776688a3e65b901  docs/qa/b6-stage2/evidence/integrated/I5-rehearsal-assertion-probe.log
+7ade467828176892c335785ceacef0ed23ac212591cbdf55086db2dc93724584  docs/qa/b6-stage2/evidence/integrated/I6-node-check.log
+8abb3378ea05675bba3fb2a88068430963e7408acab62bf2f84c4fad90afa514  docs/qa/b6-stage2/evidence/integrated/I7-fixtures.log
+24374f71218d5d4a27c4139fbda56bef9e65391950aca88d0e0de110ec2264ae  docs/qa/b6-stage2/evidence/integrated/I8-previews.log
+749d498b0961f8c1020e1556253da1ab2f2b2b10578e4a40b83ce87ef740896e  docs/qa/b6-stage2/evidence/lock-before.txt
+ce2b5afd67f602367d64c032ae4b4b5896ba86e7f87887ecc0acb17f70e726ed  docs/qa/b6-stage2/evidence/mutation-checks.log
+f92e8c3384b76f461b72fa7320ed3296681bfac529fdd75efabcb51a8d4bcdba  docs/qa/b6-stage2/evidence/node-check.log
+ed6a022c1b97c4fef65b9dda5c1a0de2baa4e90ab280c512b909e09144d40c6c  docs/qa/b6-stage2/evidence/npm-ci-backend.log
+9f7e972f78ed5d718bb06c3400a30eedbae3ec7d7ed986df79308b7c6aef9ed0  docs/qa/b6-stage2/evidence/patch-apply-check.log
+010319174ee5d328b1b4edc9316d40a43ca040d88781ecc5f7c8e8049d46ce5c  docs/qa/b6-stage2/evidence/patch-scratch-vs-current.log
+f5b61dd9610d034bbf4ee14971f9d7d03d58e8b31e3944ed3ad00922007c1976  docs/qa/b6-stage2/evidence/patch-validate-offline.log
+3d460f7c953d600ee01d50e6a476bf2722cf485de4fd6ef6074c9047b3acb3e2  docs/qa/b6-stage2/evidence/rehearsal-assertion-probe.log
+4fbbd2a37ae1dc822521fb043bcab463c3991d68620d497ad349ab3df59b88ee  docs/qa/b6-stage2/evidence/verify-b6-stage2.log
+643e8db849757cde8fea9d25a4954f6bfa6f775dc3110f72c547cd8e0ab5c406  docs/qa/b6-stage2/evidence/windows/dep0190-trigger-probe.log
+d083d6b18b950dc3a0b856afa697f225543d18144e4c1abf5a71b0d218b22856  docs/qa/b6-stage2/evidence/windows/owner-package-verification-transcript-20261027.txt
+d0b3bc71d45e54c8c3259dd4ddb36cd4ce486765221861ddb73f50d9bc115cb5  docs/qa/b6-stage2/evidence/windows/verify-b6-stage2-logo-windows-20261027-050012.log
+0c46841170246cd580ccee273efa983b023048541d01ccd80eee1cc18ad9f02a  docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.eml
+8b65f5ae2352a2e3a5b4a5fc9b4e9e76dec901bb75fbffb0e567550186348a27  docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.html
+12dfa58dad29b9e1d226c5b0aea016b52772601da7e0adeebdd86e22f3d76100  docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.subject.txt
+7e392cbb92a967adedd7a1c98603fbacab14c793eacdd98b0e353a24e03e0f6c  docs/qa/b6-stage2/fixtures/SYNTHETIC-acknowledgement.txt
+ec4972fdf19268bd7c73e4ce03c50b2ce5f0fd76caf51824f5b51ea3bfa8530a  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.eml
+1a3f2dec7d8659863670cf25076d7a42685912c7d4911bd1975c0320bbd517e6  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.html
+d69dd8f42f939189139f956d526d7b9ef08c423fcc9d4ea8b7b32680be09b379  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.subject.txt
+d9caab72c3476d0143e3547a822e6a8427f2d2401ee2e8ae8dd204850f26cb7b  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal-long-values.txt
+2231a2379e845146b7f442a0a727a041eee64fd5167364d4e0fe2aa88619756f  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.eml
+aafbe62befed0493c3e75ec3c25b8f3e888c540d717cbbda5d012c2f428e6e9d  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.html
+2ebeac51821c477ae63f734d99528c4adcb50480b5ae8a9094d8578483aaf169  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.subject.txt
+79bf2d8ef50b23a84199beda442a94deb46d12bff892d521944ce6431bde6152  docs/qa/b6-stage2/fixtures/SYNTHETIC-internal.txt
+8cafe57df716f0485b020534c7fd85c1d7552dd50aa8c5ff17f9160178c936c2  docs/qa/b6-stage2/fixtures/fixtures-index.json
+255d51b4ffe2a2c792ee774aad1443f1d8f4d12ae01d2d51a92c9fdb72587c87  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/README.md
+630d3256418e669959df5dc6ab8a8cd5ba41fb01f17c9e8e611f9c32a790c137  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.eml
+6927387c7bcd871526fa8a9f385fce170d41a9ef15fb4447f61a17ec912d68b1  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.html
+12dfa58dad29b9e1d226c5b0aea016b52772601da7e0adeebdd86e22f3d76100  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.subject.txt
+7e392cbb92a967adedd7a1c98603fbacab14c793eacdd98b0e353a24e03e0f6c  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-acknowledgement.txt
+644527c92129c91d0e870bc1865abe67c9d602f33d5393cc11b5f7fdcf756cd8  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal-long-values.html
+d69dd8f42f939189139f956d526d7b9ef08c423fcc9d4ea8b7b32680be09b379  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal-long-values.subject.txt
+d9caab72c3476d0143e3547a822e6a8427f2d2401ee2e8ae8dd204850f26cb7b  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal-long-values.txt
+65fb17d0961f36c6dd84b032e0fb08a761c99f71fa0968e768f700af305f0868  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.eml
+7da23536e69b06b397d12ec460955c906d9dbc8b6937a2c6009d3197ade0993e  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.html
+2ebeac51821c477ae63f734d99528c4adcb50480b5ae8a9094d8578483aaf169  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.subject.txt
+79bf2d8ef50b23a84199beda442a94deb46d12bff892d521944ce6431bde6152  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/SYNTHETIC-internal.txt
+e72f797ba6ff3a021221b00f3cc54a38f0e54c7a8a9a0220da2ede7f5862dbc4  docs/qa/b6-stage2/fixtures/superseded-no-logo-2026-10-26/fixtures-index.json
+c76d88977344218aa6095d979ff5deb5855ed52c6a1c29e7c121542b532dee54  docs/qa/b6-stage2/logo/logo-derivation.json
+0612b6684f7554339663499afbdeb1e9a207c4300f476b324dffbbcaf8e17109  docs/qa/b6-stage2/logo/logo-display-size-preview-dpr1.png
+65cac15c0b588f1414c2e8b8931e5ea22b66e7ad544a9287a5f7432f040eb57d  docs/qa/b6-stage2/logo/logo-display-size-preview-dpr2.png
+2b5610455c3cd86e3d9bfb7fd2ad7e065fc70b01153e5ea39a8032c4396acb3e  docs/qa/b6-stage2/logo/logo-display-size-preview.html
+767f492e17d5655c535c95fef960dc65ac3ff670d1580dde4fa938663a144a00  docs/qa/b6-stage2/logo/logo-integration.patch
+05e85f4d3bd5dfe01dec286d6ef061823db2083b1711154e7b58e8921fef4629  docs/qa/b6-stage2/logo/logo-side-by-side.png
+b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a  docs/qa/b6-stage2/logo/valida-logo-email-316x72.candidate.png
+fc6a952fe265724cf26f71d6696e7a9f14cc51071dcfc975d2a08215bc8b277e  docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-acknowledgement-desktop-680.png
+9a928448e761910616bf2cd329451a3b73fba976cdf85b4b0be647c300f53372  docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-acknowledgement-images-blocked-680.png
+1cdad55655222c30192ed0f4924afe7218a61e4823625413af0cd6deb2fa6b02  docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-acknowledgement-mobile-390.png
+9c014623fa2433f102cd564bad50a03ec916a782c931fdbd274f2aaabe48064c  docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-internal-desktop-680.png
+cf1c8d62ff67b109ce107ac9835a6c6f167af2ff635ef05069a1212e101e48bd  docs/qa/b6-stage2/previews/PREVIEW-ONLY-candidate-logo-internal-mobile-320.png
+bea62ead5f81b8af96923ae9c5e899debde5bd42e09dc985660d547013cdc632  docs/qa/b6-stage2/previews/PREVIEW-ONLY-with-candidate-logo-acknowledgement.html
+c6b8eaaa80a7daa7042063cd6800d8e128cf3f8dc2895e19a868370b34c20eba  docs/qa/b6-stage2/previews/PREVIEW-ONLY-with-candidate-logo-internal.html
+fc6a952fe265724cf26f71d6696e7a9f14cc51071dcfc975d2a08215bc8b277e  docs/qa/b6-stage2/previews/as-built-acknowledgement-desktop-680.png
+9a928448e761910616bf2cd329451a3b73fba976cdf85b4b0be647c300f53372  docs/qa/b6-stage2/previews/as-built-acknowledgement-images-not-loaded-680.png
+30f62cf6e23d6717d6339973cf1eb8993e2113092bc02802a18d7ff30ee64c15  docs/qa/b6-stage2/previews/as-built-acknowledgement-mobile-320.png
+1cdad55655222c30192ed0f4924afe7218a61e4823625413af0cd6deb2fa6b02  docs/qa/b6-stage2/previews/as-built-acknowledgement-mobile-390.png
+5841810973721f2db0570b73726122918d0675bdfed5dc300483d1f5b6f7f3cf  docs/qa/b6-stage2/previews/as-built-acknowledgement.from-eml.html
+9c014623fa2433f102cd564bad50a03ec916a782c931fdbd274f2aaabe48064c  docs/qa/b6-stage2/previews/as-built-internal-desktop-680.png
+9a873374a50a651cd888d3facac40ebca202886d1b267a891c31b389a381ba54  docs/qa/b6-stage2/previews/as-built-internal-fallback-font-desktop-680.png
+f91141661e736dae3bab59ac1d73a32cc601957e8add604cfcaf35d8f6de70f7  docs/qa/b6-stage2/previews/as-built-internal-long-values-desktop-680.png
+2aaa4b207c05283d82358d80b1e4c95d04ca98ad5fe42eec2aedfc081e201c60  docs/qa/b6-stage2/previews/as-built-internal-long-values-mobile-320.png
+839e12f15f9696156058a13de88a638afeb341afd33c0d52f173e6573878c523  docs/qa/b6-stage2/previews/as-built-internal-long-values.from-eml.html
+cf1c8d62ff67b109ce107ac9835a6c6f167af2ff635ef05069a1212e101e48bd  docs/qa/b6-stage2/previews/as-built-internal-mobile-320.png
+9435b6a9e387d997683b98144c81e063af99fd39dcd4d6564a8e7f4a5054d0f6  docs/qa/b6-stage2/previews/as-built-internal-mobile-390.png
+76be20855f84d88eb47c66ec12b1d2eb78c76769817c404c71452b264a56336b  docs/qa/b6-stage2/previews/as-built-internal.from-eml.html
+49f6090e8a9609691169490bcdc3a4fb5058d91b9b30977d22cf53ef5d244b32  docs/qa/b6-stage2/previews/previews-index.json
+fb6856657e9153038b720b44056acd01b3ff246f5d2738e7b2697ce90b49a475  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/README.md
+39eb24e5190601c5144cdd53072f963d820b353242555e56be82eadb2fec4821  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-acknowledgement-desktop-680.png
+7bd5dc082e71e278791433ed088d262ed62a06bb815ac47654139987fc7064be  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-acknowledgement-mobile-320.png
+c14c8b8694ae362e401ff6ada9e651712463ac7d3187132b1c30f215a29cbcc9  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-acknowledgement-mobile-390.png
+9a7a0aefbb89a22ea789c835cada89d2de151f2b057d081137ba6cd575b3fad2  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-desktop-680.png
+ee06736442cf1f4e2b2986a097c3420c9fa78db6691d2b3f2368f6a74e5ed485  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-fallback-font-desktop-680.png
+d8d63c040df79267e3e637625182ab2a7870cde06c89b0a5a507971f75ce2205  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-long-values-desktop-680.png
+e8cec8274affc11ca452b38382bf418542b17ca12eb7fec70c1504cdfaebd484  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-long-values-mobile-320.png
+ac3aec1a6e2e6ba0960be947c105fc339c7af4648d7b8e899e03929b17dc8288  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-mobile-320.png
+9d0ec6188427f285d3ef4d4a509255ea8558d346cde14d8c288b7de466f09236  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/as-built-internal-mobile-390.png
+4184e176a2d60ee86e9229c4417f9da0bcc9f9a1c36fcf4d023731911bb813e8  docs/qa/b6-stage2/previews/superseded-no-logo-2026-10-26/previews-index.json
+1de0819c4362a0927be794fe734b4a3eca40a166d46125cba231fecfe720e8aa  docs/qa/b6-stage2/tools/dep0190_trigger_probe.mjs
+aa247553bb90c62ad2d33d27b497f74975c2c05534724febd5785710a4234bf9  docs/qa/b6-stage2/tools/derive_logo.py
+6baa364aa3707e94fe4ac2588e8951649a98c47d6c73433ef39acc7e0b6da3a4  docs/qa/b6-stage2/tools/fixture_privacy_check.mjs
+5085afb472c9ce6dadfdde68f4054f0cd9f6fa3bd0e4da6b6608776b697d12a4  docs/qa/b6-stage2/tools/logo_mismatch_probe.mjs
+faa015ec9b994313c9cab99e657bcb73f91be6f7066be6ef856eb0fd4abc94e9  docs/qa/b6-stage2/tools/logo_sheet.py
+4e17d4ed1c8a86622a097c07cde61817fa48694078c271da57099b00b6fac475  docs/qa/b6-stage2/tools/make_fixtures.mjs
+574ef7975fa5da1ce802a63916ead2b19b78bf5f4714c7545db88f7788d23b32  docs/qa/b6-stage2/tools/make_fixtures_integrated.mjs
+24e8690c7930b5a4709cfa889ff7649beb5dc118f23fcd2d64f715bc62976cf5  docs/qa/b6-stage2/tools/make_previews.py
+b188030fd5b5c54816419a970a105b24727d33764e705d575f07a2b9837fe5a7  docs/qa/b6-stage2/tools/make_previews_integrated.py
+d05679de11394c18859b8248838dcd4e74b2a0507e53ed6de197004c5d18b910  docs/qa/b6-stage2/tools/mutation_integrated.py
+74df0d21920cc41b5f74a74a175c823b2b742c47c07e8eb1997ea303ce3d69fa  docs/qa/b6-stage2/tools/mutation_t07.py
+683663b01c11b6951f6a0aac71979cb428c6b097d8300aad35645042988513e5  docs/qa/b6-stage2/tools/package_stage2.py
+7f0d606e605621aa7c1c40ec59564f6a9a685913f5da54c32df2a8ab28a09c07  docs/qa/b6-stage2/tools/rehearsal_assertion_probe.mjs
+6a6fb4fd52936131fc85a8ba5e94de352cae7f53513d442cb902d53871f9a1e6  docs/qa/b6-stage3/EV-S3-OC1_OUTLOOK_CLASSIC_OFFLINE_ADDENDUM.md
+960267c3d811964e6ff51dd59f043511d2ee49baacaf0ea5a358750c48198360  docs/qa/b6-stage3/F01-F04_FINDINGS_AND_PROPOSAL.md
+c684b2e52c503aa5100c9c869fd8d696a59028774d287b8e6c2e61dfe83b09b2  docs/qa/b6-stage3/LIVE_TEST_PROPOSAL_R1.md
+a06b9c648fc523d260e98f468145acee018eb4052c86a85d491a610a9f3c1096  docs/qa/b6-stage3/R5_CORRECTION_AND_PACKAGE_NOTE.md
+87038da10267e61cd6815a274ffbb3442aea25077c7c1c6dc90fd62d3e9d466b  docs/qa/b6-stage3/README.md
+060006d9cc222709e905eba2988440cb431a4f0232f1f66552e4a2fd7aef0812  docs/qa/b6-stage3/STAGE3_EMAIL_CLIENT_VERIFICATION_PLAN.md
+8176f00afc260dd3472422cbef3c90c1f20bf0f3eebb0ad9d279b63d5b2aed01  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/measurements.json.txt
+6346715e139e0bf105c4bfd9c6069e76088c0c66178c241ba69a7277d65a663a  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S1-c83e9689-image.png
+82bea85a6b4f84801f15477cdc5e57c9287ca0bafc8092c7aaac5b8e4f9a1c1c  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S2-9fcbb9cb-image.png
+a3b1bf26ebbca7e38f5e9a746530d4de9ed5ef411c090213ebd4f8f2f9fdb8ec  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S3-3a183618-image.png
+23de9a3621df84fb42e90f748c62b761a6e7fffdfc334d777571b266333412ac  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S4-e75ba3ba-image.png
+586ec5db3aecc872f87f63eb44cc928954926f569a1f32193c6b4e63b18eb72a  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S5-e052b21d-image.png
+cfa444f8ae671e51503e5a44e7d339da11686221d8c966f75510684020ad682d  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S6-a7ca6229-image.png
+a767427e521ac60bfeebaa806805277e9bac30b18bdda897941247f9cda3aa4b  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/original-screenshots/S7-dc2e8650-image.png
+7de0a8e512cba0324e6fa3cf696a37c70e22d54cfbee5832264ad85179671659  docs/qa/b6-stage3/evidence/EV-S3-OC1-outlook-classic-offline/owner-instruction-2026-10-27-1610.txt
+2b835af633ec453d3e5f0e4541e944e2fe86307c76cb02515c756048775ebbcb  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/measurements.json.txt
+66d24d3cc10209ad111f6550dc1182e7ac049cefce3a626ea96a3d92e1fe8c4a  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M1-67347845-image.png
+d0fa45cbf3f99c343a221cd69b32e366a05dcd52ccfb37889f1c96a87f509c3f  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M2-66d35a91-image.png
+072a8e51449a3771d50525b7a39dcfa42ca644398f3028d51d200fed771fbaa3  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M3-e7a21878-image.png
+314eb54a5322670b109441c8bf9d62486ab68eedc99afa8631073febab0b8486  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M4-dbf0529e-image.png
+d21b9ef3d512b6a944befca93674d8fc9c7ab681a3f68f3168e6ed7b1ca637c3  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M5-985e7ca7-image.png
+2f4f22829fc765e67a3d5b19d8dc8b6820b023c13f9ab694c5cdc9687e6b2709  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/original-screenshots/M6-2d1ecfb1-image.png
+52eec6506688656bd251699120f8f7f46e19596d180070a7d7b5e78ca6c3ede4  docs/qa/b6-stage3/evidence/EV-S3-OC2-outlook-classic-c2p04-mockups/owner-instruction-2026-11-01.txt
+aae3e00589301b46699a7a3a83d28b8d1603b3ba8645fbdae22e371c4c17526b  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/measurements.json.txt
+7952561bbfba637b63d330c5e1689411eb04050043ec33ea68b1250bec737805  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N1-ec1470df-image.png
+569c8949a4d8f920903776688dac65391c68b4985afb79a1333e513a43ea26fe  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N2-8c55b8a2-image.png
+79fa02f1f5eae741b4f41f7f89dfe73a04b0ce60ed32bc42270f0dd5e7e8969f  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N3-28899f4e-image.png
+ad89ddbdcb8af6b77b3245731669bc6bba3ac8b936ddedeef8df573e37581bbd  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N4-dbdb4c4e-image.png
+3be6623f7fcf9c38c0a006052822ff6871ad0592a39615276e000dc803d71549  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/original-screenshots/N5-531c33aa-image.png
+58aa8bb64e81feb2a94b478da455ecff026968a89fc7a9efb27786943977873b  docs/qa/b6-stage3/evidence/EV-S3-OC3-outlook-classic-c2p04-mockups-1to1/owner-instruction-2026-11-02.txt
+28ab440e79a6502425e6265cfc091119fbb9103a7ed2488022c71f93d4d59ada  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/derived-title-crops/Z1-title.png
+02d98e75229b7df9706826b29f5d66dd63600906cdc2efe50ad26f634d24e2b7  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/derived-title-crops/Z2-title.png
+02d98e75229b7df9706826b29f5d66dd63600906cdc2efe50ad26f634d24e2b7  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/derived-title-crops/Z3-title.png
+2a02028674cee49898c18398f3762b4d8d4ad957d00e7851e06873a77771b12e  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/measurements.json.txt
+7728cd9119c50f4d2b4b236e624e6fdbd3f8488ff62aec065dc610a65bc19731  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/original-screenshots/Z1-88773f01-image.png
+b4d1397f254660e4a580e9fb1bc153ec92a550f3e2333aff31c65bdc61ec7669  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/original-screenshots/Z2-a1d58126-image.png
+8fe36c06b2d507b93e34372b4b8a1ba29d005becebc323f635b761726c24d86d  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/original-screenshots/Z3-a1b8b6fc-image.png
+d437e4bb7d102f58620b3ce109768002060ae8cc2f96ce1d03b17b711bf858a2  docs/qa/b6-stage3/evidence/EV-S3-OC4-outlook-classic-c2p04-mockup-zoom/owner-instruction-2026-11-02-r6-windows-outlook.txt
+808cb539f9ae7732662020b7083370fb85fe6a7e1de16b7324b9f4f96aa6bd5d  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O1-subject-line.png
+0837be140e5b7ec3aa31b06b719131498d94e08b9893fa675e2a0cda400ed1e4  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O1-title-bar.png
+3106104fd6796fcd32eefe3f6e4b685d2ff5fd456254d5f3136f74c3de0dcaa7  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O2-subject-line.png
+505d7dc2d729c0d0bc7cf34394795217c61e33f78a577dec821a2485e6a968e4  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O2-title-bar.png
+3106104fd6796fcd32eefe3f6e4b685d2ff5fd456254d5f3136f74c3de0dcaa7  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O3-subject-line.png
+505d7dc2d729c0d0bc7cf34394795217c61e33f78a577dec821a2485e6a968e4  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/derived-title-crops/O3-title-bar.png
+5ee254ef3d7b428aa2bc7871fe93f8cdddeb28427471d131bf79cc68ca0ee22a  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/measurements.json.txt
+7e95b039f3fbcb2ed92bac71e28028d67123db48a963c85d9b6d1bf99722b797  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/original-screenshots/image(20261102-151219).png
+88f9c609fccd81fa1edbad1e7893641f5f9885a95a123d886255d8dd76acf680  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/original-screenshots/image(20261102-151223).png
+a1f8cbfb4c018fad0de77c4a4dd6b64f307f15dd4f597285312fdadba8332985  docs/qa/b6-stage3/evidence/EV-S3-OC5-outlook-classic-owner-originals-0712/original-screenshots/image(20261102-151235).png
+b8c541749d0869f2473cc3344e6de5e8ecea9813bb106feb1fc3531602c8341a  docs/qa/b6-stage3/proposals/f01-logo/C0-current-316x72.png
+ecfcf240474116bab58c5946e0fddbeae46edf48f81971843f38ded5672a6966  docs/qa/b6-stage3/proposals/f01-logo/C1-transparent-lockup-316x72.png
+ac67a2cb7d447a55d89bb3264198743d4114190e259775535215acabba1aea3b  docs/qa/b6-stage3/proposals/f01-logo/C2-masthead-1200x216.png
+73adbe4c3d49697fefc52b7779ec2946898cf39be32b31baabd4f535edfbb95a  docs/qa/b6-stage3/proposals/f01-logo/C3-plate-412x144.png
+97f22299bad5962cedde7fa57cd7d787c39e62863895a8b55f79e107b50285b0  docs/qa/b6-stage3/proposals/f01-logo/F01-F04-review-sheet.png
+75461870bfa6ce4ae3f2fa697f10a63ce8d8a317121eec25fff883bd69e37eb7  docs/qa/b6-stage3/proposals/f01-logo/candidates.json
+4f9ec8ade6bdcdadac9eda63fbcda47129762dcb3b4766185ecf69d6b507b8b1  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-ol-light-680.png
+4dc0fc9b3e072d636efefd50ad683f2e60043e0bb287f18ff861f4b6b3ebe782  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-ol-light.html
+94cbb99802aa4be2d39ac7e2c3eb2d4b991465962e6fa4329aed5a73dcd5a621  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-source-680.png
+530cbf06362f1eeabfd52ea71c008ed12ef5d75178a9d862245fbc96ff0115aa  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C0-source.html
+6b353be13b787ee0074c096f1eb7593a319080cac006353add2c3afd19da9f03  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-ol-light-680.png
+128c2e9d7dc723b8e66a60103a31bdd12114e08b3c8f2f943c5a713bc3d67be6  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-ol-light.html
+693d03085e1bce70fdeda496bfc1ab9d670c8c8a78603c6231e4ecd7b992c44d  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-source-680.png
+9fb40f2688e80a5eaf7ab32fd96d7a7133735be8081ed3d18480ca861ceef615  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C1-source.html
+81cd5af27878bdc1548c73daae1f4078b8486112a7adf792f2e9d0d19fc81087  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light-320.png
+e9776184c54e7e02a3554641630ec0ece3b4fa05013c6dc429da552728c83cdf  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light-390.png
+d037a6c06ffc08742f7e13add17289edbce01d7340f2f7be5a2690683187ea8a  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light-680.png
+0e65ef468abb233932432416d16d81d8b96800cc9ae8d563125cf99daf121380  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-ol-light.html
+3d36548a3be011b89dfd5c4859584fb36e395593e5c2ffdb323ecc98b100882a  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source-320.png
+61199e0bf85d72ce7677f7ac0086f0b92eca56cae5ba33a82a521f203d17cc0c  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source-390.png
+ce4adec935c84770b319192c7abc502f577886f0570c75e931d167a5c6abc835  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source-680.png
+5f18d58c713b34baa0e962bca1c193882324cadac2dd3fd0e82f2b7bfca624c6  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C2-source.html
+665fa9d5fd0659e5fc61328ba93e4ebaceb245cb16c17b68a29291051eb54326  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light-320.png
+bc9f8097d0539098e3744b0dea905d5926a060e0eaf956418e271c482c42040d  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light-390.png
+55ae68db9be194ca7fc1ee9c7163034983023e6f715a22a2fc22f22129b6ad18  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light-680.png
+e89fd05a4cd6b238ad6a1e6940f2e9ad0dbd7d04a710250d4131c02289868894  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-ol-light.html
+bab2cf7c8c0557875db06cc3303d33f2489529f7bdc52d7e8b62738f302b8d3a  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source-320.png
+a3c38f47431d1e38aa12b8bdb2f45ccb837582866f4fc1fe2c6c52eae70ad0a5  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source-390.png
+ae8c508a7ab6c0ba2790ff61feda5db7535dccc8eb87ab630ce268696af33b24  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source-680.png
+14dfc43d2c0eb7d06a817230cd6289c55212ad509c02472c573203fd9739ca25  docs/qa/b6-stage3/proposals/f01-logo/previews/acknowledgement-C3-source.html
+811c88da1fb3344f91874ab1f716e05e6687099ea7feb8f6bd6dcd0cd742f031  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-ol-light-680.png
+a7304a24365a9b5ec6e100a4944090eb9307333b60e06ad0389a98c23b6a3a7e  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-ol-light.html
+a6fc7454d8ba86b8cdc283b922fabd6dab3105e37a4b07577592ef05c0f8f0b0  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-source-680.png
+0ca9a8a16607c78e2eb7aab60854277f1d244f396856802396c38fee78cd24fc  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C0-source.html
+c0ce3bfc39b1878279630428712b938969244d6eaf1668dae88e3d1a8d23507f  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-ol-light-680.png
+db2715484a47cd51b9dfb4cdca284ba47277e57f1320bb7ca7655207b8a2c0f4  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-ol-light.html
+586d5ac48efdc181917364d351580c335ba52bc35700ef695d10b48131db1679  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-source-680.png
+29e4e21e22a7345c0ac0c037b2269f0d85175a4922b83ceda1d02e054bb7d884  docs/qa/b6-stage3/proposals/f01-logo/previews/internal-C2-P04-source.html
+259a60d186a1fdb651cdd9d41b34360718df17c1088569b7ab213c82b7542bb3  docs/qa/b6-stage3/proposals/f01-logo/previews/previews-index.json
+ef2f0e6df97a9ec5096d4833d4f12ff4772a30ebe0286bea0684ebe050f42355  docs/qa/b6-stage3/proposals/review-emls/CONTROL-F02-plain-layout.eml
+f6e536f710571105e4ac9f820cccab15e4de6bcfccc35706d53298ddaae23e9f  docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C2-P04-acknowledgement.eml
+595651cbce42efbd7f8016bc6a9dda2d1cc16e43dcfe468001e0bebcfbe08525  docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C2-P04-internal-long-values.eml
+bddfa3ce3ca15924392ace858253725dcd7acd60b524a7b8247ad28f25ff369f  docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C3-P04-acknowledgement.eml
+6b9af82d879393a913e8f996084bdd9f93c1d9537e2cadfd0c9faba0ca57d1cd  docs/qa/b6-stage3/proposals/review-emls/REVIEW-MOCKUP-C3-P04-internal-long-values.eml
+b025991ef997ad2dc0ad848c9e7e4df37c8c989665ed7c8a80949a2a1243358d  docs/qa/b6-stage3/proposals/review-emls/review-emls-index.json
+97396033465ed400e8b9fad609c3ec7c7e8a6c6e767cedbd576b007063c0a7f1  docs/qa/b6-stage3/stage3-cell-log-template.csv
+7c57c31c77575c5a2ecbcc5e21d98fb9efadee8815804e9f0e0c4d9096798e0b  docs/qa/b6-stage3/tools/f01_variants.py
+c5f9238a8194ed70a3e45f48a225894c1438a999110d61abcd081554c7968933  docs/qa/b6-stage3/tools/make_f01_candidates.py
+415fd7ff47c6c7acdc6197050a7fc8b901ea6522ffc5a79fb8d1a4d562f7e78d  docs/qa/b6-stage3/tools/make_f01_previews.py
+2dece6df93999ab542b0946dc606f0d3d55174dbe35feb93964d8af9fd3e8347  docs/qa/b6-stage3/tools/make_f01_sheet.py
+1945645b508b4b38485dee9984d22c400368801e4aae2b25da32087ff7769dce  docs/qa/b6-stage3/tools/make_review_emls.py
+d9c65c283f6b3f23d27828dd4a6c82ae1ae61412ccc742358194c6ddc3d31d00  docs/qa/b6-stage3/tools/measure_ev_s3_oc1.py
+c1e63266f3e273da8e4cc8d69dbc6253aa56983564dd2018c7f4054ecd507e55  docs/qa/b6-stage3/tools/measure_ev_s3_oc2.py
+ba9d4396c1628a20cee4d3acc8f5d905817affe61fa0b668425fe43ff074ba91  docs/qa/b6-stage3/tools/measure_ev_s3_oc3.py
+70d231e6a27325ed0355b6a8d86b0842ed2b7354bda8a7ecf57313ef614391d5  docs/qa/b6-stage3/tools/measure_ev_s3_oc4.py
+53173c7479c0abfaeb0ede1c5e9fd9d9090ad8ada24f10da3b389559482c274c  docs/qa/b6-stage3/tools/measure_ev_s3_oc5.py
+7466983e92125a403633cca885d265ab44a719390a229aee3565e4d3e81ef3e7  docs/qa/b6-stage3/tools/outlook_light_model.py
+f0fc231852dbc64198d6a0cafd7773e46612ae4d1d23cf32482d48bbd22cb1c9  docs/review/B6_ACCEPTANCE_CHECKLIST.md
+73dd3d239778c99a1291090481cca66b5e8d8abb5e549d7edf2292f7b2bc217e  docs/review/B6_ACCEPTANCE_PACKAGE_R10.md
+584fd909a6cbf47d67ba5d4b8e986ae8a389c88fd2e1b0583beda1e029a19b71  docs/review/B6_BOUNCE_PROCEDURE_DECISION_SHEET.md
+72bd26e8ab843e83fb76f7e85129fc33aa9e363064727309ef450c9d1f99fc1e  docs/review/B6_DECISION_PACKAGE.md
+ed425779ab6f010e4a883096587bc276e5360f17c629f24dc4b74d9ad5fb905e  docs/review/B6_FINAL_REVIEW_PACKAGE.md
+f375b92b4a176c718e6301686dc82e2cef3747ff2a80ea7d5a8d3651e188742a  docs/review/B6_PUBLICATION_MANIFEST.md
+bbb5d514bc1c5310812bff7709a8d0d76f4e6fc8c1155de206b1842a0fdf3fce  docs/review/B6_REMAINING_BLOCKERS.md
+d701b2c65acc2ac1621c024e1cf20e0bf455adb748c7938269331b3252881449  docs/review/B6_REMAINING_OWNER_APPROVALS.md
+102259d33887ea1b2321095630f62a5f986516fe85ef0b9a3c391a4b8256f76e  docs/review/B6_TITAN_AMENDMENTS.md
+c010f2e3a6f9d6d5867a816496207307d67151a485d27f963600cb8e27be8c4f  docs/review/IMPLEMENTATION_PLANS_B6_TEMPLATES_B7_SUPPRESSION.md
+c5510bcb74cc4770b64d7c29e56dd4a78a46d1f2da5d9507d5e034324dd918b0  docs/review/OWNER_DECISION_2026-10-26-03_B6_STAGE2_AUTHORISATION.md
+3f774bdce406e8bb6c902192a72cd07950fcf6b35f2e9c16b58caea6749cf120  docs/review/OWNER_DECISION_2026-10-27-01_B6_LOGO_ASSET.md
+585fe7ab561e5283816b9fef52479f6d369e857816222a8be5f4959f6cedb073  docs/review/OWNER_DECISION_2026-11-02-01_B6_C2_P04.md
+1e82ec142a2ef3f1dcd11c4925bbc054aa565d7c7ad9fc03c4e863c779e825d0  docs/review/OWNER_DECISION_2026-11-02-02_B6_D6.md
+11cb9b2bd047a22746f48fd5d1214c5a45c01c705618708fed46af1112602154  docs/review/OWNER_DECISION_2026-11-02-03_B6_APPROVALS_D1_D3_D2_D4.md
+a751d161ff1173c6e053973fce3eab6c75763189f2ab10063ba483a0d4a35139  docs/review/OWNER_FEEDBACK_2026-10-27_B6_LOGO_LIGHT_RENDERING.md
+77807d1d7776c1b56adf55ec05b0e0c01cb528253e7392d56496108b3342233b  docs/review/OWNER_RECORD_2026-11-01_B6_STAGE3_OUTLOOK_OFFLINE.md
+2f2e98ab31f8830f05128403f0059e6a9876fc9953572eec0b75e08ae5486125  docs/review/OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md
+6bbe68842afd4581fc62d3ce35af9e1423fcf8fa0b81f75e3b4dac95dad3b9d0  docs/review/owner-sources/OD-2026-11-02-02/B6_D6_OWNER_DECISION_AND_EVIDENCE_RECONCILIATION.md
+4bec67a51b569e922474bcbda74d2b45f69943732a35b5726ad4e1e51e8b7030  docs/review/owner-sources/OD-2026-11-02-03/owner-instruction-2026-11-02-b6-offline-completion.txt

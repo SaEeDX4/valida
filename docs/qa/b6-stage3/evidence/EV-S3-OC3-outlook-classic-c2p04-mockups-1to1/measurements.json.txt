@@ -1,0 +1,1909 @@
+# EV-S3-OC3 pixel measurements — produced 2026-11-02T14:39:17Z by tools/measure_ev_s3_oc3.py from the preserved originals (Python 3.13.17, Pillow 12.3.0)
+{
+ "method": "see the module docstring of tools/measure_ev_s3_oc2.py",
+ "shots": {
+  "N1": {
+   "file": "N1-ec1470df-image.png",
+   "message": "ACK",
+   "mode": "light",
+   "part": "whole message",
+   "size": [
+    1919,
+    1079
+   ],
+   "scanned_rows": [
+    280,
+    1020
+   ],
+   "excluded_rows": [],
+   "runs_exact": {
+    "300": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      697,
+      "#05070A"
+     ],
+     [
+      715,
+      1250,
+      "#05070A"
+     ],
+     [
+      1251,
+      1905,
+      "#ECEEF0"
+     ]
+    ],
+    "450": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      1250,
+      "#E9EBEF"
+     ],
+     [
+      1251,
+      1905,
+      "#ECEEF0"
+     ]
+    ],
+    "700": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      692,
+      "#E9EBEF"
+     ],
+     [
+      774,
+      1250,
+      "#E9EBEF"
+     ],
+     [
+      1251,
+      1905,
+      "#ECEEF0"
+     ]
+    ],
+    "900": [
+     [
+      14,
+      1905,
+      "#ECEEF0"
+     ]
+    ]
+   },
+   "column_px": [
+    651,
+    1250,
+    600
+   ],
+   "scale": 1.0,
+   "lines": [
+    {
+     "role": "logo",
+     "size": "image",
+     "y": [
+      299,
+      328
+     ],
+     "x": [
+      694,
+      845
+     ],
+     "bg": "#05070A",
+     "peak_ink": "#FFFFFF",
+     "peak_contrast": 20.17,
+     "p90_contrast": 19.54,
+     "ink_pixels": 1249
+    },
+    {
+     "role": "eyebrow",
+     "size": "12 px, 500",
+     "y": [
+      414,
+      422
+     ],
+     "x": [
+      691,
+      817
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#006DA5",
+     "peak_contrast": 4.72,
+     "p90_contrast": 4.72,
+     "ink_pixels": 528,
+     "source": "#83C6FF",
+     "known_ink": null,
+     "reliability": "no measured ink colour for this source colour; peak = lower bound if no overshoot"
+    },
+    {
+     "role": "headline",
+     "size": "32 px, 600 (large)",
+     "y": [
+      454,
+      484
+     ],
+     "x": [
+      691,
+      1048
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 3842,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      520,
+      535
+     ],
+     "x": [
+      691,
+      1111
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1817,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      595,
+      610
+     ],
+     "x": [
+      692,
+      1209
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 2068,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      621,
+      636
+     ],
+     "x": [
+      692,
+      944
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1077,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "footer",
+     "size": "13 px",
+     "y": [
+      693,
+      702
+     ],
+     "x": [
+      691,
+      773
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 342,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    }
+   ]
+  },
+  "N2": {
+   "file": "N2-8c55b8a2-image.png",
+   "message": "ACK",
+   "mode": "light",
+   "part": "whole message",
+   "size": [
+    2559,
+    1079
+   ],
+   "scanned_rows": [
+    280,
+    1020
+   ],
+   "excluded_rows": [
+    [
+     360,
+     372
+    ]
+   ],
+   "runs_exact": {
+    "300": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      771,
+      816,
+      "#05070A"
+     ],
+     [
+      834,
+      1368,
+      "#05070A"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ],
+    "450": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      770,
+      1369,
+      "#E9EBEF"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ],
+    "700": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      770,
+      811,
+      "#E9EBEF"
+     ],
+     [
+      893,
+      1369,
+      "#E9EBEF"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ],
+    "900": [
+     [
+      14,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ]
+   },
+   "column_px": [
+    770,
+    1369,
+    600
+   ],
+   "scale": 1.0,
+   "lines": [
+    {
+     "role": "logo",
+     "size": "image",
+     "y": [
+      299,
+      328
+     ],
+     "x": [
+      813,
+      964
+     ],
+     "bg": "#05070A",
+     "peak_ink": "#FFFFFF",
+     "peak_contrast": 20.17,
+     "p90_contrast": 19.54,
+     "ink_pixels": 1249
+    },
+    {
+     "role": "eyebrow",
+     "size": "12 px, 500",
+     "y": [
+      414,
+      422
+     ],
+     "x": [
+      810,
+      936
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#006DA5",
+     "peak_contrast": 4.72,
+     "p90_contrast": 4.72,
+     "ink_pixels": 528,
+     "source": "#83C6FF",
+     "known_ink": null,
+     "reliability": "no measured ink colour for this source colour; peak = lower bound if no overshoot"
+    },
+    {
+     "role": "headline",
+     "size": "32 px, 600 (large)",
+     "y": [
+      454,
+      484
+     ],
+     "x": [
+      810,
+      1167
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 3842,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      520,
+      535
+     ],
+     "x": [
+      810,
+      1230
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1817,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      595,
+      610
+     ],
+     "x": [
+      811,
+      1328
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 2068,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      621,
+      636
+     ],
+     "x": [
+      811,
+      1063
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1077,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "footer",
+     "size": "13 px",
+     "y": [
+      693,
+      702
+     ],
+     "x": [
+      810,
+      892
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 342,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    }
+   ]
+  },
+  "N3": {
+   "file": "N3-28899f4e-image.png",
+   "message": "LONG",
+   "mode": "light",
+   "part": "top",
+   "size": [
+    1901,
+    1038
+   ],
+   "scanned_rows": [
+    280,
+    1038
+   ],
+   "excluded_rows": [],
+   "runs_exact": {
+    "300": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      697,
+      "#05070A"
+     ],
+     [
+      715,
+      1250,
+      "#05070A"
+     ],
+     [
+      1251,
+      1888,
+      "#ECEEF0"
+     ]
+    ],
+    "450": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      1250,
+      "#E9EBEF"
+     ],
+     [
+      1251,
+      1888,
+      "#ECEEF0"
+     ]
+    ],
+    "700": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      1250,
+      "#E9EBEF"
+     ],
+     [
+      1251,
+      1888,
+      "#ECEEF0"
+     ]
+    ],
+    "900": [
+     [
+      14,
+      650,
+      "#ECEEF0"
+     ],
+     [
+      651,
+      1250,
+      "#E9EBEF"
+     ],
+     [
+      1251,
+      1888,
+      "#ECEEF0"
+     ]
+    ]
+   },
+   "column_px": [
+    651,
+    1250,
+    600
+   ],
+   "scale": 1.0,
+   "lines": [
+    {
+     "role": "logo",
+     "size": "image",
+     "y": [
+      299,
+      328
+     ],
+     "x": [
+      694,
+      845
+     ],
+     "bg": "#05070A",
+     "peak_ink": "#FFFFFF",
+     "peak_contrast": 20.17,
+     "p90_contrast": 19.54,
+     "ink_pixels": 1249
+    },
+    {
+     "role": "eyebrow",
+     "size": "12 px, 500",
+     "y": [
+      414,
+      423
+     ],
+     "x": [
+      692,
+      880
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#006DA5",
+     "peak_contrast": 4.72,
+     "p90_contrast": 4.72,
+     "ink_pixels": 822,
+     "source": "#83C6FF",
+     "known_ink": null,
+     "reliability": "no measured ink colour for this source colour; peak = lower bound if no overshoot"
+    },
+    {
+     "role": "headline",
+     "size": "32 px, 600 (large)",
+     "y": [
+      454,
+      484
+     ],
+     "x": [
+      691,
+      1142
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 4728,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      520,
+      535
+     ],
+     "x": [
+      691,
+      948
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1100,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      582,
+      590
+     ],
+     "x": [
+      692,
+      718
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 126,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      606,
+      619
+     ],
+     "x": [
+      692,
+      1210
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2364,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      628,
+      641
+     ],
+     "x": [
+      692,
+      1193
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2162,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      680,
+      688
+     ],
+     "x": [
+      692,
+      780
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 409,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      704,
+      717
+     ],
+     "x": [
+      691,
+      1210
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2378,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      726,
+      739
+     ],
+     "x": [
+      691,
+      1100
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 1711,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      778,
+      788
+     ],
+     "x": [
+      692,
+      773
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 358,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      802,
+      812
+     ],
+     "x": [
+      691,
+      828
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 569,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      854,
+      862
+     ],
+     "x": [
+      691,
+      826
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 583,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      878,
+      888
+     ],
+     "x": [
+      691,
+      884
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 888,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "note",
+     "size": "14 px",
+     "y": [
+      942,
+      954
+     ],
+     "x": [
+      691,
+      1209
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1992,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "note",
+     "size": "14 px",
+     "y": [
+      964,
+      973
+     ],
+     "x": [
+      691,
+      767
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 293,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    }
+   ]
+  },
+  "N4": {
+   "file": "N4-dbdb4c4e-image.png",
+   "message": "LONG",
+   "mode": "light",
+   "part": "top",
+   "size": [
+    2559,
+    1079
+   ],
+   "scanned_rows": [
+    280,
+    1020
+   ],
+   "excluded_rows": [],
+   "runs_exact": {
+    "300": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      770,
+      816,
+      "#05070A"
+     ],
+     [
+      834,
+      1369,
+      "#05070A"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ],
+    "450": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      770,
+      1369,
+      "#E9EBEF"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ],
+    "700": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      770,
+      1369,
+      "#E9EBEF"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ],
+    "900": [
+     [
+      14,
+      769,
+      "#ECEEF0"
+     ],
+     [
+      770,
+      1369,
+      "#E9EBEF"
+     ],
+     [
+      1370,
+      2125,
+      "#ECEEF0"
+     ],
+     [
+      2126,
+      2528,
+      "#262626"
+     ]
+    ]
+   },
+   "column_px": [
+    770,
+    1369,
+    600
+   ],
+   "scale": 1.0,
+   "lines": [
+    {
+     "role": "logo",
+     "size": "image",
+     "y": [
+      299,
+      328
+     ],
+     "x": [
+      813,
+      964
+     ],
+     "bg": "#05070A",
+     "peak_ink": "#FFFFFF",
+     "peak_contrast": 20.17,
+     "p90_contrast": 19.54,
+     "ink_pixels": 1249
+    },
+    {
+     "role": "eyebrow",
+     "size": "12 px, 500",
+     "y": [
+      414,
+      423
+     ],
+     "x": [
+      811,
+      999
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#006DA5",
+     "peak_contrast": 4.72,
+     "p90_contrast": 4.72,
+     "ink_pixels": 822,
+     "source": "#83C6FF",
+     "known_ink": null,
+     "reliability": "no measured ink colour for this source colour; peak = lower bound if no overshoot"
+    },
+    {
+     "role": "headline",
+     "size": "32 px, 600 (large)",
+     "y": [
+      454,
+      484
+     ],
+     "x": [
+      810,
+      1261
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 4728,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      520,
+      535
+     ],
+     "x": [
+      810,
+      1067
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1100,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      582,
+      590
+     ],
+     "x": [
+      811,
+      837
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 126,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      606,
+      619
+     ],
+     "x": [
+      811,
+      1329
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2364,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      628,
+      641
+     ],
+     "x": [
+      811,
+      1312
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2162,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      680,
+      688
+     ],
+     "x": [
+      811,
+      899
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 409,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      704,
+      717
+     ],
+     "x": [
+      810,
+      1329
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2378,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      726,
+      739
+     ],
+     "x": [
+      810,
+      1219
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 1711,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      778,
+      788
+     ],
+     "x": [
+      811,
+      892
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 358,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      802,
+      812
+     ],
+     "x": [
+      810,
+      947
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 569,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      854,
+      862
+     ],
+     "x": [
+      810,
+      945
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 583,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      878,
+      888
+     ],
+     "x": [
+      810,
+      1003
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 888,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "note",
+     "size": "14 px",
+     "y": [
+      942,
+      954
+     ],
+     "x": [
+      810,
+      1328
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1992,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "note",
+     "size": "14 px",
+     "y": [
+      964,
+      973
+     ],
+     "x": [
+      810,
+      886
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 293,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    }
+   ]
+  },
+  "N5": {
+   "file": "N5-531c33aa-image.png",
+   "message": "LONG",
+   "mode": "light",
+   "part": "whole message",
+   "size": [
+    1079,
+    1918
+   ],
+   "scanned_rows": [
+    280,
+    1060
+   ],
+   "excluded_rows": [],
+   "runs_exact": {
+    "300": [
+     [
+      14,
+      230,
+      "#ECEEF0"
+     ],
+     [
+      231,
+      277,
+      "#05070A"
+     ],
+     [
+      295,
+      830,
+      "#05070A"
+     ],
+     [
+      831,
+      1065,
+      "#ECEEF0"
+     ]
+    ],
+    "450": [
+     [
+      14,
+      230,
+      "#ECEEF0"
+     ],
+     [
+      231,
+      830,
+      "#E9EBEF"
+     ],
+     [
+      831,
+      1065,
+      "#ECEEF0"
+     ]
+    ],
+    "700": [
+     [
+      14,
+      230,
+      "#ECEEF0"
+     ],
+     [
+      231,
+      830,
+      "#E9EBEF"
+     ],
+     [
+      831,
+      1065,
+      "#ECEEF0"
+     ]
+    ],
+    "900": [
+     [
+      14,
+      230,
+      "#ECEEF0"
+     ],
+     [
+      231,
+      830,
+      "#E9EBEF"
+     ],
+     [
+      831,
+      1065,
+      "#ECEEF0"
+     ]
+    ]
+   },
+   "column_px": [
+    231,
+    830,
+    600
+   ],
+   "scale": 1.0,
+   "lines": [
+    {
+     "role": "logo",
+     "size": "image",
+     "y": [
+      299,
+      328
+     ],
+     "x": [
+      274,
+      425
+     ],
+     "bg": "#05070A",
+     "peak_ink": "#FFFFFF",
+     "peak_contrast": 20.17,
+     "p90_contrast": 19.54,
+     "ink_pixels": 1249
+    },
+    {
+     "role": "eyebrow",
+     "size": "12 px, 500",
+     "y": [
+      414,
+      423
+     ],
+     "x": [
+      272,
+      460
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#006DA5",
+     "peak_contrast": 4.72,
+     "p90_contrast": 4.72,
+     "ink_pixels": 822,
+     "source": "#83C6FF",
+     "known_ink": null,
+     "reliability": "no measured ink colour for this source colour; peak = lower bound if no overshoot"
+    },
+    {
+     "role": "headline",
+     "size": "32 px, 600 (large)",
+     "y": [
+      454,
+      484
+     ],
+     "x": [
+      271,
+      722
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 4728,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "body",
+     "size": "16 px",
+     "y": [
+      520,
+      535
+     ],
+     "x": [
+      271,
+      528
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1100,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      582,
+      590
+     ],
+     "x": [
+      272,
+      298
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 126,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      606,
+      619
+     ],
+     "x": [
+      272,
+      790
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2364,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      628,
+      641
+     ],
+     "x": [
+      272,
+      773
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2162,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      680,
+      688
+     ],
+     "x": [
+      272,
+      360
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 409,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      704,
+      717
+     ],
+     "x": [
+      271,
+      790
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 2378,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      726,
+      739
+     ],
+     "x": [
+      271,
+      680
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 1711,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      778,
+      788
+     ],
+     "x": [
+      272,
+      353
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 358,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      802,
+      812
+     ],
+     "x": [
+      271,
+      408
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 569,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "label",
+     "size": "12 px",
+     "y": [
+      854,
+      862
+     ],
+     "x": [
+      271,
+      406
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 583,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "value",
+     "size": "15 px",
+     "y": [
+      878,
+      888
+     ],
+     "x": [
+      271,
+      464
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#2C3034",
+     "peak_contrast": 11.14,
+     "p90_contrast": 11.14,
+     "ink_pixels": 888,
+     "source": "#F4F7FA",
+     "known_ink": "#2C3034",
+     "known_ink_contrast": 11.14,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "note",
+     "size": "14 px",
+     "y": [
+      942,
+      954
+     ],
+     "x": [
+      271,
+      789
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 1992,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "note",
+     "size": "14 px",
+     "y": [
+      964,
+      973
+     ],
+     "x": [
+      271,
+      347
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 293,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    },
+    {
+     "role": "footer",
+     "size": "13 px",
+     "y": [
+      1033,
+      1045
+     ],
+     "x": [
+      271,
+      453
+     ],
+     "bg": "#E9EBEF",
+     "peak_ink": "#5D6875",
+     "peak_contrast": 4.75,
+     "p90_contrast": 4.75,
+     "ink_pixels": 732,
+     "source": "#B6C0CC",
+     "known_ink": "#5D6875",
+     "known_ink_contrast": 4.75,
+     "overshoot_pixels": 0,
+     "reliability": "exact"
+    }
+   ]
+  }
+ },
+ "masthead": {
+  "N1": [
+   263,
+   367,
+   105
+  ],
+  "N2": [
+   263,
+   366,
+   104
+  ],
+  "N3": [
+   263,
+   367,
+   105
+  ],
+  "N4": [
+   263,
+   367,
+   105
+  ],
+  "N5": [
+   263,
+   367,
+   105
+  ]
+ }
+}

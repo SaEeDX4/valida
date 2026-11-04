@@ -25,8 +25,11 @@ export const KEY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const DIGEST_PATTERN = /^[0-9a-f]{64}$/;
 export const MIN_KEY_BYTES = 32;
 export const MAX_KEY_BYTES = 128;
-/** Verify-only previous keys (rotation). */
-export const MAX_PREVIOUS_KEYS = 8;
+/*
+ * Verify-only previous keys (rotation): design §3.2 sets NO fixed maximum, so
+ * none is imposed on the number of keys (B7 r3 review). The configuration
+ * variable is bounded only as an input (its total length; env.js).
+ */
 
 const hmacHex = (key, domain, value) => crypto.createHmac('sha256', key).update(domain, 'utf8').update(String(value), 'utf8').digest('hex');
 

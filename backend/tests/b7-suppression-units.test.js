@@ -11,6 +11,7 @@ import {
   decodeKey,
   hexValuesMatch,
   keyCheckValue,
+  keyringFromConfig,
 } from '../src/modules/suppression/suppressionKeys.js';
 import { assessCoverage, createSuppressionGate, COVERAGE_REASONS } from '../src/modules/suppression/suppressionGate.js';
 import { createSuppressionOperations, SuppressionRefused, messageTokenFor } from '../src/modules/suppression/suppressionOperations.js';
@@ -119,6 +120,19 @@ describe('configuration — suppression variables (§4.2, §5)', () => {
       expect(message).not.toContain(KEY);
       expect(message).not.toContain(SECRET);
     }
+  });
+
+  it('B7 r3 (design §3.2 sets no fixed maximum): more than eight verify-only keys load; only the input length is bounded, and refused without echo', () => {
+    const many = Array.from({ length: 12 }, (_unused, index) => `p${index}:${Buffer.alloc(32, index + 1).toString('base64')}`);
+    const config = loadConfig({ ...base, SUPPRESSION_HMAC_KEY: KEY, SUPPRESSION_HMAC_KEY_ID: 'k2', SUPPRESSION_HMAC_PREVIOUS_KEYS: many.join(',') });
+    expect(config.suppression.previous.map((entry) => entry.keyId)).toEqual(many.map((item) => item.split(':')[0]));
+    expect(keyringFromConfig(config.suppression).lookupPairs('qa@x.test')).toHaveLength(13);
+    const oversized = Array.from({ length: 600 }, (_unused, index) => `q${index}:${SECRET}`).join(',');
+    expect(oversized.length).toBeGreaterThan(32_767);
+    const message = failure({ SUPPRESSION_HMAC_KEY: KEY, SUPPRESSION_HMAC_KEY_ID: 'k2', SUPPRESSION_HMAC_PREVIOUS_KEYS: oversized });
+    expect(message).toMatch(/SUPPRESSION_HMAC_PREVIOUS_KEYS: must be a comma-separated list .*at most 32,767 characters/);
+    expect(message).not.toContain(SECRET);
+    expect(message).not.toContain(KEY);
   });
 
   it('production still refuses candidate acknowledgements outright, with or without a suppression key (G-SUP; OD-2026-11-04-02 item 5)', () => {

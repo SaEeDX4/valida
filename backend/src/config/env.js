@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseMongoUri } from '../db/connectionString.js';
-import { KEY_ID_PATTERN, MAX_PREVIOUS_KEYS, decodeKey } from '../modules/suppression/suppressionKeys.js';
+import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
 /**
  * Centralised environment configuration — 15_DEVOPS_DEPLOYMENT.md sections
@@ -494,7 +494,8 @@ const operatorIds = emptyAsUnset(
  */
 export function parsePreviousSuppressionKeys(value) {
   const entries = value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
-  if (entries.length === 0 || entries.length > MAX_PREVIOUS_KEYS) return null;
+  // Design §3.2: no fixed maximum number of previous keys (the variable's length is the only bound).
+  if (entries.length === 0) return null;
   const parsed = [];
   for (const entry of entries) {
     const separator = entry.indexOf(':');
@@ -595,7 +596,8 @@ const baseSchema = z.object({
   // B7 — recipient suppression. See the section above.
   SUPPRESSION_HMAC_KEY: suppressionSecret('SUPPRESSION_HMAC_KEY', 512),
   SUPPRESSION_HMAC_KEY_ID: emptyAsUnset(z.string().regex(KEY_ID_PATTERN, { message: 'SUPPRESSION_HMAC_KEY_ID' }).optional()),
-  SUPPRESSION_HMAC_PREVIOUS_KEYS: suppressionSecret('SUPPRESSION_HMAC_PREVIOUS_KEYS', 8192),
+  // Input bound only (the Windows limit for one environment variable, 32,767 characters, about 400 keys): no key-count maximum.
+  SUPPRESSION_HMAC_PREVIOUS_KEYS: suppressionSecret('SUPPRESSION_HMAC_PREVIOUS_KEYS', 32_767),
   SUPPRESSION_OPERATOR_IDS: operatorIds,
   SUPPRESSION_LOOKUP_TIMEOUT_MS: z.coerce.number().int().min(100).max(10_000).default(2_000),
 });
@@ -670,7 +672,7 @@ const RULE_TEXT = {
     'must be 32-128 bytes of base64 (standard or URL-safe), generated with a CSPRNG (the value is never shown)',
   SUPPRESSION_HMAC_KEY_ID: 'must be 1-32 characters: lowercase letters, digits, "-" or "_", starting with a letter or digit',
   SUPPRESSION_HMAC_PREVIOUS_KEYS:
-    'must be a comma-separated list of at most 8 "<key id>:<base64 key>" pairs with distinct ids, each key 32-128 bytes (the value is never shown)',
+    'must be a comma-separated list of "<key id>:<base64 key>" pairs with distinct ids, each key 32-128 bytes, at most 32,767 characters in all (the value is never shown)',
   SUPPRESSION_KEY_ID_REQUIRED: 'is required when SUPPRESSION_HMAC_KEY is set',
   SUPPRESSION_KEY_REQUIRED: 'is set but SUPPRESSION_HMAC_KEY is not',
   SUPPRESSION_PREVIOUS_WITHOUT_CURRENT: 'is set but no current SUPPRESSION_HMAC_KEY is configured',

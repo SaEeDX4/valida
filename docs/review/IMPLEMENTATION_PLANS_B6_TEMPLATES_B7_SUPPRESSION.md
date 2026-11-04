@@ -86,7 +86,7 @@ Any cell not run stays **NOT RUN**, and the owner decides on each documented lim
 
 ### B.1 Preconditions
 
-**Status at B7 start (2026-11-04, OD-2026-11-04-01):** 1 and 2 are **met**. 3 is **pending** (the design details remain PROPOSED; the SUP-1 amendment is APPROVED, OD-2026-11-02-03; the key-copy location is AWAITING INPUT). 4 is **pending** (owner action; Claude never sees the key). 5 is **designed, PROPOSED** (design rev 7 §4.5.1 and SUP-22a–f), awaiting approval. Implementation of the B.2 scope therefore has **not** started; only the production start-up refusal of acknowledgements was added, which keeps G-SUP closed.
+**Status at B7 start (2026-11-04, OD-2026-11-04-01):** 1 and 2 are **met**. 3 is **pending** (the design details remain PROPOSED; the SUP-1 amendment is APPROVED, OD-2026-11-02-03; the key-copy location is AWAITING INPUT). 4 is **pending** (owner action; Claude never sees the key). 5 is **designed, PROPOSED** (design rev 8: §4.5.1, SUP-22a–g; with controlled recovery §4.2, SUP-23a–f), awaiting approval — consolidated in `docs/review/B7_SUPPRESSION_DECISION_PROPOSAL.md`. Implementation of the B.2 scope therefore has **not** started; only the production start-up refusal of acknowledgements was added, which keeps G-SUP closed.
 
 1. B6 is accepted.
 2. B7 is authorised separately.

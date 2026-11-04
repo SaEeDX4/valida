@@ -72,3 +72,14 @@
 ## 5. Coverage diagnostic (Doc 17 §§53–56; Doc 18 §142)
 
 Offline suite, `npm run test:coverage` (v8), 2026-11-04: lines 76.24 %, statements 75.47 %, functions 83.61 %, branches 75.69 %. This is a **diagnostic, not a threshold**. It excludes the real-database suite, and the operator scripts run as child processes are not instrumented (they show 0 % although their tests execute them). Doc 17 §55 areas: `application.notifications.js` 100 % lines, `application.validation.js` 97.65 %, `application.submission.js` 92.72 %, `localPrivateStorage.js` 89.3 %, `orphanReconciliation.js` 100 %, `stagedClose.js` 93.9 %, `serverTimeouts.js` 100 %, `env.js` 100 %.
+
+## 6. Recipient suppression (added with review package r2; OD-2026-11-04-02)
+
+| Control | Governing text | Tests | Status |
+| --- | --- | --- | --- |
+| Confirmed invalid recipients are not acknowledged again; acceptance, the internal notification and replay are untouched | Doc 14 §120; design rev 8.1 §3.2; SUP-1…15 | `db/b7-suppression-register.test.js` (20) | EX on MongoDB 8.0.23 (replica set, fail points) |
+| Fail closed on any key or coverage doubt; key-material integrity; verified rotation; controlled recovery; SUP-21 correction | Design §4.2, §4.4, §4.5.1; SUP-16, 18–23 | `db/b7-suppression-keys.test.js` (19), mutation-checked | EX |
+| Secrets never echoed or serialised; no address, digest, key or check value in logs, output or the register | Doc 13 §§112–121; SUP-6, SUP-22f | `b7-suppression-units.test.js` (16), `db/b7-suppression-cli.test.js` (2), SUP-6 | EX |
+| Production acknowledgements refused (G-SUP) | OD-2026-11-02-03 item 5; OD-2026-11-04-02 §4 | `b7-acknowledgement-gate.test.js` (5) | EX |
+
+The full SUP-to-test mapping is in `docs/review/B7_REVIEW_PACKAGE_R2.md` §7. Six fail-point cases report NOT RUN on a MongoDB server without `enableTestCommands`; that package §9 gives the optional Windows step that runs them.

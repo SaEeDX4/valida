@@ -3,11 +3,11 @@
 | | |
 | --- | --- |
 | Repository | `SaEeDX4/valida` on GitHub — **public**; remote `main` = `ec15048980c9e3e8134de4b3d7eeadc89b1aef96`; existing branches `a6-work`, `b1-work` … `b5-work`, `main`; **no `b6-work` on the remote** (checked 2026-11-03) |
-| Branch | **`b6-work`**, from `ec15048` — the existing naming convention. **One local commit** in Claude's sandbox clone holds the reviewed B6 changes. Its SHA is in the delivery note and the include-list header (a file cannot contain the hash of its own commit). B7 later goes on its own branch from the accepted `b6-work` |
+| Branch | **`b6-work`**, from `ec15048` — the existing naming convention. **Two local commits** in Claude's sandbox clone: `6da01e83958b3d886ca2518eb30382abcfde633d` (r11 — GPT verified its 334 changes) and, on top of it, the r12 documentation commit, whose SHA is in the delivery note and the include-list header (a file cannot contain the hash of its own commit). B7 later goes on its own branch from the accepted `b6-work` |
 | State | **Not pushed.** Pushed only after GPT's final recommendation, the owner's explicit B6 acceptance and the owner's authorisation, with a plain `git push origin b6-work` — never a force-push. Merging into `main` is a separate owner step |
 | Method | Every path added by an explicit list (`git add --pathspec-from-file`); no `git add -A` or `git add .`; no reset; `.gitignore` unchanged. After the commit, every published file is checked against the private original: identical, or equal to the original with rules P1–P3 applied |
 | The owner's own clones | The owner's original workspace holds uncommitted work: `b6-work` is **not** checked out or pulled there; it is fetched into a separate clone |
-| Counts | **334 paths published** (added or modified against `ec15048`; nothing deleted), of which **6 are sanitized copies**; **46 withheld** (W1–W5); **32 not published because `.gitignore` excludes them** (`*.log`, Doc 15 §§19–21) |
+| Counts | **335 paths published** (added or modified against `ec15048`; nothing deleted), of which **6 are sanitized copies**; **46 withheld** (W1–W5); **32 not published because `.gitignore` excludes them** (`*.log`, Doc 15 §§19–21) |
 | Never published | `.env` files (none is present; `backend/.env` is ignored), credentials, `node_modules`, database files, mailbox content |
 
 Private originals — the unsanitized documents, the withheld files and the ignored logs — stay in the review packages and are cited by path and SHA-256 below. Publishing any withheld file later is the owner's choice, as a separate commit.
@@ -35,14 +35,14 @@ Private originals — the unsanitized documents, the withheld files and the igno
 | `docs/qa/b6-3/WINDOWS_EVIDENCE_R6.md` | P1 ×1 | `afb4ad7c4a20dd4f3e71237db873554736420b1e350a593fef5f9ba48ff4d5b1` | `6d8451ff031f2b7fcdf73efe7a3d330f417e628272a8f24762d7ecb62a76ee6c` |
 | `docs/qa/b6-stage2/STAGE2_IMPLEMENTATION_REPORT.md` | P3 ×1 | `61b8b2c1e7c5e9cab7a213138bf352bebab02c62384e4b44cb27dcf789fa9cd0` | `3b65c6fb4e0a291d5b228837549add5c03e0f0e251c11c1282f40c18a0f600b6` |
 | `docs/qa/b6-stage2/WINDOWS_EVIDENCE_ADDENDUM_2026-10-27.md` | P1 ×3 | `cb507dba44438e8d3dcb51b12b7a51e98b85c0690226ae0f7c8dac184a8685ce` | `a3a934a0bb0476a4b382cbdd03b569af45b331589a33c923bfd2537a01d0c96f` |
-| `docs/qa/b6-stage3/LIVE_TEST_PROPOSAL_R1.md` | P2 ×1 | `c684b2e52c503aa5100c9c869fd8d696a59028774d287b8e6c2e61dfe83b09b2` | `15f9c9dbbe05ea9460e2a9e50cd00125292dae664b895bd436920480aab3cf3a` |
-| `docs/review/OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md` | P2 ×2 | `2f2e98ab31f8830f05128403f0059e6a9876fc9953572eec0b75e08ae5486125` | `60a4266486942bebd95a54f4286e9210e33fb4b6afc378888e2f186743cfb0bc` |
+| `docs/qa/b6-stage3/LIVE_TEST_PROPOSAL_R1.md` | P2 ×1 | `4933b416c63b3e49af3fa148dd1ed9020b8527ecad890a821d917b392b09534c` | `1044fc777f9c3a31e97b597a41d4d74362205a56c2caaa39ee796c2d889c5b3f` |
+| `docs/review/OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md` | P2 ×2 | `6e945df4a155ff2471a2554eb84e45b06b253de6a716884f515b20c3ac933833` | `00dd8cee4aa1792bc9f2346204b0b1e6a3292e43c7f584b819e3e32bf4ff401f` |
 
 Manifests inside `docs/` that describe the private review packages (for example `docs/qa/b6-stage2/STAGE2_DELTA_MANIFEST.sha256`) list the private originals, so for these files their hashes differ from the published copies by design.
 
 ## Sensitive-data check of the publication tree
 
-Run on the tree of the `b6-work` commit (648 files) — the patterns and every remaining hit are in the delivered check log.
+Run on the tree of the `b6-work` commit (649 files) — the patterns and every remaining hit are in the delivered check log.
 
 | Check | Result |
 | --- | --- |

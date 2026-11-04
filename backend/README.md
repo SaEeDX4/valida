@@ -2019,8 +2019,8 @@ Implemented here — and nothing more:
   `docs/qa/B6_EVIDENCE_ADDENDUM.md`.
   With `TRANSACTIONAL_EMAIL_PROVIDER=none` (the default) nothing is sent. The
   backend records relay **acceptance** only: Titan offers no webhook or
-  delivery API, so bounces are monitored manually in the sending mailbox (draft procedure,
-  not approved: `docs/operations/B6_BOUNCE_PROCEDURE_DRAFT.md`); no
+  delivery API, so bounces are monitored manually in the sending mailbox (procedure
+  approved 2026-11-03, OD-2026-11-03-01: `docs/operations/B6_BOUNCE_PROCEDURE_DRAFT.md`); no
   suppression list, no complaint processing, no scheduler; no notification
   index (the retry scan is bounded by `--limit` and `maxTimeMS`). **No
   Sent copy of automated messages is kept** (Titan stores none for SMTP; a copy design is

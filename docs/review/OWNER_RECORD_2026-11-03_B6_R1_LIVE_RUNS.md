@@ -119,3 +119,33 @@ The per-message masked recipients are in the run JSON copies GPT reviewed (U4); 
 | E10 | Optional, not a B6 criterion |
 | E11 | Credential revoked (U2); **configuration cleanup not confirmed** (U3) — the one remaining item |
 | E12 | Accepted owner reports (U8) — not requested |
+
+## 7. Update (r12, 2026-11-03, 22:41 America/Vancouver)
+
+Source: the owner's handoff "Complete the final B6 evidence reconciliation and prepare the B7 handoff" (message text; no byte copy held). **Corrections to §6 and to the r11 package are listed here; §1–§6 are kept as written.**
+
+### 7.1 Provenance classes used from here on
+
+| Class | Meaning | Held in this session? |
+| --- | --- | --- |
+| **CLAUDE-INSPECTED** | A file Claude opened and checked (fixtures, sandbox logs, the owner's Outlook classic screenshots EV-S3-OC1…OC5, the Windows logs) | Yes — in the review packages, with SHA-256 |
+| **GPT-INSPECTED** | A received message or screenshot GPT examined directly | No |
+| **PASTED, GPT-REVIEWED** | Text the owner pasted (the two run JSON contents) and GPT reviewed — not byte-verified files | No |
+| **OWNER-REPORTED** | The owner's own observation, with no artefact held here | No |
+
+### 7.2 New confirmations and evidence
+
+| # | Statement | Recorded as |
+| --- | --- | --- |
+| V1 | Test configuration cleanup after R1 confirmed | **OWNER-REPORTED: done** ([OD-2026-11-03-01](OWNER_DECISION_2026-11-03-01_B6_BOUNCE_PROCEDURE_APPROVAL.md) §3). With U2 (credential revoked), item **E11 is closed** |
+| V2 | The corrected bounce procedures approved, including planned absence | **APPROVED** — OD-2026-11-03-01; B6-2 closed |
+| V3 | "Received Outlook screenshots are Outlook Classic evidence, not Outlook Web. B-OC is therefore not wholly untested." | **Correction of r11.** The owner's screenshots of the received Outlook.com messages (run A acknowledgement, run B internal notification) were taken in **Outlook classic** with the test mailbox added: cell **B-OC**, GPT-INSPECTED. The r11 package wrongly treated the received Outlook.com messages as Outlook on the web evidence. Outlook on the web (**B-OW**) has **no** rendering evidence; what is known at Outlook.com is receiving-service behaviour — delivery to Junk, SCL 6, authentication passing (OWNER-REPORTED, L5, L7) |
+| V4 | "Both Gmail Web messages have rendering screenshots." | Cell **B-GW**, both templates (run A internal notification, run B acknowledgement): **owner screenshots, GPT-INSPECTED** |
+| V5 | "GPT inspected the received Gmail acknowledgement: no candidate name, no candidate address in the message bodies, and only the inline logo attachment." | **GPT-INSPECTED**, run B acknowledgement at Gmail: no candidate name and no candidate address in the message bodies; the only attachment is the inline logo. Recorded at exactly that scope — the finding does not state the `To` header's display name, `Reply-To` or `Auto-Submitted` |
+| V6 | "The approved R1 recipient assignments are established facts, not assumptions." | **Established:** the §6.2 assignment (run A: internal → Gmail, acknowledgement → Outlook.com; run B: internal → Outlook.com, acknowledgement → Gmail) is the **approved R1 assignment**. The r11 delivery note's word "assumption" was wrong; the records state it as fact |
+| V7 | GPT verified all 412 cumulative files and all 334 publication changes (r11; commit `6da01e83958b3d886ca2518eb30382abcfde633d`) | **GPT-REPORTED VERIFICATION** of the r11 packages and the r11 publication commit |
+
+### 7.3 Status of the §4 items after r12
+
+All items are closed or need nothing further from the owner: E1, E2 (pasted, GPT-reviewed); E3–E5, E7, E9, E12 (owner-reported or accepted); E6 (GPT-INSPECTED body and attachment scope, V5); E8 (owner-stated build); E10 (optional, not B6); **E11 closed** (V1). The remaining Stage 3 items are reconciled in [`B6_ACCEPTANCE_CHECKLIST.md`](B6_ACCEPTANCE_CHECKLIST.md) §0.
+

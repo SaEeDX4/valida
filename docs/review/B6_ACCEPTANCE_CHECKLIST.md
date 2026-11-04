@@ -1,12 +1,73 @@
-# B6 acceptance checklist — what remains for B6, and what is production / B7 work
+# B6 acceptance checklist — final (r12, 2026-11-03)
+
+> **§0 is the final checklist.** §1–§3 below are kept unchanged as the history of r1–r11; where they differ, §0 applies.
 
 | | |
 | --- | --- |
 | Milestone | Release B → **B6 — Notification Integration** (Doc 18 §§133–138) |
-| Status | **B6 NOT ACCEPTED.** B7 has not started. The B7 body-discard issue is **OPEN**. The real vacancy is **DRAFT**. **r10 (2026-11-03):** the gate-by-gate reconciliation and the remaining owner actions are in [`B6_ACCEPTANCE_PACKAGE_R10.md`](B6_ACCEPTANCE_PACKAGE_R10.md); the R1 live runs are recorded, owner-reported, in [OR-2026-11-03-01](OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md). |
+| Status | **B6 NOT ACCEPTED** until GPT's final recommendation and the owner's explicit acceptance — **final state in §0 (r12)**. B7 has not started. The B7 body-discard issue is **OPEN**. The real vacancy is **DRAFT**. **r10 (2026-11-03):** the gate-by-gate reconciliation and the remaining owner actions are in [`B6_ACCEPTANCE_PACKAGE_R10.md`](B6_ACCEPTANCE_PACKAGE_R10.md); the R1 live runs are recorded, owner-reported, in [OR-2026-11-03-01](OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md). |
 | Basis | Decision package rev 16; **OD-2026-11-02-03** (D-1, D-3 approved; D-2 in part; R1 plan only; Narrator; ACK appearance owner-accepted — [record](OWNER_DECISION_2026-11-02-03_B6_APPROVALS_D1_D3_D2_D4.md)); **OD-2026-11-02-02** (D-6 approved, [record](OWNER_DECISION_2026-11-02-02_B6_D6.md)); owner decisions OD-2026-10-25-01, OD-2026-10-26-01, OD-2026-10-26-02, OD-2026-10-26-03 (Stage 2 authorisation) and OD-2026-10-27-01 (the derived logo, [record](OWNER_DECISION_2026-10-27-01_B6_LOGO_ASSET.md)), the latter **qualified** by owner feedback OF-2026-10-27-01 (the black field rejected on a light message background, [record](OWNER_FEEDBACK_2026-10-27_B6_LOGO_LIGHT_RENDERING.md)); owner record OR-2026-11-01-01 (Stage 3 offline Outlook classic authorisation scope, owner-reported checks, the C2 preference — [record](OWNER_RECORD_2026-11-01_B6_STAGE3_OUTLOOK_OFFLINE.md)); **OD-2026-11-02-01** (C2 masthead, removal of the header label, P-04 colours — APPROVED; sandbox implementation AUTHORISED — [record](OWNER_DECISION_2026-11-02-01_B6_C2_P04.md)). **Remaining blockers in one list:** [`B6_REMAINING_BLOCKERS.md`](B6_REMAINING_BLOCKERS.md) |
 | Approval sheet | [`OWNER_APPROVAL_SHEET_B6_EMAIL.md`](OWNER_APPROVAL_SHEET_B6_EMAIL.md) collects, on one page, the identity amendment, both email texts, the timestamp option and the logo recommendation (B6-1, B6-4, B6-5). Its six choices were approved on 2026-10-26 ([`OWNER_DECISION_2026-10-26-02_B6_APPROVALS.md`](OWNER_DECISION_2026-10-26-02_B6_APPROVALS.md)). |
 | Rule | **Four separate permissions:** design approval, runtime authorisation, live-email authorisation and final B6 acceptance. None implies another. Selecting Concept A does not accept B6. |
+
+
+## 0. Final checklist (r12, 2026-11-03)
+
+**Provenance** ([OR-2026-11-03-01 §7.1](OWNER_RECORD_2026-11-03_B6_R1_LIVE_RUNS.md)): **CLAUDE-INSPECTED** — files held in the review packages with SHA-256. **GPT-INSPECTED** — received messages or screenshots GPT examined, not held here. **PASTED, GPT-REVIEWED** — the run JSON contents, not byte-verified files. **OWNER-REPORTED** — the owner's observation, no artefact held here. TEST / SOURCE / SIMULATION as before. One never stands in for another.
+
+### 0.1 The checklist items
+
+| # | Item | Status | Evidence |
+| --- | --- | --- | --- |
+| B6-1 | Titan amendments AMD-TITAN-01…05 | **APPROVED** | OD-2026-10-26-02; OD-2026-11-02-03 |
+| B6-2 | Bounce procedure, English and Persian | **APPROVED** — the complete r11 texts, including planned absence and the 24-hour manual review | [OD-2026-11-03-01](OWNER_DECISION_2026-11-03-01_B6_BOUNCE_PROCEDURE_APPROVAL.md). Backup monitor and unexpected absence stay production prerequisites; the log location is conditional |
+| B6-3 | DEV-B6-04 with SUP-1 (Doc 14 §120 interim; G-SUP closed) | **APPROVED** | OD-2026-11-02-03 |
+| B6-4 | Copy of both emails, timestamp, subject rule | **APPROVED** | OD-2026-10-26-02 |
+| B6-5 | Specification: C2 masthead, `CAREERS` removed, P-04 colours | **APPROVED** | OD-2026-11-02-01 |
+| B6-6 | `b6-3` implementation, T-01…T-13 | **DONE** | TEST, J1 / J2; [b6-3 report](../qa/b6-3/B6-3_IMPLEMENTATION_REPORT.md) |
+| B6-7 | Windows + MongoDB regression of `b6-3` | **DONE** | EV-B6-3-W1, CLAUDE-INSPECTED original log `f1b4ee…e897`: offline 2226 passed / 5 skipped; B6 460; database 145; B6 database 16; rehearsal and cleanup 17; indexes 6/6; `verify:b6` exit 2 (provider gate pending by design) |
+| B6-8 | Stage 3: independent review, client matrix, privacy on received mail | **Reconciled in §0.2**; open only the items in §0.3 | Independent review: GPT verified all 412 r11 cumulative files and all 334 publication changes (GPT-REPORTED VERIFICATION) |
+| B6-9 | Evidence package and GPT review | Package READY FOR GPT REVIEW ([final package](B6_FINAL_REVIEW_PACKAGE.md)); **GPT's final recommendation pending** | — |
+| B6-10 | Explicit owner acceptance; push authorisation | **Pending** | Local commits on `b6-work` exist in Claude's sandbox clone; **not pushed** ([manifest](B6_PUBLICATION_MANIFEST.md)) |
+
+**Live R1** (runs A `920d6396`, B `7e2ac970`; three mailboxes, four messages, sender `notifications@cybervalida.com`; approved assignment — run A internal → Gmail, acknowledgement → Outlook.com; run B internal → Outlook.com, acknowledgement → Gmail): run JSON contents PASTED, GPT-REVIEWED (every automated check and lifecycle step passed; two submissions per run; nothing extra on replay; synthetic records and files removed); receipt Gmail Inbox / Outlook.com Junk, SPF / DKIM / DMARC (and CompAuth at Outlook.com) pass, SCL 6 — OWNER-REPORTED; no bounce at the owner's check; test credential revoked; test configuration restored — OWNER-REPORTED.
+
+### 0.2 Stage 3 against the governing requirements
+
+Governing text: implementation plans §A.4 (matrix: Gmail web and mobile; Outlook classic on Windows; Outlook on the web; Apple Mail on macOS and iOS; light and dark; images on and off; 320, 390 and 600 px; long titles and identifiers; 200 % text; reading order; the plain-text part); Stage 3 plan §4 (both templates in every required client), §7 (C1–C14), §9 (coverage not available), §10 (exit: every required cell PASS for both templates, or NOT RUN / N/A with the owner's decision on that limitation; no not-acceptable difference open; C13 passed on a received INT); copy proposal §4 item 2 (privacy rule).
+
+| # | Requirement (source) | Evidence (provenance) | Status |
+| --- | --- | --- | --- |
+| S1 | **Outlook classic, INT** (§4; A1 + B) | A1: LONG fixture, EV-S3-OC5 — C2, C4 (every visible line ≥ 4.5 : 1), C7 PASS (CLAUDE-INSPECTED); narrow window and high zoom = ACCEPTED DEVIATION D-6. B: run B internal notification received in Outlook classic (GPT-INSPECTED screenshots) | **MET** (with D-6) |
+| S2 | **Outlook classic, ACK** (§4; A1 + B) | A1: maximized, 100 %, light and dark — OWNER-REPORTED, accepted (OD-2026-11-02-03); C4 derived from the measured colour pairs. B: run A acknowledgement received in Outlook classic (GPT-INSPECTED screenshots) | **MET** |
+| S3 | **Outlook classic, plain-text part and reading order** (§A.4; C9, C10, both templates) | C9 plain-text view and C10 Windows Narrator — OWNER-REPORTED, accepted; SOURCE J8 S3 / S6; SIMULATION accessibility tree | **MET** (owner-reported) |
+| S4 | **Outlook classic, dark mode, INT template on `b6-3`** (§A.4 light and dark; C5) | ACK dark: OWNER-REPORTED, accepted. INT (LONG) dark on `b6-3`: **no screenshot or report in the records held here** (EV-S3-OC5 is light; the dark captures EV-S3-OC1 are of `b6-2`) | **Q1 — GPT to confirm** from the accepted visual reports or the B-OC screenshots (§0.3) |
+| S5 | **Images off** (§A.4; C3) | SOURCE J8 S7: every plain-text line is in the HTML; the image carries only the logo, alt "Valida". SIMULATION J6: images not loaded. No client observation; whether Outlook classic can block an embedded (CID) picture was not established | **L1 — owner decision**: record C3 as N/A with that reason (§9 "'Images off' for embedded images … N/A with the reason") |
+| S6 | **200 % text** (§A.4; C8, plan §11.4) | Whole-message zoom in Outlook classic: D-6. Text-only resizing: not established that Outlook classic offers it; SIMULATION J6 text-200 shows no clipping | **L2 — owner decision**: record text-only resizing in Outlook classic as N/A, reason as stated |
+| S7 | **Outlook on the web, INT and ACK** (§A.4; §4: A2 + B) | Receiving-service behaviour at Outlook.com: both messages delivered to Junk, SCL 6, authentication passing (OWNER-REPORTED). **No Outlook on the web rendering** — the received-message screenshots are Outlook classic (S1, S2). A2 (fixture dragged into Outlook on the web): NOT RUN | **L3 — owner decision**, or one look at the two existing messages in Outlook on the web (no send) |
+| S8 | **Gmail web, INT and ACK** (§4: B) | Run A internal notification and run B acknowledgement: rendering screenshots (GPT-INSPECTED); SPF / DKIM / DMARC pass on both originals (OWNER-REPORTED) | **MET** |
+| S9 | **Gmail app, Android, INT and ACK** (§4: B) | Both messages PASS — OWNER-REPORTED, accepted | **MET** (owner-reported) |
+| S10 | **Apple Mail macOS** (§A.4; A1 + B), **Apple Mail iOS** and **Gmail app iOS** (§4: B), and a **320 px-class phone** (§A.4; §9) | NOT RUN | **L4 — owner decision**: device availability (plan §9 "Gmail web and apps, iOS Mail … NOT RUN"; "320 px on a real device — NOT RUN if no device") |
+| S11 | **Long titles and identifiers** (§A.4; C7) | A1-OC LONG: C7 PASS (CLAUDE-INSPECTED). A delivered LONG message is not available with the live procedure — plan §4 defines LONG as A1 / A2 only | **MET** for A1; A2 falls under L3 |
+| S12 | **Privacy on a received internal notification** (§10 exit; C13 INT; copy proposal §4 item 2) | Run A internal original at Gmail: no candidate data — OWNER-REPORTED (the owner's inspection); TEST T-07 (six unique markers, real adapter, local SMTP) | **MET** — the §10 exit criterion |
+| S13 | **Privacy on a received acknowledgement** (C13 ACK: the address only as recipient, no display name) | Run B acknowledgement at Gmail, GPT-INSPECTED: no candidate name and no candidate address in the message bodies; the only attachment is the inline logo. TEST T-07: as sent, the address only in `To` and the envelope, no display name | Body and part scope **MET**. The `To` display-name element on the received message: **Q2 — GPT to confirm** from the original it inspected |
+| S14 | **Headers and structure on received mail** (C12: From, Reply-To, Auto-Submitted, MIME tree, one image part, no link or remote resource) | One image part only (GPT-INSPECTED, S13); DMARC pass on all three inspected originals, so the From domain aligned (OWNER-REPORTED); TEST T-08 / T-09 and SOURCE J8 S2 / S4 on the sent bytes | **Q2 — GPT to confirm** `Reply-To` and `Auto-Submitted` from the originals it inspected |
+| S15 | **Titan webmail (`hr@`)** | Not delivered there under R1 | Not required — outside the §A.4 matrix (plan §3, §5) |
+
+### 0.3 Unresolved — only these
+
+| # | Kind | Item | Closes with |
+| --- | --- | --- | --- |
+| **Q1** | GPT confirmation | INT template in Outlook classic, dark mode, on `b6-3` (S4) | GPT's record: the accepted visual reports or the B-OC screenshots show it. If neither does: one offline look at the existing LONG fixture in dark mode (no send), or an owner decision |
+| **Q2** | GPT confirmation | Received-header values not recorded here: the acknowledgement's `To` display name (S13); `Reply-To` and `Auto-Submitted` (S14) | GPT's record of the originals it inspected. If not covered: an owner decision accepting the TEST evidence (T-07, T-09) for those values |
+| **L1** | Owner decision | C3 images off: N/A with the stated reason (S5) | One line |
+| **L2** | Owner decision | C8 text-only resizing in Outlook classic: N/A with the stated reason (S6) | One line |
+| **L3** | Owner decision | Outlook on the web rendering, both templates, and the A2 file check (S7, S11) | One line — or the no-send observation |
+| **L4** | Owner decision | Apple Mail macOS, Apple Mail iOS, Gmail app iOS, a 320 px-class phone — device availability (S10) | One line naming the devices not available |
+| **L5** | Owner decision | R1 role-isolation limit: three owner-operated mailboxes, one of which received an HR-role and a candidate-role message | One line |
+| **RV** | Review and acceptance | GPT's final recommendation; the owner's explicit B6 acceptance; authorisation to push `b6-work` | After the above |
+
+**No mandatory blocker remains** beyond these. Each L item is a single cell or check, permitted by plan §9–§10 and implementation plans §A.4 ("Any cell not run stays NOT RUN, and the owner decides on each documented limitation"); none waives a check that has evidence.
 
 ## 1. Already complete (evidence as labelled; not re-run)
 

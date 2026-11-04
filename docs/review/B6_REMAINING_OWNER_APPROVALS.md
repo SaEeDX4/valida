@@ -23,6 +23,8 @@ Not in this sheet, statuses unchanged: the rest of the Concept A specification (
 
 **Added 2026-11-03 (r11) — correction ([OD-2026-11-02-03 §5](OWNER_DECISION_2026-11-02-03_B6_APPROVALS_D1_D3_D2_D4.md)):** item 2 is a **24-hour manual review of uncertain outcomes**, explicitly approved by the owner; it is not a standing permission to re-send. Both procedures corrected.
 
+**Added 2026-11-03 (r12) — [OD-2026-11-03-01](OWNER_DECISION_2026-11-03-01_B6_BOUNCE_PROCEDURE_APPROVAL.md):** **B6-2 APPROVED** — both complete procedure texts (r11), including planned absence. The compiled texts below are history.
+
 **Added 2026-11-02 (r6):** C2, the removal of `CAREERS` and P-04 are now **APPROVED** (OD-2026-11-02-01). All open owner decisions, with batched wording, are listed in [`B6_REMAINING_BLOCKERS.md`](B6_REMAINING_BLOCKERS.md). The compiled texts below are unchanged.
 
 **Added 2026-10-27 (r4), not compiled here:** the proposed decision texts for findings F-01 (logo treatment C2 or C3, with exact asset hashes), F-04 (P-04a / P-04b) and F-03 (only after check A-03) are in [`F01-F04_FINDINGS_AND_PROPOSAL.md` §8](../qa/b6-stage3/F01-F04_FINDINGS_AND_PROPOSAL.md) — **PROPOSED**, none approved. The compiled texts below are unchanged.

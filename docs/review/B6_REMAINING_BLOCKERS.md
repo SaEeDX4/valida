@@ -1,20 +1,19 @@
-# B6 — what remains (as of r11, 2026-11-03)
+# B6 — what remains (as of r12, 2026-11-03)
 
 | | |
 | --- | --- |
-| Purpose | The short list of what still stands between `b6-3` and B6 acceptance. The full reconciliation is [`B6_FINAL_REVIEW_PACKAGE.md`](B6_FINAL_REVIEW_PACKAGE.md) (r11; it supersedes the r10 package). |
-| Changes since r10 | Owner confirmations: no bounce in `notifications@` at the time of the check; test credential revoked; configuration cleanup **not** confirmed. GPT reviewed the pasted run JSON contents (recorded as pasted copies). Corrections: the 24-hour item is a manual review, not a permission to re-send; R1 = three mailboxes, four messages, sender `notifications@cybervalida.com`, cross-provider assignment; Outlook classic and Outlook on the web evidence kept apart; C9 / C10 accepted owner reports; sanitized publication copies; Git state stated exactly. No code or test change; no test rerun; no email; nothing pushed. |
-| Not reopened | Every settled approval; F-03 cosmetic design |
+| Purpose | The short list. The final checklist with the Stage 3 reconciliation is [`B6_ACCEPTANCE_CHECKLIST.md`](B6_ACCEPTANCE_CHECKLIST.md) §0; the package is [`B6_FINAL_REVIEW_PACKAGE.md`](B6_FINAL_REVIEW_PACKAGE.md) (r12). |
+| Changes since r11 | B6-2 **approved** and the test configuration cleanup **confirmed** (OD-2026-11-03-01). Evidence provenance corrected: received Outlook screenshots = Outlook classic (B-OC); Gmail web rendering screenshots for both messages; GPT's inspection of the received Gmail acknowledgement; the approved R1 assignment recorded as fact. No code or test change; no test rerun; no email; nothing pushed. |
 | Status kept | **B6 NOT ACCEPTED.** G-SUP **CLOSED**. G-COPY **PROPOSED**. B7 body-discard issue **OPEN**. Real vacancy **DRAFT**. No further live email is authorised. |
 
 ## A. Unresolved — only these
 
-| # | Kind | Item | Who |
-| --- | --- | --- | --- |
-| **O1** | Mandatory confirmation | Configuration cleanup in the owner test workspace (README step 6) | Owner |
-| **O2** | Owner decision | B6-2: item 5 and the complete English and Persian bounce procedures (r11) | Owner |
-| **O3** | Owner decision | Stage 3 cells without evidence, and the R1 role-isolation limit, accepted as documented limitations (final package §5) | Owner |
-| **O4** | Review and acceptance | GPT's final recommendation; explicit B6 acceptance; authorisation to push `b6-work` | GPT; owner |
+| # | Kind | Item |
+| --- | --- | --- |
+| **Q1** | GPT confirmation | INT template in Outlook classic, dark mode, on `b6-3` |
+| **Q2** | GPT confirmation | Received-header values: the acknowledgement's `To` display name; `Reply-To`; `Auto-Submitted` |
+| **L1–L5** | Owner decisions, one cell or check each | C3 images off; C8 text-only resizing in Outlook classic; Outlook on the web; device availability (Apple Mail macOS and iOS, Gmail iOS, 320 px phone); R1 role isolation |
+| **RV** | Review and acceptance | GPT's final recommendation; explicit B6 acceptance; authorisation to push `b6-work` |
 
 ## B. Live email
 

@@ -83,3 +83,15 @@ Offline suite, `npm run test:coverage` (v8), 2026-11-04: lines 76.24 %, statemen
 | Production acknowledgements refused (G-SUP) | OD-2026-11-02-03 item 5; OD-2026-11-04-02 §4 | `b7-acknowledgement-gate.test.js` (5) | EX |
 
 The full SUP-to-test mapping is in `docs/review/B7_REVIEW_PACKAGE_R2.md` §7. Six fail-point cases report NOT RUN on a MongoDB server without `enableTestCommands`; that package §9 gives the optional Windows step that runs them.
+
+## 7. Recipient suppression — r3 review corrections (design rev 8.2 §9; PROPOSED)
+
+| Control | Governing text | Tests | Status |
+| --- | --- | --- | --- |
+| A consistent authorisation view: no key move or alias prune between the two send-path reads yields an acknowledgement to a suppressed address, for any sender keyring or read order | Design §3.2, §4.4, §9.1; SUP-24 | `db/b7-suppression-consistency.test.js` (18 interleavings, 2 controls, 1 alias case); mutation-checked (alias replaced; quiet period removed; coverage from the primary lookup only) | EX on MongoDB 8.0.23 (replica set) |
+| Bounded, resumable `rekey` / `recover-key`: an unresolved prefix never blocks later entries; interruption and resumption | Design §3.4, §4.2, §9.2; SUP-25 | `db/b7-suppression-consistency.test.js` (2; fail points); mutation-checked (cursor ignored) | EX |
+| No fixed maximum on verify-only keys; only the input length is bounded, refused without echo | Design §3.2 step 2, §9.3 | `b7-suppression-units.test.js` (1) | EX |
+| History cap on the duplicate-report and re-apply paths (dry run and `--apply`); alias pruning writes no history | Design §3.1, §9.5; SUP-13b | `db/b7-suppression-consistency.test.js` (3); mutation-checked (cap check removed) | EX |
+| The SUP-6 data-inventory entry lists every stored field; undecided production inputs marked AWAITING | Doc 13 §§197–198; design §9.4; SUP-6 | `b7-suppression-inventory.test.js` (5); mutation-checked (a field removed from the inventory) | EX |
+
+Results and the mapping: `docs/review/B7_REVIEW_PACKAGE_R3.md`.

@@ -2064,7 +2064,8 @@ enhanced status of a refusal (`5.1.1` …) is stored on the channel as
 
 **Configuration** (secrets; `.env.example`): `SUPPRESSION_HMAC_KEY`,
 `SUPPRESSION_HMAC_KEY_ID`, `SUPPRESSION_HMAC_PREVIOUS_KEYS` (verify-only keys
-during a rotation), `SUPPRESSION_OPERATOR_IDS`, `SUPPRESSION_LOOKUP_TIMEOUT_MS`.
+during a rotation — any number, at most 32,767 characters in all),
+`SUPPRESSION_OPERATOR_IDS`, `SUPPRESSION_LOOKUP_TIMEOUT_MS`.
 Values are never echoed. **Outside production acknowledgements now need a
 configured and registered key**, or they fail closed. **In production
 `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` is still refused outright**
@@ -2087,8 +2088,8 @@ npm run ops:notifications:suppression -- list [--state ACTIVE|LIFTED] [--limit N
 npm run ops:notifications:suppression -- check --application <id>
 npm run ops:notifications:suppression -- lift --suppression <id> --reason ADDRESS_CONFIRMED_VALID --evidence-ref <ref> --apply --operator <op>
 npm run ops:notifications:suppression -- forget --application <id> --reason PRIVACY_REQUEST --evidence-ref <ref> --apply --operator <op>
-npm run ops:notifications:suppression -- rekey --apply --operator <op>
-npm run ops:notifications:suppression -- recover-key --key-id <lost id> --reason LOST --expected-count <n> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable --apply --operator <op>
+npm run ops:notifications:suppression -- rekey [--limit N] [--after <id>] --apply --operator <op>
+npm run ops:notifications:suppression -- recover-key --key-id <lost id> --reason LOST --expected-count <n> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable [--limit N] [--after <id>] --apply --operator <op>
 npm run ops:notifications:suppression -- recover-key --key-id <lost id> --complete --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable --apply --operator <op>
 npm run ops:notifications:suppression -- resolve-unrecoverable --key-id <id> --expected-count <n> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable --apply --operator <op>
 ```
@@ -2097,7 +2098,21 @@ npm run ops:notifications:suppression -- resolve-unrecoverable --key-id <id> --e
 record). `rekey` is verified rotation only (complete coverage; every entry
 confirmed under its old key). A lost or untrusted key is handled only by
 `recover-key` (owner decision; the id becomes permanently untrusted;
-acknowledgements stay blocked until `--complete`). The register's four indexes
+acknowledgements stay blocked until `--complete`).
+
+**Rev 8.2 (B7 r3 review; design §9).** A key move keeps the old lookup as an
+alias; aliases are pruned by `rekey` (and, for that key, by `recover-key
+--complete`) only after 10 minutes, so the two send-path reads can never see an
+entry vanish between them. Remove a previous key from the configuration only
+when `coverage` shows it `safeToRetire` (no `ACTIVE` entry and no alias);
+`--complete` refuses with `ALIASES_PENDING` until its aliases are pruned.
+`rekey` and `recover-key` examine at most `--limit` entries per run, in id
+order: when the output's `nextAfter` is not `null`, run again with
+`--after <nextAfter>`; after an unknown write, resume with the `--after` the
+error message prints. Entries that stay unresolved are reported in every run and
+never hold the later ones back.
+
+The register's indexes
 are part of `npm run db:indexes:apply`; `add` refuses (`INDEXES_MISSING`) until
 the unique one exists. The live smoke run (`ops:notifications:smoke`) creates a
 synthetic key of its own for its disposable test database and removes its

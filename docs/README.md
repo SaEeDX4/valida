@@ -23,6 +23,7 @@ never evidence that the feature works.
 | Document | Purpose | Milestone |
 | --- | --- | --- |
 | [`A6_WINDOWS_QA_MATRIX.md`](A6_WINDOWS_QA_MATRIX.md) | The browser, device, screen-reader, zoom, reduced-motion and Lighthouse checks that automated tests cannot perform, with setup steps and result tables | A6 |
+| [`privacy/DATA_INVENTORY.md`](privacy/DATA_INVENTORY.md) | The personal-data and provider inventory entries for recipient suppression (SUP-6; Doc 13 §§197–198). Undecided production inputs are marked AWAITING INPUT | B7 |
 
 The canonical documents 00-18 are maintained outside the repository. Copying
 them in is a documentation decision for Saeed, not an implementation

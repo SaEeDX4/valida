@@ -304,6 +304,16 @@ export function checkNotificationSettings(settings, { isProduction }) {
     if (!settings.fromAddress) {
       problems.push({ variable: 'TRANSACTIONAL_FROM_ADDRESS', rule: 'ACKNOWLEDGEMENT_REQUIRES_FROM' });
     }
+    // B7 — gate G-SUP (Doc 14 section 120; OD-2026-10-26-01 D2a; OD-2026-11-02-03
+    // item 5): production candidate acknowledgements stay disabled until the
+    // recipient-suppression check exists and has passed its acceptance tests.
+    // There is no suppression check in this build, so production refuses the
+    // switch outright (fail closed, Doc 13 section 235). This is the minimal
+    // form of the design's start-up refusal (RECIPIENT_SUPPRESSION_DESIGN.md
+    // section 3.2); it chooses none of that design's PROPOSED details.
+    if (isProduction) {
+      problems.push({ variable: 'APPLICATION_ACKNOWLEDGEMENT_ENABLED', rule: 'ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP' });
+    }
   }
   if (realProvider) {
     // An API provider authenticates with its key; SMTP with SMTP_USERNAME / SMTP_PASSWORD (above).
@@ -610,6 +620,9 @@ const RULE_TEXT = {
     'is required when APPLICATION_ACKNOWLEDGEMENT_ENABLED=true — candidates must be able to ' +
     'reply to the recruitment mailbox',
   ACKNOWLEDGEMENT_REQUIRES_FROM: 'is required when APPLICATION_ACKNOWLEDGEMENT_ENABLED=true',
+  ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP:
+    'must be "false" in production: candidate acknowledgements stay disabled until recipient ' +
+    'suppression is implemented and accepted (gate G-SUP)',
   PROVIDER_REQUIRES_API_KEY: 'is required when a transactional email provider is configured',
   PROVIDER_REQUIRES_FROM: 'is required when a transactional email provider is configured',
   PROVIDER_REQUIRES_RECIPIENT:

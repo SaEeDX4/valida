@@ -20,7 +20,8 @@
  *   2. the B7 acceptance gate on its own (offline): the bounded early-answer
  *      discard and the explicit server timeouts, public resume denial, log
  *      redaction, orphan reconciliation and storage listing, the controlled
- *      NoSQL-operator payloads and the connection-level Apply measurements;
+ *      NoSQL-operator payloads, the production acknowledgement refusal (G-SUP)
+ *      and the connection-level Apply measurements;
  *   3. the coverage diagnostic (Doc 17 sections 53-56) — reported, never a
  *      threshold; FAIL only if the run itself fails;
  *   4. the dependency check: `npm audit --omit=dev`.
@@ -71,6 +72,7 @@ const B7_ACCEPTANCE = [
   'tests/b7-log-redaction.test.js',
   'tests/b7-orphan-reconciliation.test.js',
   'tests/b7-injection-negative.test.js',
+  'tests/b7-acknowledgement-gate.test.js',
   'tests/staged-close.test.js',
   'tests/upload-temp-failure.test.js',
   'tests/private-storage.test.js',

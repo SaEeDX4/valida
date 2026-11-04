@@ -2037,6 +2037,15 @@ configuration, or no storage configured — nothing read or deleted). It works
 with the development local adapter; the production storage provider (C6) must
 provide the same listing before it can be used there.
 
+### Production acknowledgements stay disabled (G-SUP)
+
+Recipient suppression (Doc 14 section 120) is not implemented: its design
+(`docs/architecture/RECIPIENT_SUPPRESSION_DESIGN.md`) awaits owner approval.
+Until it is implemented and accepted, `APP_ENV=production` refuses to start
+with `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true`
+(`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`). Outside production the B6 behaviour is
+unchanged (allowlisted test recipients only).
+
 ### B7 verification
 
 ```powershell
@@ -2093,7 +2102,8 @@ Implemented here — and nothing more:
 - B7 (*Backend Security, Failure & QA Gate*; not the admin/authentication
   milestone): the early-answer discard is bounded server-wide and the server
   timeouts are explicit (the former OPEN body-discard item is resolved); the
-  security test matrix, coverage diagnostic and `verify:b7`
+  security test matrix, coverage diagnostic and `verify:b7`. **No recipient
+  suppression yet**, so production refuses candidate acknowledgements (G-SUP)
 - readiness reports 503 while no email provider is configured (or its login is
   refused), even with the database connected and storage ready; `ready` for
   notifications means connection + TLS + login verified, not delivery

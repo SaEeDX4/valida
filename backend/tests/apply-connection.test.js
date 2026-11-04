@@ -143,12 +143,19 @@ describe('answers given before the upload is read are delivered, then the connec
 });
 
 /**
- * The GENERAL public rate limit (B1, app-wide, unchanged by B5) in front of
- * the Apply route. Measured through the production request listener with an
- * UNREAD multipart body: what the client receives, whether anything behind
- * the refused body can cause a side effect, and what the server keeps.
+ * The GENERAL public rate limit (B1, app-wide) in front of the Apply route,
+ * through the production request listener with an UNREAD multipart body.
+ *
+ * B7 (the body-discard issue): until B7 this 429 was sent with the connection
+ * kept open and Node read and discarded the rest of the body bounded only by
+ * its requestTimeout (300 s by default) or the client — measured here as a
+ * DOCUMENTED LIMITATION. Since B7 every answer given before the body has
+ * arrived closes the connection in stages, server-wide
+ * (lib/http/stagedClose.js, closeEarlyAnswersInStages): the answer is
+ * delivered, the rest of the body is read within the staged-close bounds
+ * (8 MiB, 2 s idle, 5 s in total), and nothing behind it is processed.
  */
-describe('the GENERAL rate limit (B1, unchanged) on an Apply upload — measured', () => {
+describe('the GENERAL rate limit on an Apply upload — B7: closed in stages', () => {
   const limitedServe = (windowMs = 60_000) => serve({ configOverrides: { rateLimit: Object.freeze({ windowMs, max: 1 }) } });
 
   /** Uses the single general-limit allowance with one accepted Application. */
@@ -160,69 +167,68 @@ describe('the GENERAL rate limit (B1, unchanged) on an Apply upload — measured
     first.socket.destroy();
   }
 
-  it('the client receives the complete 429 (no reset); Node reads and discards the body and keeps the connection; nothing created, no temporary file', async () => {
+  it('the client receives the complete 429 (no reset), every uploaded byte is read, then the connection closes; nothing created, no temporary file', async () => {
     const { port, sockets } = await limitedServe();
     await spendAllowance(port);
     const limited = await rawClient(port);
     limited.send(applyBytes({ pdf: syntheticPdfOfSize(2 * 1024 * 1024) }).bytes);
-    await eventually(() => /\r\n\r\n\{.*\}$/s.test(limited.text()), 3000, 'the 429');
-    // Every uploaded byte is consumed by the server (no unread data, so no reset).
-    await eventually(() => sockets[1]?.socket.bytesRead === limited.state.sent, 3000, 'body read');
+    await eventually(() => /\r\n\r\n\{.*\}$/s.test(limited.text()) && limited.state.ended, 3000, 'the 429 and FIN');
+    await eventually(() => sockets[1]?.closed, 3000, 'server close');
+    expect(sockets[1].bytesRead).toBe(limited.state.sent); // nothing left unread: no reset
     expect(limited.text()).toMatch(/^HTTP\/1\.1 429 /);
     expect(limited.text()).toContain('"code":"RATE_LIMITED"');
     expect(limited.text()).toMatch(/\r\nCache-Control: no-store\r\n/i);
-    expect(limited.text()).toMatch(/\r\nConnection: keep-alive\r\n/i);
+    expect(limited.text()).toMatch(/\r\nConnection: close\r\n/i);
     expect(limited.state.errors).toEqual([]);
     expect(env.applications.all()).toHaveLength(1);
     expect(env.storedObjects()).toHaveLength(1);
     expect(env.tempFiles()).toEqual([]);
-    limited.socket.destroy();
   });
 
-  it('a valid Application pipelined directly behind the refused body is framed as its own request and refused too: no side effect', async () => {
-    const { port } = await limitedServe();
+  it('a valid Application pipelined directly behind the refused body is never processed and gets no answer: no side effect', async () => {
+    const { port, sockets } = await limitedServe();
     await spendAllowance(port);
     const client = await rawClient(port);
     client.send(Buffer.concat([applyBytes({ pdf: syntheticPdfOfSize(1024 * 1024) }).bytes, applyBytes().bytes]));
-    await eventually(() => statusLines(client.text()).length === 2 && /\}$/.test(client.text()), 3000, 'two answers');
-    expect(statusLines(client.text())).toEqual(['HTTP/1.1 429', 'HTTP/1.1 429']);
-    const ids = [...client.text().matchAll(/\r\nX-Request-ID: ([^\r]+)\r\n/gi)].map((match) => match[1]);
-    expect(new Set(ids).size).toBe(2); // two separate requests, correctly delimited
+    await eventually(() => client.state.ended, 3000, 'FIN');
+    await eventually(() => sockets[1]?.closed, 6000, 'server close');
+    expect(statusLines(client.text())).toEqual(['HTTP/1.1 429']);
     expect(env.applications.all()).toHaveLength(1);
     expect(env.storedObjects()).toHaveLength(1);
     expect(env.tempFiles()).toEqual([]);
-    client.socket.destroy();
   });
 
-  it('framing stays intact: once the window has passed, a new Application on the SAME connection is an ordinary request — accepted once', async () => {
+  it('once the window has passed, a new Application on a NEW connection is an ordinary request — accepted once', async () => {
     const windowMs = 3_000;
-    const { port } = await limitedServe(windowMs);
+    const { port, sockets } = await limitedServe(windowMs);
     const windowStarted = Date.now();
     await spendAllowance(port);
     const client = await rawClient(port);
     client.send(applyBytes({ pdf: syntheticPdfOfSize(1024 * 1024) }).bytes);
-    await eventually(() => statusLines(client.text()).length === 1 && /\}$/.test(client.text()), 3000, 'the 429');
-    // Wait until the client's window (started by its first request) has certainly passed.
+    await eventually(() => statusLines(client.text()).length === 1 && client.state.ended, 3000, 'the 429 and FIN');
+    await eventually(() => sockets[1]?.closed, 3000, 'server close');
+    expect(statusLines(client.text())).toEqual(['HTTP/1.1 429']);
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, windowStarted + windowMs + 300 - Date.now())));
-    client.send(applyBytes().bytes);
-    await eventually(() => statusLines(client.text()).length === 2 && /\}$/.test(client.text()), 3000, 'second answer');
-    expect(statusLines(client.text())).toEqual(['HTTP/1.1 429', 'HTTP/1.1 201']);
+    const next = await rawClient(port);
+    next.send(applyBytes().bytes);
+    await eventually(() => statusLines(next.text()).length === 1 && /\}$/.test(next.text()), 3000, 'the answer');
+    expect(statusLines(next.text())).toEqual(['HTTP/1.1 201']);
     expect(env.applications.all()).toHaveLength(2);
     expect(env.storedObjects()).toHaveLength(2);
     expect(env.tempFiles()).toEqual([]);
-    client.socket.destroy();
+    next.socket.destroy();
   }, 15_000);
 
-  it('DOCUMENTED LIMITATION (server-wide since B1, not B5): an unread body after this 429 is discarded WITHOUT the B4 staged-close bounds (8 MiB, 5 s) — only Node\'s requestTimeout or the client ends it; nothing is kept', async () => {
+  it('B7 BOUND (was the documented limitation): an unread body after this 429 is read only within the staged-close bounds (8 MiB, 5 s), then the connection is closed; nothing is kept', async () => {
     const { port, sockets } = await limitedServe();
     await spendAllowance(port);
     const outcome = await trickleAfterEarlyAnswer(port, sockets, 1, (contentType, length) =>
       `POST ${applyPath('qa-synthetic-apply-role')} HTTP/1.1\r\nHost: qa\r\nContent-Type: ${contentType}\r\nIdempotency-Key: ${randomUUID()}\r\nContent-Length: ${length}\r\n\r\n`,
     );
     expect(outcome.status).toBe('HTTP/1.1 429');
-    expect(outcome.serverReadBeyondStagedCap).toBe(true);
-    expect(outcome.stillOpenAfterStagedMaxMs).toBe(true);
-    await eventually(() => sockets[1].closed, 3000, 'server close after the client left');
+    expect(outcome.connectionClose).toBe(true);
+    expect(outcome.serverReadBeyondStagedCap).toBe(false);
+    expect(outcome.closedWithinStagedMaxMs).toBe(true);
     expect(env.applications.all()).toHaveLength(1);
     expect(env.storedObjects()).toHaveLength(1);
     expect(env.tempFiles()).toEqual([]);
@@ -231,8 +237,8 @@ describe('the GENERAL rate limit (B1, unchanged) on an Apply upload — measured
 
 /**
  * Sends the head of a request declaring a 64 MiB body, then 9 MiB at once
- * (over the B4 staged-close byte cap) and 128 KiB every 500 ms until 5.5 s
- * have passed (over its 5 s time cap); reports what the server did.
+ * (over the staged-close byte cap) and 128 KiB every 500 ms until 5.5 s have
+ * passed (over its 5 s time cap); reports what the server did.
  */
 async function trickleAfterEarlyAnswer(port, sockets, socketIndex, head) {
   const client = await rawClient(port);
@@ -243,35 +249,35 @@ async function trickleAfterEarlyAnswer(port, sockets, socketIndex, head) {
   client.send(Buffer.alloc(9 * 1024 * 1024, 0x51));
   while (Date.now() - started < 5_500) {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    if (client.state.closed) break;
+    if (client.state.closed || sockets[socketIndex].closed) break;
     client.send(Buffer.alloc(128 * 1024, 0x51));
   }
   await new Promise((resolve) => setTimeout(resolve, 200));
   const server = sockets[socketIndex];
   const outcome = {
     status: statusLines(client.text())[0],
-    // More than the 9 MiB burst PLUS trickled chunks: a staged close would have
-    // stopped reading at its 8 MiB cap and destroyed the socket.
+    connectionClose: /\r\nConnection: close\r\n/i.test(client.text()),
+    // Without the bound the server would read the 9 MiB burst PLUS the trickled chunks.
     serverReadBeyondStagedCap: server.socket.bytesRead >= 9 * 1024 * 1024 + 3 * 128 * 1024,
-    stillOpenAfterStagedMaxMs: !server.closed && !client.state.closed,
+    closedWithinStagedMaxMs: server.closed && Date.now() - started <= 5_000 + 1_500,
   };
   client.socket.destroy();
   return outcome;
 }
 
-describe('the same discard, server-wide since B1/B4 (comparison, not B5 behaviour)', () => {
+describe('B7 — the same bound server-wide, for every early answer (was: discarded without bounds)', () => {
   it.each([
     ['an unknown API route (B1 404)', () => `/api/v1/qa-unknown-route`, 'HTTP/1.1 404'],
     ['the Apply route with a non-multipart body (B4 415)', () => applyPath('qa-synthetic-apply-role'), 'HTTP/1.1 415'],
-  ])('%s: the unread body is also read and discarded without the staged-close bounds', async (_label, pathOf, status) => {
+  ])('%s: the unread body is read only within the staged-close bounds, then the connection is closed', async (_label, pathOf, status) => {
     const { port, sockets } = await serve({});
     const outcome = await trickleAfterEarlyAnswer(port, sockets, 0, (contentType, length) =>
       `POST ${pathOf()} HTTP/1.1\r\nHost: qa\r\nContent-Type: ${status.endsWith('415') ? 'application/octet-stream' : contentType}\r\nIdempotency-Key: ${randomUUID()}\r\nContent-Length: ${length}\r\n\r\n`,
     );
     expect(outcome.status).toBe(status);
-    expect(outcome.serverReadBeyondStagedCap).toBe(true);
-    expect(outcome.stillOpenAfterStagedMaxMs).toBe(true);
-    await eventually(() => sockets[0].closed, 3000, 'server close after the client left');
+    expect(outcome.connectionClose).toBe(true);
+    expect(outcome.serverReadBeyondStagedCap).toBe(false);
+    expect(outcome.closedWithinStagedMaxMs).toBe(true);
     expect(env.applications.all()).toEqual([]);
     expect(env.tempFiles()).toEqual([]);
   }, 20_000);

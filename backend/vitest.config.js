@@ -17,5 +17,13 @@ export default defineConfig({
     // running files sequentially keeps them deterministic.
     fileParallelism: false,
     restoreMocks: true,
+    // B7 coverage DIAGNOSTIC (Doc 17 sections 53-56): `npm run test:coverage`.
+    // Reported, never a gate — no threshold is set, and none is invented.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.js', 'scripts/**/*.mjs'],
+      reporter: ['text-summary', 'text', 'json-summary'],
+      reportsDirectory: 'coverage',
+    },
   },
 });

@@ -98,6 +98,7 @@ const defaultOperations = Object.freeze({
   unlink: fsp.unlink,
   open: fsp.open,
   readFile: fsp.readFile,
+  readdir: fsp.readdir,
   writeFile: fsp.writeFile,
   createWriteStream: fs.createWriteStream,
 });
@@ -351,6 +352,81 @@ export class LocalPrivateStorage {
       if (error instanceof PrivateStorageError) throw error;
       throw new PrivateStorageError('stat', classifyStorageError(error), error);
     }
+  }
+
+  /**
+   * B7 — every object in the store, for orphan reconciliation only (Doc 15
+   * sections 199-205). Returns keys, sizes and modification times; it reads no
+   * object content. Entries that are not objects are counted, never followed:
+   * `<fileKey>.partial-<random>` leftovers of a failed write are listed as
+   * partials (their key is the name without the suffix); a per-object
+   * directory that does not resolve to its place in storage (a link or a
+   * swapped directory) is counted as `notConfined` and skipped; anything else
+   * is counted as `unexpected`.
+   *
+   * @returns {Promise<{ objects: Array<{ storageKey: string, sizeBytes: number, modifiedAt: Date }>,
+   *   partials: Array<{ storageKey: string, modifiedAt: Date }>, unexpected: number, notConfined: number }>}
+   */
+  async listPrivateObjects() {
+    this.#assertReady('list');
+    if (!(await this.#assertConfinedDirectory(this.#objectsDirectory, 'list'))) {
+      throw new PrivateStorageError('list', 'NOT_A_DIRECTORY');
+    }
+    const result = { objects: [], partials: [], unexpected: 0, notConfined: 0 };
+    let ids;
+    try {
+      ids = await this.#ops.readdir(this.#objectsDirectory);
+    } catch (error) {
+      throw new PrivateStorageError('list', classifyStorageError(error), error);
+    }
+    for (const id of ids.sort()) {
+      if (!/^[0-9a-f]{32}$/.test(id)) {
+        result.unexpected += 1;
+        continue;
+      }
+      const directory = path.join(this.#objectsDirectory, id);
+      let confined;
+      try {
+        confined = await this.#assertConfinedDirectory(directory, 'list');
+      } catch (error) {
+        if (error instanceof PrivateStorageError && error.reason === 'PATH_ESCAPES_STORAGE') {
+          result.notConfined += 1;
+          continue;
+        }
+        throw error;
+      }
+      if (!confined) continue; // removed while listing
+      let names;
+      try {
+        names = await this.#ops.readdir(directory);
+      } catch (error) {
+        if (error?.code === 'ENOENT') continue;
+        throw new PrivateStorageError('list', classifyStorageError(error), error);
+      }
+      for (const name of names.sort()) {
+        const partial = /^([0-9a-f]{32})\.partial-[0-9a-f]+$/.exec(name);
+        const fileKey = partial ? partial[1] : /^[0-9a-f]{32}$/.test(name) ? name : null;
+        if (fileKey === null) {
+          result.unexpected += 1;
+          continue;
+        }
+        let stat;
+        try {
+          stat = await this.#ops.lstat(path.join(directory, name));
+        } catch (error) {
+          if (error?.code === 'ENOENT') continue;
+          throw new PrivateStorageError('list', classifyStorageError(error), error);
+        }
+        if (!stat.isFile()) {
+          result.unexpected += 1;
+          continue;
+        }
+        const storageKey = `resumes/${id}/${fileKey}`;
+        if (partial) result.partials.push({ storageKey, modifiedAt: stat.mtime });
+        else result.objects.push({ storageKey, sizeBytes: stat.size, modifiedAt: stat.mtime });
+      }
+    }
+    return result;
   }
 
   async close() {

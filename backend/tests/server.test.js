@@ -5,6 +5,7 @@ import {
   startServer, isMainModule, formatStartupFailure, installSignalHandlers, settleWithin,
 } from '../src/server.js';
 import { createApp } from '../src/app.js';
+import { SERVER_TIMEOUTS } from '../src/lib/http/serverTimeouts.js';
 import { ConfigurationError } from '../src/config/env.js';
 import { DatabaseConnectionError } from '../src/db/mongoose.js';
 import {
@@ -77,6 +78,14 @@ describe('app factory', () => {
 });
 
 describe('startServer', () => {
+  it('B7: the listening server uses the explicit timeouts of lib/http/serverTimeouts.js, not Node defaults', async () => {
+    const { server } = await start();
+    expect(server.headersTimeout).toBe(SERVER_TIMEOUTS.headersTimeout);
+    expect(server.requestTimeout).toBe(SERVER_TIMEOUTS.requestTimeout);
+    expect(server.keepAliveTimeout).toBe(SERVER_TIMEOUTS.keepAliveTimeout);
+    expect(SERVER_TIMEOUTS).toEqual({ headersTimeout: 30_000, requestTimeout: 180_000, keepAliveTimeout: 5_000 });
+  });
+
   it('listens and serves health on the configured port', async () => {
     const { server, port } = await start();
     expect(server.listening).toBe(true);

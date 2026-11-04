@@ -9,6 +9,7 @@ import { mongoDatabase, DatabaseConnectionError } from './db/mongoose.js';
 import { createPrivateStorage, StorageInitializationError } from './integrations/storage/privateStorage.js';
 import { TempUploadArea } from './lib/multipart/tempUploadArea.js';
 import { serveUnlessConnectionClosing } from './lib/http/stagedClose.js';
+import { applyServerTimeouts } from './lib/http/serverTimeouts.js';
 import { createNotificationService, notificationServiceOptions } from './integrations/notifications/notificationService.js';
 import { createNotificationTransport } from './integrations/notifications/transport.js';
 
@@ -324,8 +325,11 @@ export async function startServer({
      * read (413/503, connection closed in stages) never reaches the app
      * (RFC 9112 section 9.6; lib/http/stagedClose.js). Outside the app, so the
      * Express middleware order (Doc 09 section 13) is unchanged.
+     * B7: every answer given before the request body has arrived closes the
+     * connection in the same bounded stages (the body-discard issue), and the
+     * server timeouts are explicit (lib/http/serverTimeouts.js).
      */
-    server = http.createServer(serveUnlessConnectionClosing(app));
+    server = applyServerTimeouts(http.createServer(serveUnlessConnectionClosing(app, { logger })));
   } catch (error) {
     readiness.beginShutdown();
     await runShutdownHooks(cleanupTimeoutMs);

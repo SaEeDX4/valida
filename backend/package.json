@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "verify:b1": "npm test && npm audit --audit-level=high",
     "test:db": "vitest run --config vitest.db.config.js",
+    "test:coverage": "vitest run --coverage",
     "db:indexes:check": "node --env-file-if-exists=.env scripts/db-indexes.mjs check",
     "db:indexes:apply": "node --env-file-if-exists=.env scripts/db-indexes.mjs apply",
     "verify:b2": "node scripts/verify-b2.mjs",
@@ -24,7 +25,9 @@
     "verify:b5": "node scripts/verify-b5.mjs",
     "ops:notifications:retry": "node --env-file-if-exists=.env scripts/notifications-retry.mjs",
     "ops:notifications:smoke": "node --env-file-if-exists=.env scripts/notifications-smoke.mjs",
-    "verify:b6": "node scripts/verify-b6.mjs"
+    "ops:storage:reconcile": "node --env-file-if-exists=.env scripts/storage-reconcile.mjs",
+    "verify:b6": "node scripts/verify-b6.mjs",
+    "verify:b7": "node scripts/verify-b7.mjs"
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.2",
@@ -39,6 +42,7 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "5.0.3",
     "smtp-server": "3.19.24",
     "supertest": "^7.3.0",
     "vite": "8.3.3",

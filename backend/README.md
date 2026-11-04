@@ -123,6 +123,9 @@ npm run verify:b2      # full B2 gate — see "B2 verification" below
 npm run verify:b3      # full B3 gate — see "B3 verification" below
 npm run verify:b4      # full B4 gate — see "B4 verification" below
 npm run verify:b5      # full B5 gate — see "B5 verification" below
+npm run verify:b6      # full B6 gate — see "B6 verification" below
+npm run verify:b7      # B7 / Release B gate — see "B7 verification" below
+npm run test:coverage  # coverage diagnostic (offline suite; no threshold)
 npm run db:indexes:apply
 npm run db:indexes:check
 npm run jobs:provision:plan  -- --file provisioning/jobs/cybersecurity-specialist.json
@@ -429,21 +432,16 @@ notification state is ever returned. `Cache-Control: no-store` on every answer.
 | storage or database unavailable, outcome not confirmable, indexes missing | 503 | `SERVICE_UNAVAILABLE` ("We couldn't submit your application right now. Please try again.") |
 | unexpected defect | 500 | `INTERNAL_ERROR` |
 
-Answers given before the upload is read (400 key, the **Apply** limiter's 429,
-503 storage not configured, and B4's 413/503) carry `Connection: close` and
-close the connection in stages, so the client receives them and the upload is
-never processed as another request. The general public limit's 429 (B1,
-unchanged) is answered completely with the connection kept open; Node then
-reads and discards the unread upload — nothing is parsed, stored or created,
-and a request pipelined behind it is framed as its own request and is itself
-subject to the limit. **Limitation (server-wide since B1, not B5) — OPEN,
-tracked for B7, must be resolved before public deployment:** that discard is
-not bounded by the B4 staged-close limits (8 MiB, 5 s) — only by Node's
-default `requestTimeout` (300 s; `server.js` does not set it, and the 300 s
-bound itself is not measured by a test) or the client; B1's 404 and B4's
-non-multipart 415 behave the same. Measured in
-`tests/apply-connection.test.js`. A reverse-proxy body limit configured later
-does not by itself close this item; B7 must resolve and verify it.
+Every answer given before the upload is read — the 400 key, **both** rate
+limiters' 429, 503 storage not configured, B4's 413/415/503 and B1's 404 —
+carries `Connection: close` and closes the connection in stages, so the client
+receives it and the upload is never processed as another request (B7, see
+"HTTP bounds (B7)"). **Resolved in B7:** until B6 the general public limit's
+429, B1's 404 and B4's non-multipart 415 kept the connection open and let Node
+read and discard the unread upload, bounded only by Node's default
+`requestTimeout` (300 s). That discard is now bounded server-wide by the
+staged-close limits, and the server sets explicit timeouts. Measured in
+`tests/apply-connection.test.js` and `tests/b7-http-bounds.test.js`.
 
 ## Response envelopes
 
@@ -1230,7 +1228,7 @@ attempt may already have been applied.
 A client that retries after a `503` with the same key either gets the replay
 (the record existed after all) or creates the Application then; an unknown
 outcome's object that no record references is an orphan for the conservative
-reconciliation of Doc 10 sections 207-209 (the command is deferred, see Scope).
+reconciliation of Doc 10 sections 207-209 (`ops:storage:reconcile`, B7).
 The follow-up of a timed-out insert lives in process memory: it is not awaited
 at shutdown, and one still pending when the process stops is dropped — safely,
 since its object is then kept and already named.
@@ -1252,15 +1250,14 @@ It is one-way (the key has 256 random bits) and grants nothing. On the local
 adapter a failed write can leave `<key>.partial-<random>`; its key is the name
 without that suffix.
 
-Reconciliation (Doc 10 sections 207-209; Doc 15 sections 200-204; the
-`ops:storage:reconcile` command is deferred to B7/C6) needs no log to work: it
+Reconciliation (Doc 10 sections 207-209; Doc 15 sections 199-205; the
+`ops:storage:reconcile` command, B7 — see "Storage reconciliation (B7)") needs no log to work: it
 lists private storage, looks each key up in `Application.resume.storageKey`,
 and treats an unreferenced object older than the safety window as a possible
 orphan — dry-run by default, deletion only on an explicit operator action. The
 log's `objectRef` lets an operator connect an incident (request id, reason) to
 the one object concerned: reconciliation computes `storageObjectRef()` for each
-key it lists. Until that command exists (B7/C6), an operator with access to the
-private store computes the same value for the keys listed there. The key itself stays only where it is already protected — in
+key it lists, and prints that reference for every object it reports. The key itself stays only where it is already protected — in
 private storage and in MongoDB (`tests/db/b5-apply.test.js` performs exactly
 this resolution against the real database).
 
@@ -1999,7 +1996,67 @@ verification.
 
 ---
 
-## Scope and limitations (B1 + B2 + B3 + B4 + B5 + B6)
+## B7 — HTTP bounds, storage reconciliation and verification
+
+### HTTP bounds (B7)
+
+- **Early answers.** `serveUnlessConnectionClosing` (around the app in
+  `src/server.js`) now also wraps every response: when an answer is about to
+  be written while the request body is still unread (`Content-Length` > 0 or
+  `Transfer-Encoding` present, and the body not yet complete), it adds
+  `Connection: close` and closes in stages (`src/lib/http/stagedClose.js`):
+  at most 8 MiB more is read, 2 s without data or 5 s in all, then the socket
+  closes. Status codes and envelopes are unchanged; a request without a body,
+  or whose body was read, keeps the connection open.
+- **Explicit server timeouts** (`src/lib/http/serverTimeouts.js`, applied by
+  `startServer`): `headersTimeout` 30 s, `requestTimeout` 180 s,
+  `keepAliveTimeout` 5 s. The request timeout leaves room for the largest
+  legitimate request (a 5 MiB resume plus fields, about 5.4 MiB) at roughly
+  250 kbit/s; a slower client is cut off. They are constants, not environment
+  variables; deployment tuning behind a proxy is C6.
+
+### Storage reconciliation (B7)
+
+```powershell
+npm run ops:storage:reconcile                                # dry run (default): report only
+npm run ops:storage:reconcile -- --min-age-hours 96          # a longer safety window
+npm run ops:storage:reconcile -- --delete --confirm-delete   # delete old unreferenced objects
+```
+
+Lists the private resume objects (no content is read; links are never
+followed), looks each key up in `Application.resume.storageKey` (bounded,
+batched `$in` reads), and reports possible orphans by their one-way
+`storageObjectRef()` only — never a key, path or filename. Deletion needs
+**both** flags, never touches an object younger than the minimum age (72 h by
+default, never below 24 h), re-checks the reference immediately before each
+deletion (an Application persisted in the meantime keeps its object), and logs
+`storage_orphan_deleted` / `storage_orphan_kept` / `storage_orphan_delete_failed`
+with the reference only. Partial-write leftovers and unexpected entries are
+reported, never deleted. Exit codes: 0 done; 1 a failure; 2 refused (arguments,
+configuration, or no storage configured — nothing read or deleted). It works
+with the development local adapter; the production storage provider (C6) must
+provide the same listing before it can be used there.
+
+### B7 verification
+
+```powershell
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test"
+npm run verify:b7
+echo "exit=$LASTEXITCODE"
+```
+
+PASS / FAIL / DIAGNOSTIC for: Node.js 24; `verify:b6` (the complete offline
+suite, the B4–B6 gates and, with `MONGODB_TEST_URI`, the real-database suite
+including `tests/db/b7-storage-reconcile.test.js`; its live-provider gate is
+PENDING by design, so its exit code 2 counts as PASS — B6 was accepted on the
+owner's live evidence); the B7 acceptance files on their own; the coverage
+diagnostic (reported, never a threshold); `npm audit --omit=dev`. Without
+`MONGODB_TEST_URI` the database gate is a FAIL: Release B is not verified
+without a real database. Exit code 0 only when every gate passed. The mapping
+of each security requirement to its tests is
+`docs/qa/b7/B7_SECURITY_TEST_MATRIX.md`.
+
+## Scope and limitations (B1 + B2 + B3 + B4 + B5 + B6 + B7)
 
 Implemented here — and nothing more:
 
@@ -2027,21 +2084,16 @@ Implemented here — and nothing more:
   proposed, not implemented: `docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`); the
   application database deliberately stores
   no email bodies
-- no orphan reconciliation command yet (Doc 15 section 200,
-  `ops:storage:reconcile`, deferred to B7/C6): unknown-outcome and
-  failed-compensation objects are KEPT, and the logs name them by a one-way
-  object reference (never the key)
+- orphan reconciliation (`ops:storage:reconcile`, B7) for the local adapter:
+  unknown-outcome and failed-compensation objects are KEPT at Apply time and
+  named in logs by a one-way object reference (never the key); the operator
+  command finds and, only on explicit confirmation, deletes them
 - the Apply rate limit counts in process memory: with several backend
   instances each counts separately (Doc 13 section 54; deployment design, C6)
-- an early answer given before a request body has arrived (the general 429,
-  B1's 404, B4's non-multipart 415) lets Node read and discard the rest of the
-  body, bounded only by Node's default `requestTimeout` (300 s) or the client,
-  not by the B4 staged-close limits — a server-wide property since B1, measured in
-  `tests/apply-connection.test.js`. **OPEN — tracked for B7 and to be resolved
-  before public deployment**; a reverse-proxy body limit configured later does
-  not by itself close it
-- no backend security, failure-handling or QA gate hardening (B7 — *Backend
-  Security, Failure & QA Gate*; it is not the admin/authentication milestone)
+- B7 (*Backend Security, Failure & QA Gate*; not the admin/authentication
+  milestone): the early-answer discard is bounded server-wide and the server
+  timeouts are explicit (the former OPEN body-discard item is resolved); the
+  security test matrix, coverage diagnostic and `verify:b7`
 - readiness reports 503 while no email provider is configured (or its login is
   refused), even with the database connected and storage ready; `ready` for
   notifications means connection + TLS + login verified, not delivery

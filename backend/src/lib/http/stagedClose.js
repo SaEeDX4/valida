@@ -181,16 +181,72 @@ export function refuseFurtherRequest(req) {
 }
 
 /**
+ * True when `req` declares a body (Content-Length > 0 or any Transfer-Encoding)
+ * that has not been received completely yet.
+ *
+ * @param {import('node:http').IncomingMessage} req
+ */
+export function hasUnreadBody(req) {
+  if (req.complete || req.readableEnded) return false;
+  const length = req.headers['content-length'];
+  if (req.headers['transfer-encoding'] !== undefined) return true;
+  return length !== undefined && Number(length) > 0;
+}
+
+/**
+ * B7 — EVERY answer given before the request body has arrived closes the
+ * connection in stages, server-wide.
+ *
+ * WHY. Until B7 only the answers that set `closeConnection` (B4's 413/503, the
+ * Apply route's 400/429/503) used the staged close. Any other early answer —
+ * the general rate limit's 429, an unknown route's 404, a non-multipart 415 —
+ * was sent with the connection kept open, and Node then read and discarded the
+ * rest of the body bounded only by its `requestTimeout` (300 s by default) or
+ * the client: the "body-discard issue" tracked since B1 for B7.
+ *
+ * WHAT. The response's head is intercepted once, at the moment Node writes it
+ * (explicitly, or implicitly through `res.end()`). If the request still has an
+ * unread body at that moment, the response gets `Connection: close` and the
+ * staged close is armed: the client receives the whole answer, the rest of the
+ * body is read and discarded within `STAGED_CLOSE_LIMITS` (8 MiB, 2 s idle,
+ * 5 s in total), and nothing pipelined behind it is processed. Requests whose
+ * body was already read — every ordinary answer — and requests without a body
+ * are untouched (keep-alive as before). Status codes and envelopes do not
+ * change.
+ *
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {{ limits?: typeof STAGED_CLOSE_LIMITS, logger?: object }} [options]
+ */
+export function closeEarlyAnswersInStages(req, res, options = {}) {
+  const ownWriteHead = Object.prototype.hasOwnProperty.call(res, 'writeHead');
+  const writeHead = res.writeHead;
+  res.writeHead = function writeHeadClosingEarlyAnswers(...args) {
+    if (ownWriteHead) res.writeHead = writeHead;
+    else delete res.writeHead;
+    if (!res.headersSent && hasUnreadBody(req)) {
+      res.setHeader('Connection', 'close');
+      closeAfterResponseInStages(req, options);
+    }
+    return writeHead.apply(this, args);
+  };
+}
+
+/**
  * Wraps an HTTP request listener (the Express app) so that a request arriving
  * on a connection being closed in stages never reaches it and is never
- * answered; its body is drained (see "NO FURTHER REQUEST IS PROCESSED" above). Used by
- * src/server.js: `http.createServer(serveUnlessConnectionClosing(app))`.
+ * answered; its body is drained (see "NO FURTHER REQUEST IS PROCESSED" above),
+ * and so that every answer given before the body has arrived closes the
+ * connection in stages (B7, `closeEarlyAnswersInStages`). Used by
+ * src/server.js: `http.createServer(serveUnlessConnectionClosing(app, { logger }))`.
  *
  * @param {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void} listener
+ * @param {{ limits?: typeof STAGED_CLOSE_LIMITS, logger?: object }} [options]
  */
-export function serveUnlessConnectionClosing(listener) {
+export function serveUnlessConnectionClosing(listener, options = {}) {
   return function serveUnlessConnectionClosingListener(req, res) {
     if (refuseFurtherRequest(req)) return;
+    closeEarlyAnswersInStages(req, res, options);
     listener(req, res);
   };
 }

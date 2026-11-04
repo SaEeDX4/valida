@@ -500,6 +500,8 @@ describe('the retry run over MongoDB (ops:notifications:retry core)', () => {
     expect(output).toMatch(/FAILED \/ PROVIDER_UNAVAILABLE/);
     expect(output).toMatch(/scanned: 1 Application\(s\) with a notification due now/);
     expect(output).toContain(`${String(id)}  internal  WOULD_SEND`);
+    // B7: one coverage line (design rev 8 §5) — this process has no suppression key, so acknowledgements are blocked.
+    expect(output).toMatch(/suppression coverage: COVERAGE_INCOMPLETE \(CURRENT_KEY_MISSING\) — candidate acknowledgements are blocked/);
     expect(await Application.find({}).lean()).toEqual(before);
     for (const marker of [QA_CANDIDATE.fullName, QA_CANDIDATE.email, TEST_URI]) expect(output).not.toContain(marker);
     evidence({ test: 'retry command dry run (process)', exitCode: result.status, stdout: result.stdout.split('\n').filter(Boolean) });

@@ -25,6 +25,7 @@
     "verify:b5": "node scripts/verify-b5.mjs",
     "ops:notifications:retry": "node --env-file-if-exists=.env scripts/notifications-retry.mjs",
     "ops:notifications:smoke": "node --env-file-if-exists=.env scripts/notifications-smoke.mjs",
+    "ops:notifications:suppression": "node --env-file-if-exists=.env scripts/ops-notifications-suppression.mjs",
     "ops:storage:reconcile": "node --env-file-if-exists=.env scripts/storage-reconcile.mjs",
     "verify:b6": "node scripts/verify-b6.mjs",
     "verify:b7": "node scripts/verify-b7.mjs"

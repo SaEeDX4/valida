@@ -140,6 +140,10 @@ describe('classification (Doc 14 sections 120-121; Doc 10 section 122)', () => {
       PROVIDER_ERROR: 'UNCERTAIN',
       INTERNAL_ERROR: 'UNCERTAIN',
       ATTEMPT_IN_PROGRESS: 'UNCERTAIN',
+      // B7 — recipient suppression (design rev 8 §3.2; OD-2026-11-04-02).
+      RECIPIENT_SUPPRESSED: 'PERMANENT',
+      SUPPRESSION_CHECK_UNAVAILABLE: 'TRANSIENT',
+      SUPPRESSION_COVERAGE_INCOMPLETE: 'CONFIGURATION',
     });
     expect(classifyErrorCode('SOMETHING_NEW')).toBe(FAILURE_CLASSES.UNCERTAIN);
     expect(classifyErrorCode(null)).toBe(FAILURE_CLASSES.UNCERTAIN);

@@ -137,6 +137,17 @@ export const ERROR_CODE_CLASSES = Object.freeze({
   // Written BEFORE a send (the claim). Still present later = the attempt was
   // interrupted after it may have reached the provider.
   ATTEMPT_IN_PROGRESS: FAILURE_CLASSES.UNCERTAIN,
+  // B7 — recipient suppression (design rev 8 §3.2; OD-2026-11-04-02). Decided
+  // by the send-path check, before the provider is called: nothing was sent.
+  //   RECIPIENT_SUPPRESSED             a confirmed suppression matched: never retried.
+  //   SUPPRESSION_CHECK_UNAVAILABLE    the register could not be read in time:
+  //                                    the normal bounded retry runs a fresh check.
+  //   SUPPRESSION_COVERAGE_INCOMPLETE  a key is missing, unverified or recovering:
+  //                                    only an operator run with --include-configuration,
+  //                                    after coverage is restored.
+  RECIPIENT_SUPPRESSED: FAILURE_CLASSES.PERMANENT,
+  SUPPRESSION_CHECK_UNAVAILABLE: FAILURE_CLASSES.TRANSIENT,
+  SUPPRESSION_COVERAGE_INCOMPLETE: FAILURE_CLASSES.CONFIGURATION,
 });
 
 /** The codes a transport may report. */

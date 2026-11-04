@@ -163,8 +163,23 @@ export function assessChannel(
  * @param {ReturnType<import('../../integrations/notifications/notificationService.js').createNotificationService>} deps.notifications
  * @param {() => Date} deps.clock
  * @param {object} deps.logger
+ * @param {ReturnType<import('../suppression/suppressionGate.js').createSuppressionGate> | null} [deps.suppression]
+ *   B7 — the recipient-suppression check for the ACKNOWLEDGEMENT channel
+ *   (design rev 8 §3.2; OD-2026-11-04-02). It runs after the claim and before
+ *   the provider is called; without one, every acknowledgement fails closed
+ *   (SUPPRESSION_COVERAGE_INCOMPLETE). The internal channel never uses it.
  */
-export function createApplicationNotifier({ applications, notifications, clock, logger }) {
+export function createApplicationNotifier({ applications, notifications, clock, logger, suppression = null }) {
+  /** §3.2 — never throws; anything unexpected is "unavailable" (no send). */
+  async function suppressionDecision(document) {
+    if (!suppression) return { decision: 'COVERAGE_INCOMPLETE', errorCode: 'SUPPRESSION_COVERAGE_INCOMPLETE', problems: [{ keyId: null, reason: 'SUPPRESSION_NOT_CONFIGURED' }] };
+    try {
+      return await suppression.checkAcknowledgement({ emailNormalized: document.candidate?.emailNormalized });
+    } catch {
+      return { decision: 'UNAVAILABLE', errorCode: 'SUPPRESSION_CHECK_UNAVAILABLE', reason: 'INTERNAL' };
+    }
+  }
+
   /**
    * One claim / send / record cycle for the given channels of one loaded
    * Application document. Never throws.
@@ -200,6 +215,14 @@ export function createApplicationNotifier({ applications, notifications, clock, 
     const results = await Promise.all(
       channels.map(async (channel) => {
         let outcome;
+        // B7 — the suppression check, acknowledgement channel only (§3.2).
+        if (channel === 'candidateAcknowledgement') {
+          const gate = await suppressionDecision(document);
+          if (gate.decision !== 'PROCEED') {
+            logSuppression(context, channel, gate);
+            return [channel, { status: NOTIFICATION_OUTCOMES.FAILED, attemptedAt: clock(), errorCode: gate.errorCode, errorClass: classifyErrorCode(gate.errorCode) }];
+          }
+        }
         try {
           outcome = await notifications.deliver(CHANNEL_EVENTS[channel], input);
         } catch {
@@ -207,6 +230,10 @@ export function createApplicationNotifier({ applications, notifications, clock, 
         }
         if (!outcome || outcome.status === NOTIFICATION_OUTCOMES.NOT_ATTEMPTED) {
           outcome = { status: NOTIFICATION_OUTCOMES.FAILED, errorCode: 'INTERNAL_ERROR', errorClass: classifyErrorCode('INTERNAL_ERROR') };
+        }
+        // B7 (§3.3): the relay's enhanced status of a refusal is recorded with the outcome.
+        if (outcome.status === NOTIFICATION_OUTCOMES.FAILED && outcome.diagnostic?.enhancedStatus) {
+          outcome = { ...outcome, statusCode: outcome.diagnostic.enhancedStatus };
         }
         return [channel, outcome];
       }),
@@ -254,6 +281,21 @@ export function createApplicationNotifier({ applications, notifications, clock, 
       );
     }
     return { attempted: true, outcomes, recorded };
+  }
+
+  /** Fixed tokens only: the Application id, channel, suppression _id, key ids and reasons (§4.3). */
+  function logSuppression(context, channel, gate) {
+    const entry = { ...context, channel, errorCode: gate.errorCode };
+    if (gate.decision === 'SUPPRESSED') {
+      logger.info({ ...entry, event: 'notification_suppressed', suppressionId: gate.suppressionId }, 'candidate acknowledgement suppressed: a confirmed suppression matched; nothing was sent');
+    } else if (gate.decision === 'COVERAGE_INCOMPLETE') {
+      logger.error(
+        { ...entry, event: 'notification_suppression_coverage_incomplete', problems: (gate.problems ?? []).map(({ keyId, reason }) => ({ keyId, reason })) },
+        'candidate acknowledgement blocked: suppression coverage is incomplete; nothing was sent',
+      );
+    } else {
+      logger.warn({ ...entry, event: 'notification_suppression_check_unavailable', reason: gate.reason }, 'candidate acknowledgement not sent: the suppression register could not be checked');
+    }
   }
 
   return Object.freeze({

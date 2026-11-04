@@ -66,6 +66,9 @@ import {
   runNotificationRetry,
   staleAfterMs,
 } from '../src/modules/applications/application.notifications.js';
+import { createSuppressionGate } from '../src/modules/suppression/suppressionGate.js';
+import { createSuppressionRegister } from '../src/modules/suppression/suppressionRegister.js';
+import { keyringFromConfig } from '../src/modules/suppression/suppressionKeys.js';
 
 const USAGE = [
   'Usage:',
@@ -147,7 +150,12 @@ async function main() {
   console.log(`database: ${mongoose.connection.name}`);
 
   const applications = createApplicationRepository({ timeoutMs: config.databaseQueryTimeoutMs });
-  const notifier = createApplicationNotifier({ applications, notifications, clock: () => new Date(), logger });
+  // B7 — every acknowledgement retry passes the same suppression check as the first attempt (design rev 8 §3.2).
+  const suppression = createSuppressionGate({
+    register: createSuppressionRegister({ timeoutMs: config.suppression.lookupTimeoutMs, writeTimeoutMs: config.databaseQueryTimeoutMs }),
+    keyring: keyringFromConfig(config.suppression),
+  });
+  const notifier = createApplicationNotifier({ applications, notifications, clock: () => new Date(), logger, suppression });
   const policy = {
     maxAttempts: config.notifications.retry.maxAttempts,
     baseDelayMs: config.notifications.retry.baseDelayMs,
@@ -166,6 +174,14 @@ async function main() {
     if (states.length === 0) console.log('    (none)');
     for (const { status, code, count } of states) console.log(`    ${String(count).padStart(6)}  ${status}${code ? ` / ${code}` : ''}`);
     console.log(`    ${String(exhausted).padStart(6)}  of these at the attempt limit (never retried)`);
+  }
+  // B7 — one coverage line (design rev 8 §5): key ids and fixed reasons only.
+  try {
+    const coverage = await suppression.coverage();
+    const problems = coverage.problems.map(({ keyId, reason }) => `${reason}${keyId ? `:${keyId}` : ''}`).join(', ');
+    console.log(`\nsuppression coverage: ${coverage.complete ? 'COVERAGE_COMPLETE' : `COVERAGE_INCOMPLETE (${problems}) — candidate acknowledgements are blocked`}`);
+  } catch {
+    console.log('\nsuppression coverage: UNAVAILABLE (the register could not be read) — candidate acknowledgements are not sent');
   }
 
   stage = options.send ? 'sending' : 'scan';

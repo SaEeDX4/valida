@@ -405,7 +405,7 @@ describe('the bounded insert (application.repository.js, scripted model)', () =>
     expect(document.saves[0]).toEqual({
       options: WRITE_POLICY,
       where: { 'notifications.internal.status': 'PENDING', 'notifications.internal.attemptCount': 0, 'notifications.internal.lastErrorCode': null },
-      state: { status: 'PENDING', attemptCount: 1, lastAttemptAt: new Date(1), sentAt: null, lastErrorCode: 'ATTEMPT_IN_PROGRESS' },
+      state: { status: 'PENDING', attemptCount: 1, lastAttemptAt: new Date(1), sentAt: null, lastErrorCode: 'ATTEMPT_IN_PROGRESS', lastStatusCode: null },
     });
     expect(await repo.recordNotificationOutcomes(document, { internal: { status: 'SENT', attemptedAt: new Date(1), sentAt: new Date(2) } })).toBe('RECORDED');
     expect(document.saves[1]).toMatchObject({
@@ -413,7 +413,7 @@ describe('the bounded insert (application.repository.js, scripted model)', () =>
       where: { 'notifications.internal.attemptCount': 1, 'notifications.internal.lastErrorCode': 'ATTEMPT_IN_PROGRESS' },
     });
     expect(document.saves).toHaveLength(2);
-    expect(document.notifications.internal.toObject()).toEqual({ status: 'SENT', attemptCount: 1, lastAttemptAt: new Date(1), sentAt: new Date(2), lastErrorCode: null });
+    expect(document.notifications.internal.toObject()).toEqual({ status: 'SENT', attemptCount: 1, lastAttemptAt: new Date(1), sentAt: new Date(2), lastErrorCode: null, lastStatusCode: null });
     expect(document.$where).toBeNull();
   });
 
@@ -422,7 +422,7 @@ describe('the bounded insert (application.repository.js, scripted model)', () =>
     const document = notificationDocument();
     await repo.claimNotificationAttempts(document, ['internal'], { now: new Date(5) });
     expect(await repo.recordNotificationOutcomes(document, { internal: { status: 'FAILED', attemptedAt: new Date(5), errorCode: 'TIMEOUT' } })).toBe('RECORDED');
-    expect(document.notifications.internal.toObject()).toEqual({ status: 'FAILED', attemptCount: 1, lastAttemptAt: new Date(5), sentAt: null, lastErrorCode: 'TIMEOUT' });
+    expect(document.notifications.internal.toObject()).toEqual({ status: 'FAILED', attemptCount: 1, lastAttemptAt: new Date(5), sentAt: null, lastErrorCode: 'TIMEOUT', lastStatusCode: null });
   });
 
   it('the stored state no longer matches (DocumentNotFoundError): LOST — never an error, never a success', async () => {

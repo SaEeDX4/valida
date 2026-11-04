@@ -272,6 +272,13 @@ const notificationChannelSchema = new mongoose.Schema(
      * secret, a full provider response or any part of the candidate's email.
      */
     lastErrorCode: { type: String, default: null, maxlength: 80 },
+    /*
+     * B7 — the enhanced status (RFC 3463) of the last FAILED attempt, when the
+     * relay gave one (suppression design §3.3; OD-2026-11-04-02). A standard
+     * code only — never reply text. Lets `add --from-refusal` check eligibility
+     * (5.1.1, 5.1.2, 5.1.3, 5.1.10) without reading logs.
+     */
+    lastStatusCode: { type: String, default: null, match: /^[245]\.\d{1,3}\.\d{1,3}$/ },
   },
   { _id: false },
 );

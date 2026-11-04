@@ -13,6 +13,7 @@ import {
 import { ERROR_CODE_CLASSES, createNotificationService } from '../src/integrations/notifications/notificationService.js';
 import { capturingLogger } from './helpers.js';
 import { QA_NOTIFICATION_OPTIONS, dbUnavailable, matchesFilter, memoryApplicationRepository, recordingTransport } from './fixtures/applyHarness.js';
+import { openSuppressionGate } from './fixtures/suppressionDoubles.js';
 
 /**
  * B6 — the claim / send / record cycle and the retry policy, offline
@@ -29,7 +30,8 @@ const T0 = new Date('2026-10-05T12:00:00.000Z');
 const at = (ms) => new Date(T0.getTime() + ms);
 const POLICY = Object.freeze({ maxAttempts: 5, baseDelayMs: MINUTE, staleMs: staleAfterMs({ notificationTimeoutMs: 5_000, databaseTimeoutMs: 5_000 }) });
 
-const state = (overrides = {}) => ({ status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, ...overrides });
+// B7: lastStatusCode (suppression design §3.3) is part of every channel state.
+const state = (overrides = {}) => ({ status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, lastStatusCode: null, ...overrides });
 const NOT_REQUIRED = () => state({ status: 'NOT_REQUIRED' });
 
 let sequence = 0;
@@ -41,7 +43,8 @@ function seed(repo, { internal = state(), candidateAcknowledgement = NOT_REQUIRE
     _id,
     submittedAt,
     jobSnapshot: { title: 'QA Synthetic Apply Role', slug: 'qa-synthetic-apply-role' },
-    candidate: { fullName: 'QA Synthetic Candidate', email: 'qa.candidate@qa-valida.example.test' },
+    // emailNormalized: derived by the model on every real Application (Doc 10 section 84); the suppression check reads it.
+    candidate: { fullName: 'QA Synthetic Candidate', email: 'qa.candidate@qa-valida.example.test', emailNormalized: 'qa.candidate@qa-valida.example.test' },
     resume: { storageKey: `resumes/qa/${sequence}` },
     notifications: { internal, candidateAcknowledgement },
   });
@@ -54,7 +57,8 @@ function setup({ transport = recordingTransport('accept'), acknowledgementEnable
   let clockNow = now;
   const clock = () => clockNow;
   const notifications = createNotificationService({ transport, timeoutMs: 200, clock, ...QA_NOTIFICATION_OPTIONS, acknowledgementEnabled });
-  const notifier = createApplicationNotifier({ applications: repo, notifications, clock, logger: log.logger });
+  // B7: complete coverage, nothing suppressed — these are the B6 notifier tests.
+  const notifier = createApplicationNotifier({ applications: repo, notifications, clock, logger: log.logger, suppression: openSuppressionGate() });
   const events = (name) =>
     log
       .output()
@@ -81,19 +85,19 @@ describe('the retry policy (assessChannel)', () => {
     ['NOT_REQUIRED', NOT_REQUIRED(), {}, 'NOT_REQUIRED', false],
     ['never attempted, old enough', state(), {}, 'UNATTEMPTED', true],
     ['never attempted, inside the grace period (its own request is notifying it)', state(), { now: at(10_000) }, 'UNATTEMPTED', false],
-    ['in progress, recent', state({ attemptCount: 1, lastAttemptAt: at(9.5 * MINUTE), lastErrorCode: 'ATTEMPT_IN_PROGRESS' }), {}, 'IN_FLIGHT', false],
-    ['in progress, stale (interrupted)', state({ attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'ATTEMPT_IN_PROGRESS' }), {}, 'UNCERTAIN', false],
-    ['in progress, stale, operator includes uncertain', state({ attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'ATTEMPT_IN_PROGRESS' }), { includeUncertain: true }, 'UNCERTAIN', true],
-    ['timeout', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT' }), {}, 'UNCERTAIN', false],
-    ['transient, backoff elapsed', state({ status: 'FAILED', attemptCount: 2, lastAttemptAt: at(7 * MINUTE), lastErrorCode: 'PROVIDER_UNAVAILABLE' }), {}, 'TRANSIENT_DUE', true],
-    ['transient, backoff running', state({ status: 'FAILED', attemptCount: 3, lastAttemptAt: at(7 * MINUTE), lastErrorCode: 'RATE_LIMITED' }), {}, 'TRANSIENT_WAITING', false],
-    ['configuration', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SENDER_NOT_VERIFIED' }), {}, 'CONFIGURATION', false],
-    ['configuration, operator includes it', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_AUTH_FAILED' }), { includeConfiguration: true }, 'CONFIGURATION', true],
-    ['suppressed (permanent)', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SUPPRESSED' }), { includeUncertain: true, includeConfiguration: true }, 'PERMANENT', false],
-    ['invalid recipient (permanent)', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'INVALID_RECIPIENT' }), {}, 'PERMANENT', false],
-    ['transient at the attempt limit', state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }), {}, 'EXHAUSTED', false],
-    ['uncertain at the attempt limit, even when included', state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT' }), { includeUncertain: true }, 'EXHAUSTED', false],
-    ['an unknown stored code', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SOMETHING_ELSE' }), {}, 'UNCERTAIN', false],
+    ['in progress, recent', state({ attemptCount: 1, lastAttemptAt: at(9.5 * MINUTE), lastErrorCode: 'ATTEMPT_IN_PROGRESS', lastStatusCode: null }), {}, 'IN_FLIGHT', false],
+    ['in progress, stale (interrupted)', state({ attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'ATTEMPT_IN_PROGRESS', lastStatusCode: null }), {}, 'UNCERTAIN', false],
+    ['in progress, stale, operator includes uncertain', state({ attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'ATTEMPT_IN_PROGRESS', lastStatusCode: null }), { includeUncertain: true }, 'UNCERTAIN', true],
+    ['timeout', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT', lastStatusCode: null }), {}, 'UNCERTAIN', false],
+    ['transient, backoff elapsed', state({ status: 'FAILED', attemptCount: 2, lastAttemptAt: at(7 * MINUTE), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }), {}, 'TRANSIENT_DUE', true],
+    ['transient, backoff running', state({ status: 'FAILED', attemptCount: 3, lastAttemptAt: at(7 * MINUTE), lastErrorCode: 'RATE_LIMITED', lastStatusCode: null }), {}, 'TRANSIENT_WAITING', false],
+    ['configuration', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SENDER_NOT_VERIFIED', lastStatusCode: null }), {}, 'CONFIGURATION', false],
+    ['configuration, operator includes it', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_AUTH_FAILED', lastStatusCode: null }), { includeConfiguration: true }, 'CONFIGURATION', true],
+    ['suppressed (permanent)', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SUPPRESSED', lastStatusCode: null }), { includeUncertain: true, includeConfiguration: true }, 'PERMANENT', false],
+    ['invalid recipient (permanent)', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'INVALID_RECIPIENT', lastStatusCode: null }), {}, 'PERMANENT', false],
+    ['transient at the attempt limit', state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }), {}, 'EXHAUSTED', false],
+    ['uncertain at the attempt limit, even when included', state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT', lastStatusCode: null }), { includeUncertain: true }, 'EXHAUSTED', false],
+    ['an unknown stored code', state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SOMETHING_ELSE', lastStatusCode: null }), {}, 'UNCERTAIN', false],
   ])('%s -> %s', (_label, channelState, options, category, due) => {
     expect(assess(channelState, options)).toEqual({ category, due });
   });
@@ -221,8 +225,8 @@ describe('the first attempt (notifyAccepted)', () => {
     const result = await notifier.notifyAccepted(await repo.loadForUpdate(id));
     expect(result).toMatchObject({ attempted: true, recorded: true });
     expect(stored(repo, id)).toEqual({
-      internal: { status: 'SENT', attemptCount: 1, lastAttemptAt: T0, sentAt: T0, lastErrorCode: null },
-      candidateAcknowledgement: { status: 'SENT', attemptCount: 1, lastAttemptAt: T0, sentAt: T0, lastErrorCode: null },
+      internal: { status: 'SENT', attemptCount: 1, lastAttemptAt: T0, sentAt: T0, lastErrorCode: null, lastStatusCode: null },
+      candidateAcknowledgement: { status: 'SENT', attemptCount: 1, lastAttemptAt: T0, sentAt: T0, lastErrorCode: null, lastStatusCode: null },
     });
     expect(transport.calls.map((message) => [message.event, message.to[0]])).toEqual([
       ['APPLICATION_RECEIVED_INTERNAL', QA_NOTIFICATION_OPTIONS.internalRecipient],
@@ -236,8 +240,8 @@ describe('the first attempt (notifyAccepted)', () => {
     const id = seed(repo, { candidateAcknowledgement: state() });
     await notifier.notifyAccepted(await repo.loadForUpdate(id));
     expect(stored(repo, id)).toEqual({
-      internal: { status: 'SENT', attemptCount: 1, lastAttemptAt: T0, sentAt: T0, lastErrorCode: null },
-      candidateAcknowledgement: { status: 'FAILED', attemptCount: 1, lastAttemptAt: T0, sentAt: null, lastErrorCode: 'SUPPRESSED' },
+      internal: { status: 'SENT', attemptCount: 1, lastAttemptAt: T0, sentAt: T0, lastErrorCode: null, lastStatusCode: null },
+      candidateAcknowledgement: { status: 'FAILED', attemptCount: 1, lastAttemptAt: T0, sentAt: null, lastErrorCode: 'SUPPRESSED', lastStatusCode: null },
     });
     expect(events('notification_attempted').map(({ channel, outcome, errorCode, errorClass }) => ({ channel, outcome, errorCode, errorClass }))).toEqual([
       { channel: 'internal', outcome: 'SENT', errorCode: undefined, errorClass: undefined },
@@ -256,7 +260,7 @@ describe('the first attempt (notifyAccepted)', () => {
         logger: capturingLogger().logger,
       });
       expect(await broken.notifyAccepted(await repo.loadForUpdate(id))).toMatchObject({ attempted: true, recorded: true });
-      expect(stored(repo, id).internal).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'INTERNAL_ERROR' });
+      expect(stored(repo, id).internal).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'INTERNAL_ERROR', lastStatusCode: null });
     }
   });
 
@@ -264,7 +268,7 @@ describe('the first attempt (notifyAccepted)', () => {
     const { repo, notifier } = setup({ transport: recordingTransport(new Error('qa: transport threw')) });
     const id = seed(repo);
     await notifier.notifyAccepted(await repo.loadForUpdate(id));
-    expect(stored(repo, id).internal).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'PROVIDER_ERROR' });
+    expect(stored(repo, id).internal).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'PROVIDER_ERROR', lastStatusCode: null });
   });
 });
 
@@ -300,7 +304,7 @@ describe('provider-returned identifiers never reach logs, outcomes, stored state
     const transport = returningTransport(value);
     const { repo, notifier, log, setNow } = setup({ transport, acknowledgementEnabled: true });
     const first = seed(repo, { candidateAcknowledgement: state() });
-    const retried = seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
+    const retried = seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
 
     const accepted = await notifier.notifyAccepted(await repo.loadForUpdate(first), { requestId: 'qa-request-1' });
     const later = at(24 * 60 * MINUTE);
@@ -338,7 +342,7 @@ describe('provider-returned identifiers never reach logs, outcomes, stored state
 describe('concurrency and duplicate-send risk (the conditional claim)', () => {
   it('two concurrent attempts on the same Application: exactly one claims and sends; the other sends NOTHING', async () => {
     const { repo, notifier, transport, events } = setup();
-    const id = seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(-60 * MINUTE), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
+    const id = seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(-60 * MINUTE), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
     const [first, second] = [await repo.loadForUpdate(id), await repo.loadForUpdate(id)];
     const results = await Promise.all([notifier.retry(first, ['internal']), notifier.retry(second, ['internal'])]);
     expect(results.map((result) => result.attempted).sort()).toEqual([false, true]);
@@ -376,7 +380,7 @@ describe('concurrency and duplicate-send risk (the conditional claim)', () => {
     repo.faults.claimNotificationAppliedThenFails = dbUnavailable('timeout');
     expect(await notifier.notifyAccepted(await repo.loadForUpdate(id))).toEqual({ attempted: false, reason: 'CLAIM_FAILED' });
     expect(transport.calls).toHaveLength(0);
-    expect(stored(repo, id).internal).toEqual(state({ attemptCount: 1, lastAttemptAt: T0, lastErrorCode: 'ATTEMPT_IN_PROGRESS' }));
+    expect(stored(repo, id).internal).toEqual(state({ attemptCount: 1, lastAttemptAt: T0, lastErrorCode: 'ATTEMPT_IN_PROGRESS', lastStatusCode: null }));
     expect(events('notification_claim_failed')).toHaveLength(1);
     // Never re-sent automatically; an operator's --include-uncertain run picks it up after the stale threshold.
     repo.faults.claimNotificationAppliedThenFails = null;
@@ -391,7 +395,7 @@ describe('concurrency and duplicate-send risk (the conditional claim)', () => {
     repo.faults.recordNotification = dbUnavailable('timeout');
     const result = await notifier.notifyAccepted(await repo.loadForUpdate(id));
     expect(result).toMatchObject({ attempted: true, recorded: false, outcomes: { internal: { status: 'SENT' } } });
-    expect(stored(repo, id).internal).toEqual(state({ attemptCount: 1, lastAttemptAt: T0, lastErrorCode: 'ATTEMPT_IN_PROGRESS' }));
+    expect(stored(repo, id).internal).toEqual(state({ attemptCount: 1, lastAttemptAt: T0, lastErrorCode: 'ATTEMPT_IN_PROGRESS', lastStatusCode: null }));
     expect(events('notification_state_unrecorded')).toEqual([expect.objectContaining({ outcomes: { internal: 'SENT' } })]);
     // A retry run neither during nor after the stale threshold sends it again.
     repo.faults.recordNotification = null;
@@ -414,11 +418,11 @@ describe('runNotificationRetry (ops:notifications:retry)', () => {
     const { repo } = context;
     return {
       unattempted: seed(repo, { submittedAt: at(-MINUTE) }),
-      transient: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) }),
-      timeout: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT' }) }),
-      configuration: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SENDER_NOT_VERIFIED' }) }),
-      suppressed: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SUPPRESSED' }) }),
-      exhausted: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) }),
+      transient: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) }),
+      timeout: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT', lastStatusCode: null }) }),
+      configuration: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SENDER_NOT_VERIFIED', lastStatusCode: null }) }),
+      suppressed: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SUPPRESSED', lastStatusCode: null }) }),
+      exhausted: seed(repo, { internal: state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) }),
       sent: seed(repo, { internal: state({ status: 'SENT', attemptCount: 1, lastAttemptAt: at(0), sentAt: at(0) }) }),
     };
   }
@@ -468,9 +472,9 @@ describe('runNotificationRetry (ops:notifications:retry)', () => {
 
   it('a transient failure again: recorded FAILED with the next attempt count, then waits for its backoff', async () => {
     const context = setup({ transport: recordingTransport('RATE_LIMITED') });
-    const id = seed(context.repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
+    const id = seed(context.repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
     expect((await retry(context, { send: true })).results.FAILED).toBe(1);
-    expect(stored(context.repo, id).internal).toMatchObject({ status: 'FAILED', attemptCount: 2, lastAttemptAt: later, lastErrorCode: 'RATE_LIMITED' });
+    expect(stored(context.repo, id).internal).toMatchObject({ status: 'FAILED', attemptCount: 2, lastAttemptAt: later, lastErrorCode: 'RATE_LIMITED', lastStatusCode: null });
     const soon = await retry(context, { send: true }, new Date(later.getTime() + MINUTE));
     // Waiting out its backoff: not even scanned (it cannot be due in this run).
     expect(soon.scanned).toBe(0);
@@ -490,12 +494,12 @@ describe('runNotificationRetry (ops:notifications:retry)', () => {
   it('rows that are not due (backoff running, grace period, permanent, exhausted, uncertain) never fill the bounded scan', async () => {
     const context = setup();
     for (let i = 0; i < 3; i += 1) {
-      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 3, lastAttemptAt: at(24 * 60 * MINUTE - MINUTE), lastErrorCode: 'RATE_LIMITED' }) });
-      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SUPPRESSED' }) });
-      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
-      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT' }) });
+      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 3, lastAttemptAt: at(24 * 60 * MINUTE - MINUTE), lastErrorCode: 'RATE_LIMITED', lastStatusCode: null }) });
+      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'SUPPRESSED', lastStatusCode: null }) });
+      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 5, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
+      seed(context.repo, { submittedAt: at(-60 * MINUTE + i), internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'TIMEOUT', lastStatusCode: null }) });
     }
-    const due = seed(context.repo, { submittedAt: at(0), internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
+    const due = seed(context.repo, { submittedAt: at(0), internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
     const report = await retry(context, { limit: 1 });
     expect(report.items).toEqual([{ applicationId: due, channels: ['internal'], action: 'WOULD_SEND' }]);
     const summary = await context.repo.summarizeNotificationStates({ maxAttempts: POLICY.maxAttempts });
@@ -504,15 +508,15 @@ describe('runNotificationRetry (ops:notifications:retry)', () => {
 
   it('acknowledgements: retried only while enabled; never created for an Application accepted while disabled', async () => {
     const enabled = setup({ acknowledgementEnabled: true });
-    const pendingAck = seed(enabled.repo, { internal: state({ status: 'SENT', attemptCount: 1, sentAt: at(0), lastAttemptAt: at(0) }), candidateAcknowledgement: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
-    const neverRequired = seed(enabled.repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
+    const pendingAck = seed(enabled.repo, { internal: state({ status: 'SENT', attemptCount: 1, sentAt: at(0), lastAttemptAt: at(0) }), candidateAcknowledgement: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
+    const neverRequired = seed(enabled.repo, { internal: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
     await retry(enabled, { send: true });
     expect(stored(enabled.repo, pendingAck).candidateAcknowledgement).toMatchObject({ status: 'SENT', attemptCount: 2 });
     expect(stored(enabled.repo, neverRequired).candidateAcknowledgement).toEqual(NOT_REQUIRED());
     expect(enabled.transport.calls.map((message) => message.event).sort()).toEqual(['APPLICATION_ACKNOWLEDGEMENT', 'APPLICATION_RECEIVED_INTERNAL']);
 
     const disabled = setup({ acknowledgementEnabled: false });
-    const stillPending = seed(disabled.repo, { internal: state({ status: 'SENT', attemptCount: 1, sentAt: at(0), lastAttemptAt: at(0) }), candidateAcknowledgement: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE' }) });
+    const stillPending = seed(disabled.repo, { internal: state({ status: 'SENT', attemptCount: 1, sentAt: at(0), lastAttemptAt: at(0) }), candidateAcknowledgement: state({ status: 'FAILED', attemptCount: 1, lastAttemptAt: at(0), lastErrorCode: 'PROVIDER_UNAVAILABLE', lastStatusCode: null }) });
     const report = await retry(disabled, { send: true });
     expect(report.due).toBe(0);
     expect(stored(disabled.repo, stillPending).candidateAcknowledgement.status).toBe('FAILED');

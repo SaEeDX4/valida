@@ -92,10 +92,11 @@ describe('database connection', () => {
 
 describe('required indexes exist in the real database', () => {
   it('reports every required index as present and compatible', async () => {
-    const actual = {
-      jobs: await mongoose.connection.db.collection('jobs').indexes(),
-      applications: await mongoose.connection.db.collection('applications').indexes(),
-    };
+    // Every collection the list names (B7: the suppression register too).
+    const actual = {};
+    for (const collection of new Set(REQUIRED_INDEXES.map((index) => index.collection))) {
+      actual[collection] = await mongoose.connection.db.collection(collection).indexes();
+    }
     const { satisfied, missing, incompatible } = diffIndexes(REQUIRED_INDEXES, actual);
     expect(missing, `missing: ${missing.map((index) => index.name).join(', ')}`).toHaveLength(0);
     expect(incompatible).toHaveLength(0);

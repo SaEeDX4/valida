@@ -14,8 +14,8 @@ const find = (collection, key) =>
   );
 
 describe('required index set', () => {
-  it('declares exactly the six required indexes', () => {
-    expect(REQUIRED_INDEXES).toHaveLength(6);
+  it('declares exactly the ten required indexes (B2-B5 six; B7 suppression register four)', () => {
+    expect(REQUIRED_INDEXES).toHaveLength(10);
   });
 
   it.each([
@@ -25,6 +25,11 @@ describe('required index set', () => {
     ['applications', { 'candidate.emailNormalized': 1, jobId: 1, submittedAt: -1 }, false],
     ['applications', { 'idempotency.keyHash': 1 }, true],
     ['applications', { 'resume.storageKey': 1 }, true],
+    // B7 — RECIPIENT_SUPPRESSION_DESIGN.md rev 8 §3.1 (OD-2026-11-04-02).
+    ['recipient_suppressions', { 'lookup.keyId': 1, 'lookup.digest': 1, scope: 1 }, true],
+    ['recipient_suppressions', { state: 1, updatedAt: -1 }, false],
+    ['recipient_suppressions', { 'sources.applicationId': 1 }, false],
+    ['recipient_suppressions', { state: 1, scope: 1, 'lookup.keyId': 1 }, false],
   ])('declares %s %j with unique=%s', (collection, key, unique) => {
     const index = find(collection, key);
     expect(index, `missing required index on ${collection}`).toBeTruthy();
@@ -48,7 +53,8 @@ describe('required index set', () => {
   });
 
   it('gives every index a documented reason', () => {
-    REQUIRED_INDEXES.forEach((index) => expect(index.reason).toMatch(/Doc 10 section/));
+    // The register is the approved Doc 10 addition of the suppression design (B7).
+    REQUIRED_INDEXES.forEach((index) => expect(index.reason).toMatch(index.collection === 'recipient_suppressions' ? /Suppression design §3\.1/ : /Doc 10 section/));
   });
 });
 
@@ -104,12 +110,18 @@ describe('diff classification', () => {
       { name: 'idem', key: { 'idempotency.keyHash': 1 }, unique: true },
       { name: 'storage', key: { 'resume.storageKey': 1 }, unique: true },
     ],
+    recipient_suppressions: [
+      { name: 'lookup', key: { 'lookup.keyId': 1, 'lookup.digest': 1, scope: 1 }, unique: true },
+      { name: 'listing', key: { state: 1, updatedAt: -1 } },
+      { name: 'sources', key: { 'sources.applicationId': 1 } },
+      { name: 'coverage', key: { state: 1, scope: 1, 'lookup.keyId': 1 } },
+    ],
     ...overrides,
   });
 
   it('reports a fully indexed database as satisfied', () => {
     const { satisfied, missing, incompatible } = diffIndexes(REQUIRED_INDEXES, actualFor());
-    expect(satisfied).toHaveLength(6);
+    expect(satisfied).toHaveLength(10);
     expect(missing).toHaveLength(0);
     expect(incompatible).toHaveLength(0);
   });
@@ -122,8 +134,8 @@ describe('diff classification', () => {
   });
 
   it('reports an empty database as all missing', () => {
-    const { missing } = diffIndexes(REQUIRED_INDEXES, { jobs: [], applications: [] });
-    expect(missing).toHaveLength(6);
+    const { missing } = diffIndexes(REQUIRED_INDEXES, { jobs: [], applications: [], recipient_suppressions: [] });
+    expect(missing).toHaveLength(10);
   });
 
   it('reports a non-unique slug index as incompatible, not missing', () => {

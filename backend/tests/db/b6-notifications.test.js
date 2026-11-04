@@ -19,6 +19,7 @@ import { PDF_MIME, syntheticPdf } from '../fixtures/resumeFiles.js';
 import { createIntakeEnvironment } from '../fixtures/uploadHarness.js';
 import { QA_CANDIDATE, QA_NOTIFICATION_OPTIONS, applyRequest, recordingTransport } from '../fixtures/applyHarness.js';
 import { requireTestDatabase, assertConnectedToTestDatabase } from './testDatabase.js';
+import { clearSuppression, realSuppression, registerKeys } from './fixtures/suppression.js';
 
 /**
  * B6 REAL-DATABASE SUITE — notification state, claims and retries against a
@@ -46,6 +47,7 @@ async function clearSuiteCollections() {
   assertConnectedToTestDatabase(mongoose.connection, TEST_DATABASE);
   await Application.deleteMany({});
   await Job.deleteMany({});
+  await clearSuppression(TEST_DATABASE);
 }
 
 async function publishedJob({ publishedAgoMs = 60_000 } = {}) {
@@ -84,9 +86,13 @@ afterAll(async () => {
 
 let intake;
 let log;
+// B7: acknowledgements pass the REAL suppression check (synthetic key, registered; empty register).
+let suppression;
 beforeEach(async () => {
   if (mongoose.connection.readyState !== 1) await mongoose.connect(TEST_URI, CONNECT);
   await clearSuiteCollections();
+  suppression = realSuppression();
+  await registerKeys(suppression);
   await publishedJob();
   log = capturingLogger();
   intake = await createIntakeEnvironment({ logger: log.logger });
@@ -109,6 +115,7 @@ function realApp({ transport = null, acknowledgementEnabled = false, notificatio
     resumeStorage: intake.storage,
     uploadArea: intake.uploadArea,
     clock,
+    suppressionGate: suppression.gate,
   });
 }
 

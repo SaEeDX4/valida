@@ -88,6 +88,8 @@ Any cell not run stays **NOT RUN**, and the owner decides on each documented lim
 
 **Status at B7 start (2026-11-04, OD-2026-11-04-01):** 1 and 2 are **met**. 3 is **pending** (the design details remain PROPOSED; the SUP-1 amendment is APPROVED, OD-2026-11-02-03; the key-copy location is AWAITING INPUT). 4 is **pending** (owner action; Claude never sees the key). 5 is **designed, PROPOSED** (design rev 8: §4.5.1, SUP-22a–g; with controlled recovery §4.2, SUP-23a–f), awaiting approval — consolidated in `docs/review/B7_SUPPRESSION_DECISION_PROPOSAL.md`. Implementation of the B.2 scope therefore has **not** started; only the production start-up refusal of acknowledgements was added, which keeps G-SUP closed.
 
+**Status after OD-2026-11-04-02 (2026-11-04):** 3 and 5 are **met** (design rev 8 approved: S1 keyed HMAC, S2–S6; the SUP-21 correction). 4 remains an owner action at **C6** (production key placement; key-copy location AWAITING INPUT; operator tokens). Implementation and verification with synthetic keys only were authorised and are done in B7. G-SUP stays closed until the evidence is reviewed and accepted, and the production refusal stays.
+
 1. B6 is accepted.
 2. B7 is authorised separately.
 3. The owner approves the design details ([`RECIPIENT_SUPPRESSION_DESIGN.md`](../architecture/RECIPIENT_SUPPRESSION_DESIGN.md)):

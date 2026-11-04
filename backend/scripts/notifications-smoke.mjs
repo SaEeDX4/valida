@@ -98,6 +98,8 @@ import { Job } from '../src/models/Job.js';
 import { publishJob } from '../src/modules/jobs/job.service.js';
 import { Application } from '../src/models/Application.js';
 import { REQUIRED_INDEXES } from '../src/db/indexes.js';
+import { RecipientSuppressionKey } from '../src/models/RecipientSuppression.js';
+import { keyCheckValue } from '../src/modules/suppression/suppressionKeys.js';
 import { createNotificationService, notificationServiceOptions, isAllowedRecipient } from '../src/integrations/notifications/notificationService.js';
 import { createNotificationTransport } from '../src/integrations/notifications/transport.js';
 import { messageReference } from '../src/integrations/notifications/smtpTransport.js';
@@ -379,6 +381,15 @@ async function main() {
 
   // 3. The live run.
   const runId = randomBytes(4).toString('hex');
+  /*
+   * B7 — the acknowledgement passes the real suppression check (G-SUP; design
+   * rev 8 §3.2). This throw-away run uses its OWN synthetic key: random bytes
+   * made here, a fresh key id, its check value registered in the disposable
+   * TEST database for the run and removed at its end. No real key is involved.
+   */
+  const suppressionKeyId = `smoke-${runId}`;
+  const suppressionKey = randomBytes(32);
+  let suppressionKeyRegistered = false;
   const evidence = {
     kind: 'valida-b6-live-smoke',
     runId,
@@ -467,6 +478,9 @@ async function main() {
         RESUME_STORAGE_DRIVER: 'local',
         RESUME_STORAGE_LOCAL_ROOT: storageRoot,
         APPLICATION_ACKNOWLEDGEMENT_ENABLED: 'true',
+        SUPPRESSION_HMAC_KEY: suppressionKey.toString('base64'),
+        SUPPRESSION_HMAC_KEY_ID: suppressionKeyId,
+        SUPPRESSION_HMAC_PREVIOUS_KEYS: '',
       },
       logger,
       notificationTransportFactory: instrumented,
@@ -495,6 +509,11 @@ async function main() {
     for (const index of REQUIRED_INDEXES) {
       await mongoose.connection.collection(index.collection).createIndex(index.key, { name: index.name, ...index.options });
     }
+    await new RecipientSuppressionKey({ _id: suppressionKeyId, check: keyCheckValue(suppressionKey, suppressionKeyId), state: 'ACTIVE', recovery: null, createdBy: 'smoke-run', requestId: `smoke-${runId}` }).save({
+      writeConcern: { w: 'majority', j: true, wtimeout: 10_000 },
+    });
+    suppressionKeyRegistered = true;
+    check('the run\'s synthetic suppression key is registered (the acknowledgement passes the real suppression check)', true, { keyId: suppressionKeyId });
     const slug = smokeJobSlug(runId);
     // Created as a draft and published through the real lifecycle service, like every Job.
     const job = new Job({
@@ -621,6 +640,15 @@ async function main() {
     // The ORIGINAL failure. Lifecycle failures below are recorded beside it, never in its place.
     evidence.error = summary;
   } finally {
+    // B7: the run's synthetic key check value is removed before shutdown (it protects nothing after the run).
+    if (suppressionKeyRegistered) {
+      try {
+        const removed = await RecipientSuppressionKey.deleteOne({ _id: { $eq: suppressionKeyId } }, { writeConcern: { w: 'majority', j: true, wtimeout: 10_000 } });
+        evidence.suppressionKey = removed.deletedCount === 1 ? 'REMOVED' : 'NOT_FOUND';
+      } catch {
+        evidence.suppressionKey = 'REMOVE_FAILED';
+      }
+    }
     // Every step runs whatever happened before it; PASS needs each one confirmed.
     let ownershipReleasing = null;
     const finalised = await finaliseSmokeRun({

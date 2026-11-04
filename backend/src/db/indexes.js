@@ -66,6 +66,35 @@ export const REQUIRED_INDEXES = [
     options: { unique: true },
     reason: 'Doc 10 section 97 — one stored resume object belongs to one Application.',
   },
+  // B7 — recipient suppression (RECIPIENT_SUPPRESSION_DESIGN.md rev 8 §3.1; OD-2026-11-04-02).
+  {
+    collection: 'recipient_suppressions',
+    name: 'suppression_lookup_unique',
+    key: { 'lookup.keyId': 1, 'lookup.digest': 1, scope: 1 },
+    options: { unique: true },
+    reason: 'Suppression design §3.1 — one document per address and scope under one key; concurrent adds converge on it.',
+  },
+  {
+    collection: 'recipient_suppressions',
+    name: 'suppression_state_updatedAt',
+    key: { state: 1, updatedAt: -1 },
+    options: {},
+    reason: 'Suppression design §3.1 — operator listing.',
+  },
+  {
+    collection: 'recipient_suppressions',
+    name: 'suppression_sourceApplication',
+    key: { 'sources.applicationId': 1 },
+    options: {},
+    reason: 'Suppression design §3.1 — deletion coordination (forget) and re-keying.',
+  },
+  {
+    collection: 'recipient_suppressions',
+    name: 'suppression_coverage',
+    key: { state: 1, scope: 1, 'lookup.keyId': 1 },
+    options: {},
+    reason: 'Suppression design §3.1, §4.4 — the bounded key-coverage check on every acknowledgement attempt.',
+  },
 ];
 
 /** Option keys that make an existing index incompatible if they differ. */

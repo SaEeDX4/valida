@@ -10,6 +10,7 @@ import { createNotificationService } from '../../src/integrations/notifications/
 import { capturingLogger, testConfig } from '../helpers.js';
 import { PDF_MIME, syntheticPdf } from './resumeFiles.js';
 import { createIntakeEnvironment } from './uploadHarness.js';
+import { openSuppressionGate } from './suppressionDoubles.js';
 
 /**
  * OFFLINE B5 HARNESS — synthetic data only (Doc 17 sections 25-30).
@@ -348,6 +349,7 @@ export function memoryApplicationRepository() {
         state.attemptCount += 1;
         state.lastAttemptAt = now;
         state.lastErrorCode = 'ATTEMPT_IN_PROGRESS';
+        state.lastStatusCode = null;
         attempts[channel] = state.attemptCount;
       }
       const claimed = applyConditionally(document, channels, where);
@@ -376,9 +378,11 @@ export function memoryApplicationRepository() {
           state.status = 'SENT';
           state.sentAt = outcome.sentAt;
           state.lastErrorCode = null;
+          state.lastStatusCode = null;
         } else {
           state.status = 'FAILED';
           state.lastErrorCode = outcome.errorCode;
+          state.lastStatusCode = outcome.statusCode ?? null;
         }
       }
       return applyConditionally(document, Object.keys(outcomes), where) ? 'RECORDED' : 'LOST';
@@ -478,6 +482,8 @@ export async function createApplyEnvironment({
   storageOptions = {},
   storage: storageOverride,
   withStorage = true,
+  // B7 — the suppression check (default: complete coverage, nothing suppressed).
+  suppression = openSuppressionGate(),
 } = {}) {
   const log = capturingLogger();
   const intake = withStorage ? await createIntakeEnvironment({ logger: log.logger, storageOptions }) : null;
@@ -507,9 +513,11 @@ export async function createApplyEnvironment({
     clock,
     resumeStorage: storage,
     uploadArea: intake?.uploadArea ?? null,
+    suppressionGate: suppression,
   });
   return {
     app,
+    suppression,
     log,
     intake,
     storage,

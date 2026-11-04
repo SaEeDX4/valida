@@ -18,6 +18,9 @@ import { createApplicationRepository } from './modules/applications/application.
 import { createApplicationSubmissionService } from './modules/applications/application.submission.js';
 import { createNotificationService, notificationServiceOptions } from './integrations/notifications/notificationService.js';
 import { createApplicationNotifier } from './modules/applications/application.notifications.js';
+import { createSuppressionGate } from './modules/suppression/suppressionGate.js';
+import { createSuppressionRegister } from './modules/suppression/suppressionRegister.js';
+import { keyringFromConfig } from './modules/suppression/suppressionKeys.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -106,6 +109,17 @@ export function createApp({
     clock,
     ...notificationServiceOptions(config?.notifications),
   }),
+  /**
+   * B7 — the recipient-suppression check for candidate acknowledgements
+   * (design rev 8 §3.2; OD-2026-11-04-02): the real register over the
+   * process-wide Mongoose connection and the configured keys. Without a
+   * current key every acknowledgement fails closed. Offline tests inject a
+   * stand-in; the register itself is proven by the real-database suite.
+   */
+  suppressionGate = createSuppressionGate({
+    register: createSuppressionRegister({ timeoutMs: config?.suppression?.lookupTimeoutMs ?? 2_000, writeTimeoutMs: config?.databaseQueryTimeoutMs }),
+    keyring: keyringFromConfig(config?.suppression),
+  }),
 } = {}) {
   const app = express();
 
@@ -170,7 +184,7 @@ export function createApp({
   api.use('/jobs', jobsRouter({ repository: jobRepository, clock, logger }));
   // B5 — Apply (Doc 09 sections 71-150): POST /jobs/:jobSlug/applications only.
   // B6 — the claim / send / record cycle shared with ops:notifications:retry.
-  const notifier = createApplicationNotifier({ applications: applicationRepository, notifications: notificationService, clock, logger });
+  const notifier = createApplicationNotifier({ applications: applicationRepository, notifications: notificationService, clock, logger, suppression: suppressionGate });
   const applicationSubmission = createApplicationSubmissionService({
     jobs: jobRepository,
     applications: applicationRepository,

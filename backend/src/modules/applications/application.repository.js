@@ -463,6 +463,8 @@ export function createApplicationRepository({ model = Application, timeoutMs = 5
         state.attemptCount = state.attemptCount + 1;
         state.lastAttemptAt = now;
         state.lastErrorCode = 'ATTEMPT_IN_PROGRESS';
+        // B7: a status code belongs to the attempt that produced it.
+        state.lastStatusCode = null;
         attempts[channel] = state.attemptCount;
       }
       // Rejects (no ownership) when the outcome is unknown or the database failed.
@@ -508,9 +510,12 @@ export function createApplicationRepository({ model = Application, timeoutMs = 5
           state.status = 'SENT';
           state.sentAt = outcome.sentAt;
           state.lastErrorCode = null;
+          state.lastStatusCode = null;
         } else {
           state.status = 'FAILED';
           state.lastErrorCode = outcome.errorCode;
+          // B7: the relay's enhanced status, validated again by the schema.
+          state.lastStatusCode = outcome.statusCode ?? null;
         }
       }
       return (await conditionalSave(document, where)) ? 'RECORDED' : 'LOST';

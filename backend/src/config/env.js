@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseMongoUri } from '../db/connectionString.js';
+import { KEY_ID_PATTERN, MAX_PREVIOUS_KEYS, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
 /**
  * Centralised environment configuration — 15_DEVOPS_DEPLOYMENT.md sections
@@ -467,6 +468,45 @@ export function checkResolvedLocalStorageRoot(value, { applicationRoot = APPLICA
   return null;
 }
 
+/*
+ * B7 — recipient suppression (RECIPIENT_SUPPRESSION_DESIGN.md rev 8 §4.2, §5;
+ * OD-2026-11-04-02). The keys are SECRETS: only their shape is checked, by
+ * fixed rules that never echo a value. Operator identifiers are non-secret
+ * tokens (never an email address).
+ */
+// eslint-disable-next-line no-control-regex
+const noControlCharacters = (value) => !/[\u0000-\u001f\u007f]/.test(value);
+const suppressionSecret = (sentinel, max) => emptyAsUnset(z.string().max(max).refine(noControlCharacters, { message: sentinel }).optional());
+export const OPERATOR_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{1,39}$/;
+const operatorIds = emptyAsUnset(
+  z
+    .string()
+    .transform((value) => value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0))
+    .refine((entries) => entries.length > 0 && entries.length <= 20 && new Set(entries).size === entries.length && entries.every((entry) => OPERATOR_ID_PATTERN.test(entry)), {
+      message: 'SUPPRESSION_OPERATOR_IDS_INVALID',
+    })
+    .optional(),
+);
+
+/**
+ * `id:base64,id:base64` -> [{ keyId, key }]; null when malformed. Never
+ * reports which part was wrong (the value is a secret).
+ */
+export function parsePreviousSuppressionKeys(value) {
+  const entries = value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+  if (entries.length === 0 || entries.length > MAX_PREVIOUS_KEYS) return null;
+  const parsed = [];
+  for (const entry of entries) {
+    const separator = entry.indexOf(':');
+    if (separator < 1) return null;
+    const keyId = entry.slice(0, separator);
+    const key = decodeKey(entry.slice(separator + 1));
+    if (!KEY_ID_PATTERN.test(keyId) || key === null) return null;
+    parsed.push({ keyId, key });
+  }
+  return new Set(parsed.map((entry) => entry.keyId)).size === parsed.length ? parsed : null;
+}
+
 const baseSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   APP_ENV: z.enum(['local', 'review', 'production']).default('local'),
@@ -552,6 +592,12 @@ const baseSchema = z.object({
   SMTP_PASSWORD: smtpPassword,
   NOTIFICATION_RETRY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   NOTIFICATION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(1_000).max(86_400_000).default(60_000),
+  // B7 — recipient suppression. See the section above.
+  SUPPRESSION_HMAC_KEY: suppressionSecret('SUPPRESSION_HMAC_KEY', 512),
+  SUPPRESSION_HMAC_KEY_ID: emptyAsUnset(z.string().regex(KEY_ID_PATTERN, { message: 'SUPPRESSION_HMAC_KEY_ID' }).optional()),
+  SUPPRESSION_HMAC_PREVIOUS_KEYS: suppressionSecret('SUPPRESSION_HMAC_PREVIOUS_KEYS', 8192),
+  SUPPRESSION_OPERATOR_IDS: operatorIds,
+  SUPPRESSION_LOOKUP_TIMEOUT_MS: z.coerce.number().int().min(100).max(10_000).default(2_000),
 });
 
 
@@ -620,6 +666,18 @@ const RULE_TEXT = {
     'is required when APPLICATION_ACKNOWLEDGEMENT_ENABLED=true — candidates must be able to ' +
     'reply to the recruitment mailbox',
   ACKNOWLEDGEMENT_REQUIRES_FROM: 'is required when APPLICATION_ACKNOWLEDGEMENT_ENABLED=true',
+  SUPPRESSION_HMAC_KEY:
+    'must be 32-128 bytes of base64 (standard or URL-safe), generated with a CSPRNG (the value is never shown)',
+  SUPPRESSION_HMAC_KEY_ID: 'must be 1-32 characters: lowercase letters, digits, "-" or "_", starting with a letter or digit',
+  SUPPRESSION_HMAC_PREVIOUS_KEYS:
+    'must be a comma-separated list of at most 8 "<key id>:<base64 key>" pairs with distinct ids, each key 32-128 bytes (the value is never shown)',
+  SUPPRESSION_KEY_ID_REQUIRED: 'is required when SUPPRESSION_HMAC_KEY is set',
+  SUPPRESSION_KEY_REQUIRED: 'is set but SUPPRESSION_HMAC_KEY is not',
+  SUPPRESSION_PREVIOUS_WITHOUT_CURRENT: 'is set but no current SUPPRESSION_HMAC_KEY is configured',
+  SUPPRESSION_PREVIOUS_ID_IS_CURRENT: 'must not repeat the current SUPPRESSION_HMAC_KEY_ID',
+  SUPPRESSION_OPERATOR_IDS: 'must be a comma-separated list of 1-20 distinct operator tokens (2-40 characters: lowercase letters, digits, ".", "_", "-"; never an email address)',
+  SUPPRESSION_OPERATOR_IDS_INVALID: 'must be a comma-separated list of 1-20 distinct operator tokens (2-40 characters: lowercase letters, digits, ".", "_", "-"; never an email address)',
+  SUPPRESSION_LOOKUP_TIMEOUT_MS: 'must be an integer between 100 and 10000 (milliseconds)',
   ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP:
     'must be "false" in production: candidate acknowledgements stay disabled until recipient ' +
     'suppression is implemented and accepted (gate G-SUP)',
@@ -732,6 +790,10 @@ function redactedConfigView() {
       if (notifications.smtp?.password) notifications.smtp = { ...notifications.smtp, password: REDACTED };
       view[key] = notifications;
     }
+    // B7: the suppression keys are secrets — key ids only.
+    if (key === 'suppression' && value) {
+      view[key] = { currentKeyId: value.current?.keyId ?? null, previousKeyIds: (value.previous ?? []).map((entry) => entry.keyId), operatorIds: value.operatorIds, lookupTimeoutMs: value.lookupTimeoutMs };
+    }
   }
   return view;
 }
@@ -747,6 +809,16 @@ function withRedactedSerialisation(object, secretKeys) {
     const copy = { ...this };
     for (const key of secretKeys) if (copy[key]) copy[key] = REDACTED;
     return copy;
+  };
+  Object.defineProperty(object, 'toJSON', { value: view, enumerable: false });
+  Object.defineProperty(object, Symbol.for('nodejs.util.inspect.custom'), { value: view, enumerable: false });
+  return object;
+}
+
+/** B7: the suppression settings serialise to key ids only — never key bytes. */
+function suppressionSerialisationGuard(object) {
+  const view = function suppressionView() {
+    return { currentKeyId: this.current?.keyId ?? null, previousKeyIds: (this.previous ?? []).map((entry) => entry.keyId), operatorIds: this.operatorIds, lookupTimeoutMs: this.lookupTimeoutMs };
   };
   Object.defineProperty(object, 'toJSON', { value: view, enumerable: false });
   Object.defineProperty(object, Symbol.for('nodejs.util.inspect.custom'), { value: view, enumerable: false });
@@ -877,6 +949,35 @@ export function loadConfig(env = process.env) {
         )
       : null;
 
+  /*
+   * B7 — recipient suppression keys (design rev 8 §4.2, §5). Shapes only; a
+   * missing key is NOT a start-up failure outside production: the send path
+   * then fails closed (SUPPRESSION_COVERAGE_INCOMPLETE, §3.2). In production
+   * candidate acknowledgements are refused outright (G-SUP, above).
+   */
+  let suppressionCurrent = null;
+  if (config.SUPPRESSION_HMAC_KEY !== undefined) {
+    const key = decodeKey(config.SUPPRESSION_HMAC_KEY);
+    if (key === null) missing.push({ variable: 'SUPPRESSION_HMAC_KEY', rule: RULE_TEXT.SUPPRESSION_HMAC_KEY });
+    if (config.SUPPRESSION_HMAC_KEY_ID === undefined) missing.push({ variable: 'SUPPRESSION_HMAC_KEY_ID', rule: RULE_TEXT.SUPPRESSION_KEY_ID_REQUIRED });
+    if (key !== null && config.SUPPRESSION_HMAC_KEY_ID !== undefined) suppressionCurrent = { keyId: config.SUPPRESSION_HMAC_KEY_ID, key };
+  } else if (config.SUPPRESSION_HMAC_KEY_ID !== undefined) {
+    missing.push({ variable: 'SUPPRESSION_HMAC_KEY_ID', rule: RULE_TEXT.SUPPRESSION_KEY_REQUIRED });
+  }
+  let suppressionPrevious = [];
+  if (config.SUPPRESSION_HMAC_PREVIOUS_KEYS !== undefined) {
+    const parsedPrevious = parsePreviousSuppressionKeys(config.SUPPRESSION_HMAC_PREVIOUS_KEYS);
+    if (parsedPrevious === null) {
+      missing.push({ variable: 'SUPPRESSION_HMAC_PREVIOUS_KEYS', rule: RULE_TEXT.SUPPRESSION_HMAC_PREVIOUS_KEYS });
+    } else if (config.SUPPRESSION_HMAC_KEY === undefined) {
+      missing.push({ variable: 'SUPPRESSION_HMAC_PREVIOUS_KEYS', rule: RULE_TEXT.SUPPRESSION_PREVIOUS_WITHOUT_CURRENT });
+    } else if (parsedPrevious.some((entry) => entry.keyId === config.SUPPRESSION_HMAC_KEY_ID)) {
+      missing.push({ variable: 'SUPPRESSION_HMAC_PREVIOUS_KEYS', rule: RULE_TEXT.SUPPRESSION_PREVIOUS_ID_IS_CURRENT });
+    } else {
+      suppressionPrevious = parsedPrevious;
+    }
+  }
+
   // Every missing requirement is reported at once, so an operator fixes the
   // environment in one pass rather than one restart per variable.
   if (missing.length > 0) {
@@ -957,5 +1058,18 @@ export function loadConfig(env = process.env) {
       driver: storageDriver,
       localRoot: storageDriver === 'local' ? path.resolve(storageRoot) : null,
     }),
+    /*
+     * B7 — recipient suppression (design rev 8 §4.2, §5). The key bytes are
+     * secrets: carried for the keyring only (modules/suppression) and replaced
+     * by their ids in every serialised view.
+     */
+    suppression: Object.freeze(
+      suppressionSerialisationGuard({
+        current: suppressionCurrent ? Object.freeze({ ...suppressionCurrent }) : null,
+        previous: Object.freeze(suppressionPrevious.map((entry) => Object.freeze({ ...entry }))),
+        operatorIds: Object.freeze([...(config.SUPPRESSION_OPERATOR_IDS ?? [])]),
+        lookupTimeoutMs: config.SUPPRESSION_LOOKUP_TIMEOUT_MS,
+      }),
+    ),
   });
 }

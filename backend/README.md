@@ -2037,14 +2037,71 @@ configuration, or no storage configured — nothing read or deleted). It works
 with the development local adapter; the production storage provider (C6) must
 provide the same listing before it can be used there.
 
-### Production acknowledgements stay disabled (G-SUP)
+### Recipient suppression (B7)
 
-Recipient suppression (Doc 14 section 120) is not implemented: its design
-(`docs/architecture/RECIPIENT_SUPPRESSION_DESIGN.md`) awaits owner approval.
-Until it is implemented and accepted, `APP_ENV=production` refuses to start
-with `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true`
-(`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`). Outside production the B6 behaviour is
-unchanged (allowlisted test recipients only).
+Implements `docs/architecture/RECIPIENT_SUPPRESSION_DESIGN.md` rev 8, approved
+by OD-2026-11-04-02 (keyed HMAC; fail-closed key lifecycle; key check values;
+controlled recovery; operator tokens).
+
+**Send path.** Every candidate acknowledgement — first attempt and every retry
+— is checked after the claim and before the provider is called
+(`src/modules/suppression/suppressionGate.js`). The internal notification never
+is. One bounded read (`SUPPRESSION_LOOKUP_TIMEOUT_MS`, default 2 s) from the
+primary decides:
+
+| Result | Recorded | Retry |
+| --- | --- | --- |
+| a confirmed suppression matches | `FAILED` / `RECIPIENT_SUPPRESSED` | never |
+| coverage incomplete — no current key, a configured key without a registered and matching check value, an `ACTIVE` entry under an unconfigured key id, or any key `RECOVERING` | `FAILED` / `SUPPRESSION_COVERAGE_INCOMPLETE` | only `ops:notifications:retry --include-configuration`, after the fix |
+| the register cannot be read in time | `FAILED` / `SUPPRESSION_CHECK_UNAVAILABLE` | the normal bounded retry, with a fresh check |
+| none of these | the unchanged B6 delivery | — |
+
+Application acceptance (`201`), the internal notification and replay are never
+affected. Logs carry the Application id, channel, suppression id, key ids and
+fixed reasons only — never an address, digest, key or check value. The relay's
+enhanced status of a refusal (`5.1.1` …) is stored on the channel as
+`lastStatusCode`.
+
+**Configuration** (secrets; `.env.example`): `SUPPRESSION_HMAC_KEY`,
+`SUPPRESSION_HMAC_KEY_ID`, `SUPPRESSION_HMAC_PREVIOUS_KEYS` (verify-only keys
+during a rotation), `SUPPRESSION_OPERATOR_IDS`, `SUPPRESSION_LOOKUP_TIMEOUT_MS`.
+Values are never echoed. **Outside production acknowledgements now need a
+configured and registered key**, or they fail closed. **In production
+`APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` is still refused outright**
+(`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`) until G-SUP is accepted; the production
+key, its protected copy (location AWAITING INPUT) and the operator tokens are
+C6 prerequisites.
+
+**Operator command** — dry run by default; `--apply` needs `--operator <token>`
+listed in `SUPPRESSION_OPERATOR_IDS`. Exit codes: 0 done, 1 failure (a write may
+be unknown — re-run, every subcommand is idempotent), 2 refused (nothing
+written). No address is ever typed in or printed.
+
+```powershell
+npm run ops:notifications:suppression -- coverage
+npm run ops:notifications:suppression -- key-register --key-id <id> --apply --operator <op>
+npm run ops:notifications:suppression -- add --from-refusal --application <id> --evidence-ref <ref> --apply --operator <op>
+npm run ops:notifications:suppression -- add --from-bounce --message-token <32 hex> --status 5.1.1 --dsn-received <ISO time> --evidence-ref <ref> --apply --operator <op>
+npm run ops:notifications:suppression -- add --complaint --application <id> --kind COMPLAINT --evidence-ref <ref> --apply --operator <op>
+npm run ops:notifications:suppression -- list [--state ACTIVE|LIFTED] [--limit N]
+npm run ops:notifications:suppression -- check --application <id>
+npm run ops:notifications:suppression -- lift --suppression <id> --reason ADDRESS_CONFIRMED_VALID --evidence-ref <ref> --apply --operator <op>
+npm run ops:notifications:suppression -- forget --application <id> --reason PRIVACY_REQUEST --evidence-ref <ref> --apply --operator <op>
+npm run ops:notifications:suppression -- rekey --apply --operator <op>
+npm run ops:notifications:suppression -- recover-key --key-id <lost id> --reason LOST --expected-count <n> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable --apply --operator <op>
+npm run ops:notifications:suppression -- recover-key --key-id <lost id> --complete --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable --apply --operator <op>
+npm run ops:notifications:suppression -- resolve-unrecoverable --key-id <id> --expected-count <n> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable --apply --operator <op>
+```
+
+`key-register` accepts fresh key ids only (never an id with entries or a key
+record). `rekey` is verified rotation only (complete coverage; every entry
+confirmed under its old key). A lost or untrusted key is handled only by
+`recover-key` (owner decision; the id becomes permanently untrusted;
+acknowledgements stay blocked until `--complete`). The register's four indexes
+are part of `npm run db:indexes:apply`; `add` refuses (`INDEXES_MISSING`) until
+the unique one exists. The live smoke run (`ops:notifications:smoke`) creates a
+synthetic key of its own for its disposable test database and removes its
+record afterwards.
 
 ### B7 verification
 
@@ -2086,8 +2143,9 @@ Implemented here — and nothing more:
   With `TRANSACTIONAL_EMAIL_PROVIDER=none` (the default) nothing is sent. The
   backend records relay **acceptance** only: Titan offers no webhook or
   delivery API, so bounces are monitored manually in the sending mailbox (procedure
-  approved 2026-11-03, OD-2026-11-03-01: `docs/operations/B6_BOUNCE_PROCEDURE_DRAFT.md`); no
-  suppression list, no complaint processing, no scheduler; no notification
+  approved 2026-11-03, OD-2026-11-03-01: `docs/operations/B6_BOUNCE_PROCEDURE_DRAFT.md`); the
+  operator records confirmed bounces in the B7 suppression register (no automatic
+  DSN parsing, no complaint feed), no scheduler; no notification
   index (the retry scan is bounded by `--limit` and `maxTimeMS`). **No
   Sent copy of automated messages is kept** (Titan stores none for SMTP; a copy design is
   proposed, not implemented: `docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`); the
@@ -2102,8 +2160,9 @@ Implemented here — and nothing more:
 - B7 (*Backend Security, Failure & QA Gate*; not the admin/authentication
   milestone): the early-answer discard is bounded server-wide and the server
   timeouts are explicit (the former OPEN body-discard item is resolved); the
-  security test matrix, coverage diagnostic and `verify:b7`. **No recipient
-  suppression yet**, so production refuses candidate acknowledgements (G-SUP)
+  security test matrix, coverage diagnostic and `verify:b7`; recipient
+  suppression (OD-2026-11-04-02). Production still refuses candidate
+  acknowledgements until G-SUP is accepted
 - readiness reports 503 while no email provider is configured (or its login is
   refused), even with the database connected and storage ready; `ready` for
   notifications means connection + TLS + login verified, not delivery

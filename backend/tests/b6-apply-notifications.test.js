@@ -58,13 +58,13 @@ describe('candidate acknowledgement ENABLED (provider double, identity configure
     expect(response.body).toEqual(ACCEPTED_BODY(response));
     expect(states).toEqual([
       {
-        internal: { status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null },
-        candidateAcknowledgement: { status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null },
+        internal: { status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, lastStatusCode: null },
+        candidateAcknowledgement: { status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, lastStatusCode: null },
       },
     ]);
     expect(record().notifications).toEqual({
-      internal: { status: 'SENT', attemptCount: 1, lastAttemptAt: QA_NOW, sentAt: QA_NOW, lastErrorCode: null },
-      candidateAcknowledgement: { status: 'SENT', attemptCount: 1, lastAttemptAt: QA_NOW, sentAt: QA_NOW, lastErrorCode: null },
+      internal: { status: 'SENT', attemptCount: 1, lastAttemptAt: QA_NOW, sentAt: QA_NOW, lastErrorCode: null, lastStatusCode: null },
+      candidateAcknowledgement: { status: 'SENT', attemptCount: 1, lastAttemptAt: QA_NOW, sentAt: QA_NOW, lastErrorCode: null, lastStatusCode: null },
     });
     const byEvent = Object.fromEntries(transport.calls.map((message) => [message.event, message]));
     expect(Object.keys(byEvent).sort()).toEqual(['APPLICATION_ACKNOWLEDGEMENT', 'APPLICATION_RECEIVED_INTERNAL']);
@@ -103,8 +103,8 @@ describe('candidate acknowledgement ENABLED (provider double, identity configure
     const response = await applyRequest(env.app);
     expect(response.status).toBe(201);
     expect(Date.now() - started).toBeLessThan(2_000);
-    expect(record().notifications.internal).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'TIMEOUT' });
-    expect(record().notifications.candidateAcknowledgement).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'TIMEOUT' });
+    expect(record().notifications.internal).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'TIMEOUT', lastStatusCode: null });
+    expect(record().notifications.candidateAcknowledgement).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'TIMEOUT', lastStatusCode: null });
     expect(transport.signals.every((signal) => signal.aborted)).toBe(true);
     expect(env.storedObjects()).toHaveLength(1);
   });
@@ -117,7 +117,7 @@ describe('candidate acknowledgement ENABLED (provider double, identity configure
     });
     expect((await applyRequest(env.app)).status).toBe(201);
     expect(transport.calls.map((message) => message.event)).toEqual(['APPLICATION_RECEIVED_INTERNAL']);
-    expect(record().notifications.candidateAcknowledgement).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'RECIPIENT_NOT_ALLOWED' });
+    expect(record().notifications.candidateAcknowledgement).toMatchObject({ status: 'FAILED', attemptCount: 1, lastErrorCode: 'RECIPIENT_NOT_ALLOWED', lastStatusCode: null });
   });
 
   it('a replay sends nothing — neither event — and changes no notification state (Doc 09 section 135)', async () => {
@@ -152,7 +152,7 @@ describe('candidate acknowledgement DISABLED (the default)', () => {
     const transport = recordingTransport('accept');
     env = await createApplyEnvironment({ transport });
     expect((await applyRequest(env.app)).status).toBe(201);
-    expect(record().notifications.candidateAcknowledgement).toEqual({ status: 'NOT_REQUIRED', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null });
+    expect(record().notifications.candidateAcknowledgement).toEqual({ status: 'NOT_REQUIRED', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, lastStatusCode: null });
     expect(transport.calls.map((message) => message.event)).toEqual(['APPLICATION_RECEIVED_INTERNAL']);
     expect(events('application_accepted')).toEqual([expect.objectContaining({ notification: 'SENT', acknowledgement: 'NOT_REQUIRED' })]);
   });
@@ -161,8 +161,8 @@ describe('candidate acknowledgement DISABLED (the default)', () => {
     env = await createApplyEnvironment({ transport: null, notificationOptions: { acknowledgementEnabled: true } });
     expect((await applyRequest(env.app)).status).toBe(201);
     expect(record().notifications).toEqual({
-      internal: { status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null },
-      candidateAcknowledgement: { status: 'NOT_REQUIRED', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null },
+      internal: { status: 'PENDING', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, lastStatusCode: null },
+      candidateAcknowledgement: { status: 'NOT_REQUIRED', attemptCount: 0, lastAttemptAt: null, sentAt: null, lastErrorCode: null, lastStatusCode: null },
     });
     expect(env.applications.calls.claimNotificationAttempts).toBe(0);
     expect(events('application_accepted')).toEqual([expect.objectContaining({ notification: 'NOT_ATTEMPTED', notificationReason: 'NOT_CONFIGURED', acknowledgement: 'NOT_REQUIRED' })]);

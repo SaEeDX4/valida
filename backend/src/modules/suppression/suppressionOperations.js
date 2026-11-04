@@ -5,9 +5,11 @@ import { NOTIFICATION_EVENTS } from '../../integrations/notifications/notificati
 import { REQUIRED_INDEXES, diffIndexes } from '../../db/indexes.js';
 import {
   ACTOR_PATTERN,
+  ALIAS_QUIET_PERIOD_MS,
   DECISION_REF_PATTERN,
   EVIDENCE_REF_PATTERN,
   MAX_HISTORY,
+  MAX_LOOKUPS,
   MAX_SOURCES,
   MESSAGE_TOKEN_PATTERN,
   RECOVERY_REASONS,
@@ -15,7 +17,7 @@ import {
 import { runBounded } from '../jobs/job.repository.js';
 import { assessCoverage } from './suppressionGate.js';
 import { KEY_ID_PATTERN, hexValuesMatch } from './suppressionKeys.js';
-import { SUPPRESSION_SCOPE, SuppressionWriteConflict } from './suppressionRegister.js';
+import { SUPPRESSION_SCOPE, SuppressionWriteConflict, SuppressionWriteUnknown } from './suppressionRegister.js';
 
 /**
  * `npm run ops:notifications:suppression -- <subcommand>` — the operator
@@ -65,6 +67,10 @@ export class SuppressionRefused extends Error {
 const refuse = (code, details) => {
   throw new SuppressionRefused(code, details);
 };
+
+/** The `(keyId, digest)` pairs as a `lookups` match (rev 8.2: primary and aliases). */
+const lookupsMatch = (pairs) => ({ $or: pairs.map(({ keyId, digest }) => ({ lookups: { $elemMatch: { keyId: { $eq: keyId }, digest: { $eq: digest } } } })) });
+const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
 
 /** The r9 Message-ID token of one Application's message for one event (smtpTransport.messageReference). */
 export const messageTokenFor = (event, applicationId) => messageReference(`${event}/${String(applicationId)}`);
@@ -174,23 +180,27 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
     await requireIndexes();
     const pairs = keyring.lookupPairs(emailNormalized);
     return retryOnConflict(async () => {
-      const existing = await register.findEntries({ scope: { $eq: SUPPRESSION_SCOPE }, $or: pairs.map(({ keyId, digest }) => ({ 'lookup.keyId': { $eq: keyId }, 'lookup.digest': { $eq: digest } })) }, { limit: pairs.length + 1 });
+      const existing = await register.findEntries({ scope: { $eq: SUPPRESSION_SCOPE }, ...lookupsMatch(pairs) }, { limit: pairs.length + 1 });
       const active = existing.find((entry) => entry.state === 'ACTIVE' && entry.lookup.keyId === currentKeyId) ?? existing.find((entry) => entry.state === 'ACTIVE');
       if (active) {
         if (active.sources.some((item) => String(item.applicationId) === String(source.applicationId))) return { result: 'ALREADY_ACTIVE', suppressionId: String(active._id) };
+        // §3.1: AT the history cap every further action is refused (B7 r3 review) — nothing is written.
+        refuseAtHistoryCap(active);
         if (!write) return { result: 'WOULD_RECORD_DUPLICATE', suppressionId: String(active._id) };
-        const sourceAdded = active.sources.length < MAX_SOURCES;
+        // §3.1: once the cap is NEAR, a duplicate report only increments duplicateReports.
+        const nearCap = active.history.length >= HISTORY_NEAR_CAP;
+        const sourceAdded = !nearCap && active.sources.length < MAX_SOURCES;
         if (sourceAdded) active.sources.push(source);
         active.duplicateReports += 1;
-        const historyAdded = active.history.length < HISTORY_NEAR_CAP;
-        if (historyAdded) active.history.push(history(write, 'DUPLICATE', { reason, evidenceRef: basis.evidenceRef }));
+        if (!nearCap) active.history.push(history(write, 'DUPLICATE', { reason, evidenceRef: basis.evidenceRef }));
         await register.save(active);
-        return { result: 'DUPLICATE', suppressionId: String(active._id), sourceAdded, historyAdded };
+        return { result: 'DUPLICATE', suppressionId: String(active._id), sourceAdded, historyAdded: !nearCap };
       }
       const lifted = existing.find((entry) => entry.state === 'LIFTED' && entry.lookup.keyId === currentKeyId);
       if (lifted) {
-        if (!write) return { result: 'WOULD_REAPPLY', suppressionId: String(lifted._id) };
+        // §3.1: refused AT the cap — in a dry run too, so the dry run reports what --apply would do.
         refuseAtHistoryCap(lifted);
+        if (!write) return { result: 'WOULD_REAPPLY', suppressionId: String(lifted._id) };
         lifted.state = 'ACTIVE';
         lifted.reason = reason;
         lifted.basis = basis;
@@ -200,8 +210,10 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
         return { result: 'REAPPLIED', suppressionId: String(lifted._id) };
       }
       if (!write) return { result: 'WOULD_ADD', keyId: currentKeyId };
+      const digest = keyring.digestUnder(currentKeyId, emailNormalized);
       const entry = register.newEntry({
-        lookup: { keyId: currentKeyId, digest: keyring.digestUnder(currentKeyId, emailNormalized) },
+        lookup: { keyId: currentKeyId, digest },
+        lookups: [{ keyId: currentKeyId, digest, retiredAt: null }],
         scope: SUPPRESSION_SCOPE,
         state: 'ACTIVE',
         reason,
@@ -215,6 +227,86 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
       await register.save(entry);
       return { result: 'ADDED', suppressionId: String(entry._id), keyId: currentKeyId };
     });
+  }
+
+  /**
+   * Rev 8.2 — moves an entry's PRIMARY lookup to `(keyId, digest)` and keeps
+   * the old one as an alias (retiredAt now), so the entry stays matchable
+   * under its old key until the alias is pruned. Returns false when the entry
+   * already holds MAX_LOOKUPS lookups (left unchanged: prune first).
+   */
+  function moveLookup(entry, keyId, digest) {
+    const lookups = entry.lookups.map((item) => ({ keyId: item.keyId, digest: item.digest, retiredAt: item.retiredAt ?? null }));
+    const existing = lookups.find((item) => item.keyId === keyId && item.digest === digest);
+    if (!existing && lookups.length >= MAX_LOOKUPS) return false;
+    const now = clock();
+    for (const item of lookups) if (item.retiredAt === null) item.retiredAt = now;
+    if (existing) existing.retiredAt = null;
+    else lookups.push({ keyId, digest, retiredAt: null });
+    entry.lookups = lookups;
+    entry.lookup = { keyId, digest };
+    return true;
+  }
+
+  /**
+   * Rev 8.2 — removes aliases that have been aliases for at least
+   * ALIAS_QUIET_PERIOD_MS (optionally only those under `keyId`). Bounded
+   * (`limit` entries), one conditional durable write per entry, no history
+   * entry (no suppression decision changes). Never touches a primary lookup.
+   */
+  async function pruneAliases({ write, limit, keyId = null }) {
+    const cutoff = new Date(clock().getTime() - ALIAS_QUIET_PERIOD_MS);
+    const old = { retiredAt: { $ne: null, $lte: cutoff }, ...(keyId ? { keyId: { $eq: keyId } } : {}) };
+    const entries = await register.findEntries({ lookups: { $elemMatch: old } }, { limit });
+    let pruned = 0;
+    let waiting = 0;
+    for (const entry of entries) {
+      const keep = entry.lookups.filter((item) => item.retiredAt === null || item.retiredAt > cutoff || (keyId !== null && item.keyId !== keyId));
+      const removed = entry.lookups.length - keep.length;
+      if (removed === 0) continue;
+      if (!write) {
+        waiting += removed;
+        continue;
+      }
+      entry.lookups = keep.map((item) => ({ keyId: item.keyId, digest: item.digest, retiredAt: item.retiredAt ?? null }));
+      try {
+        await register.save(entry);
+        pruned += removed;
+      } catch (error) {
+        if (!(error instanceof SuppressionWriteConflict)) throw error;
+      }
+    }
+    return { pruned, prunable: waiting };
+  }
+
+  const requireCursor = (after) => {
+    if (after === undefined || after === null) return null;
+    if (typeof after !== 'string' || !OBJECT_ID_HEX.test(after)) refuse('INVALID_CURSOR');
+    return new mongoose.Types.ObjectId(after);
+  };
+
+  /**
+   * One bounded, resumable pass (B7 r3 review): examines at most `limit`
+   * entries in `_id` order after the cursor, so entries that stay unresolved
+   * can never hold back later ones — the next run continues from `nextAfter`.
+   * An unknown write stops the pass with `resumeAfter`: the last entry fully
+   * handled before it (the failed one is examined again; every step is
+   * idempotent).
+   */
+  async function boundedPass({ filter, after, limit, handle }) {
+    const cursor = requireCursor(after);
+    const entries = await register.findEntries({ ...filter, ...(cursor ? { _id: { $gt: cursor } } : {}) }, { limit, sort: { _id: 1 } });
+    let lastHandled = cursor ? String(cursor) : null;
+    for (const entry of entries) {
+      try {
+        await handle(entry);
+      } catch (error) {
+        if (error instanceof SuppressionWriteUnknown) error.resumeAfter = lastHandled;
+        throw error;
+      }
+      lastHandled = String(entry._id);
+    }
+    return { examined: entries.length, nextAfter: entries.length === limit ? lastHandled : null };
   }
 
   const acknowledgementSource = (applicationId, channel) => ({
@@ -253,7 +345,7 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
       const coverage = await currentCoverage();
       if (!keyring.currentKeyId) return { state: 'UNKNOWN', coverage: coverage.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE', problems: coverage.problems };
       const pairs = keyring.lookupPairs(application.candidate.emailNormalized);
-      const entries = await register.findEntries({ scope: { $eq: SUPPRESSION_SCOPE }, $or: pairs.map(({ keyId, digest }) => ({ 'lookup.keyId': { $eq: keyId }, 'lookup.digest': { $eq: digest } })) }, { limit: pairs.length + 1 });
+      const entries = await register.findEntries({ scope: { $eq: SUPPRESSION_SCOPE }, ...lookupsMatch(pairs) }, { limit: pairs.length + 1 });
       const active = entries.find((entry) => entry.state === 'ACTIVE');
       const found = active ?? entries[0] ?? null;
       return {
@@ -414,17 +506,21 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
       return { result: items.length === 0 ? 'NOTHING_TO_FORGET' : 'DONE', items };
     },
 
-    /** `coverage` — read-only (§3.4, §4.4). */
+    /** `coverage` — read-only (§3.4, §4.4; rev 8.2 counts aliases). */
     async coverage() {
       const [coverage, counts] = await Promise.all([currentCoverage(), register.activeCountsByKey()]);
       const byKey = new Map(counts.map((row) => [row._id, row]));
       const keys = coverage.keys.map((key) => {
         const count = byKey.get(key.keyId);
+        const active = count?.active ?? 0;
+        const aliases = count?.aliases ?? 0;
         return {
           ...key,
-          activeEntries: count?.active ?? 0,
+          activeEntries: active,
           activeListingSource: count?.listingSource ?? 0,
-          ...(key.role === 'PREVIOUS' ? { safeToRetire: (count?.active ?? 0) === 0 } : {}),
+          aliasEntries: aliases,
+          // A previous key may be removed only when no ACTIVE entry can still be matched under it.
+          ...(key.role === 'PREVIOUS' ? { safeToRetire: active === 0 && aliases === 0 } : {}),
         };
       });
       return { result: coverage.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE', problems: coverage.problems, keys };
@@ -435,7 +531,8 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
       requireKeyId(keyId);
       if (!keyring.has(keyId)) refuse('KEY_NOT_CONFIGURED');
       const write = writer({ apply, actor, requestId });
-      if ((await register.countEntries({ 'lookup.keyId': { $eq: keyId } })) > 0) refuse('KEY_ID_ALREADY_USED');
+      // Any entry — any state, primary OR alias lookup — makes the id "already used".
+      if ((await register.countEntries({ $or: [{ 'lookup.keyId': { $eq: keyId } }, { 'lookups.keyId': { $eq: keyId } }] })) > 0) refuse('KEY_ID_ALREADY_USED');
       if (await register.findKeyDocument(keyId)) refuse('KEY_ID_ALREADY_USED');
       if (!write) return { result: 'WOULD_REGISTER', keyId };
       try {
@@ -449,76 +546,86 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
     },
 
     /**
-     * `rekey [--limit ≤ 500]` — ORDINARY, VERIFIED rotation only (§4.2 rev 8;
-     * SUP-16, SUP-19, SUP-23a). Refused unless coverage is complete; every
-     * entry is confirmed under its old key before it moves; never SOURCE_UNVERIFIED.
+     * `rekey [--limit ≤ 500] [--after <suppression id>]` — ORDINARY, VERIFIED
+     * rotation only (§4.2 rev 8; SUP-16, SUP-19, SUP-23a). Refused unless
+     * coverage is complete; every entry is confirmed under its old key before
+     * it moves; never SOURCE_UNVERIFIED. Rev 8.2: a move keeps the old lookup
+     * as an alias; aliases older than ALIAS_QUIET_PERIOD_MS are pruned first.
+     * Bounded and resumable (SUP-25): `limit` entries examined after `after`.
      */
-    async rekey({ limit = OPERATION_LIMITS.batch, apply = false, actor, requestId } = {}) {
+    async rekey({ limit = OPERATION_LIMITS.batch, after = null, apply = false, actor, requestId } = {}) {
       if (!Number.isInteger(limit) || limit < 1 || limit > OPERATION_LIMITS.batch) refuse('INVALID_LIMIT');
+      requireCursor(after);
       const write = writer({ apply, actor, requestId });
       const before = await currentCoverage();
       if (!before.complete) refuse('COVERAGE_INCOMPLETE', { problems: before.problems });
       const currentKeyId = keyring.currentKeyId;
-      const counts = { moved: 0, wouldMove: 0, withoutSource: 0, digestMismatch: 0, conflict: 0, versionConflict: 0, historyCap: 0 };
-      const entries = await register.findEntries({ state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE }, 'lookup.keyId': { $ne: currentKeyId } }, { limit });
-      for (const entry of entries) {
-        const usable = await usableSource(entry);
-        if (!usable) {
-          counts.withoutSource += 1;
-          continue;
-        }
-        if (!hexValuesMatch(keyring.digestUnder(entry.lookup.keyId, usable.emailNormalized), entry.lookup.digest)) {
-          counts.digestMismatch += 1;
-          continue;
-        }
-        const digest = keyring.digestUnder(currentKeyId, usable.emailNormalized);
-        if (await register.findEntry({ 'lookup.keyId': { $eq: currentKeyId }, 'lookup.digest': { $eq: digest }, scope: { $eq: SUPPRESSION_SCOPE } })) {
-          counts.conflict += 1;
-          continue;
-        }
-        if (entry.history.length >= MAX_HISTORY) {
-          counts.historyCap += 1;
-          continue;
-        }
-        if (!write) {
-          counts.wouldMove += 1;
-          continue;
-        }
-        entry.lookup = { keyId: currentKeyId, digest };
-        entry.history.push(history(write, 'REKEY', { reason: 'ROTATION' }));
-        try {
-          await register.save(entry);
-          counts.moved += 1;
-        } catch (error) {
-          if (!(error instanceof SuppressionWriteConflict)) throw error;
-          counts[error.kind === 'DUPLICATE_KEY' ? 'conflict' : 'versionConflict'] += 1;
-        }
-      }
-      const after = await currentCoverage();
+      const { pruned, prunable } = await pruneAliases({ write, limit });
+      const counts = { moved: 0, wouldMove: 0, withoutSource: 0, digestMismatch: 0, conflict: 0, versionConflict: 0, historyCap: 0, lookupCap: 0 };
+      const pass = await boundedPass({
+        filter: { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE }, 'lookup.keyId': { $ne: currentKeyId } },
+        after,
+        limit,
+        handle: async (entry) => {
+          const usable = await usableSource(entry);
+          if (!usable) return void (counts.withoutSource += 1);
+          if (!hexValuesMatch(keyring.digestUnder(entry.lookup.keyId, usable.emailNormalized), entry.lookup.digest)) return void (counts.digestMismatch += 1);
+          const digest = keyring.digestUnder(currentKeyId, usable.emailNormalized);
+          if (await register.findEntry({ 'lookup.keyId': { $eq: currentKeyId }, 'lookup.digest': { $eq: digest }, scope: { $eq: SUPPRESSION_SCOPE } })) return void (counts.conflict += 1);
+          if (entry.history.length >= MAX_HISTORY) return void (counts.historyCap += 1);
+          if (!write) return void (counts.wouldMove += 1);
+          if (!moveLookup(entry, currentKeyId, digest)) return void (counts.lookupCap += 1);
+          entry.history.push(history(write, 'REKEY', { reason: 'ROTATION' }));
+          try {
+            await register.save(entry);
+            counts.moved += 1;
+          } catch (error) {
+            if (!(error instanceof SuppressionWriteConflict)) throw error;
+            counts[error.kind === 'DUPLICATE_KEY' ? 'conflict' : 'versionConflict'] += 1;
+          }
+        },
+      });
+      const after_ = await currentCoverage();
       const remaining = await register.countEntries({ state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE }, 'lookup.keyId': { $ne: currentKeyId } });
-      return { result: write ? 'DONE' : 'DRY_RUN', currentKeyId, ...counts, remainingUnderPreviousKeys: remaining, coverage: after.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE' };
+      return {
+        result: write ? 'DONE' : 'DRY_RUN',
+        currentKeyId,
+        ...counts,
+        examined: pass.examined,
+        nextAfter: pass.nextAfter,
+        aliasesPruned: pruned,
+        aliasesPrunable: prunable,
+        remainingUnderPreviousKeys: remaining,
+        coverage: after_.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE',
+      };
     },
 
     /**
      * `recover-key` — CONTROLLED RECOVERY of a lost or untrusted key (§4.2 rev 8; SUP-23).
      * First run: marks the id RECOVERING (permanently untrusted). Every run with
      * `apply` moves each ACTIVE entry that has a source to the current key
-     * (REKEY / SOURCE_UNVERIFIED). `complete` retires the id once no ACTIVE
-     * entry is left under it. Acknowledgements stay blocked until then
-     * (suppressionGate: a RECOVERING key document makes coverage incomplete).
+     * (REKEY / SOURCE_UNVERIFIED), keeping the old lookup as an alias (rev 8.2),
+     * in bounded, resumable passes (`limit`, `after`; SUP-25). `complete` prunes
+     * the id's aliases once they are older than ALIAS_QUIET_PERIOD_MS and
+     * retires the id when no ACTIVE entry can be matched under it any more.
+     * Acknowledgements stay blocked until then (suppressionGate: a RECOVERING
+     * key document — and any lookup under an unconfigured id — makes coverage
+     * incomplete).
      */
-    async recoverKey({ keyId, decisionRef, evidenceRef, confirmKeyUnavailable = false, expectedCount, reason, limit = OPERATION_LIMITS.batch, complete = false, apply = false, actor, requestId }) {
+    async recoverKey({ keyId, decisionRef, evidenceRef, confirmKeyUnavailable = false, expectedCount, reason, limit = OPERATION_LIMITS.batch, after = null, complete = false, apply = false, actor, requestId }) {
       requireKeyId(keyId);
       requireDecisionRef(decisionRef);
       requireEvidenceRef(evidenceRef);
       if (confirmKeyUnavailable !== true) refuse('CONFIRMATION_REQUIRED');
       if (!Number.isInteger(limit) || limit < 1 || limit > OPERATION_LIMITS.batch) refuse('INVALID_LIMIT');
+      requireCursor(after);
       const write = writer({ apply, actor, requestId });
       if (keyring.has(keyId)) refuse('KEY_STILL_CONFIGURED');
       const currentKeyId = await requireVerifiedCurrentKey();
       if (currentKeyId === keyId) refuse('KEY_STILL_CONFIGURED');
 
       const activeUnder = { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE }, 'lookup.keyId': { $eq: keyId } };
+      const matchableUnder = { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE }, 'lookups.keyId': { $eq: keyId } };
       let keyDocument = await register.findKeyDocument(keyId);
       if (keyDocument?.state === 'RETIRED') refuse('KEY_RETIRED');
       const firstRun = keyDocument?.state !== 'RECOVERING';
@@ -528,7 +635,11 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
         if (firstRun) refuse('NOT_RECOVERING');
         const left = await register.countEntries(activeUnder);
         if (left > 0) refuse('ENTRIES_REMAIN', { activeEntries: left });
-        if (!write) return { result: 'WOULD_COMPLETE', keyId };
+        const { pruned, prunable } = await pruneAliases({ write, limit, keyId });
+        const aliasesLeft = await register.countEntries(matchableUnder);
+        if (!write) return { result: 'WOULD_COMPLETE', keyId, aliasesPrunable: prunable, aliasesWaiting: aliasesLeft - prunable };
+        // Aliases younger than the quiet period (or beyond this batch): run --complete again later.
+        if (aliasesLeft > 0) refuse('ALIASES_PENDING', { aliasEntries: aliasesLeft, aliasesPruned: pruned });
         await retryOnConflict(async () => {
           const fresh = await register.findKeyDocument(keyId);
           if (fresh?.state !== 'RECOVERING') refuse('NOT_RECOVERING');
@@ -536,8 +647,8 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
           fresh.recovery = { ...fresh.recovery.toObject(), completedAt: clock(), completedBy: write.actor };
           await register.save(fresh);
         });
-        const after = await currentCoverage();
-        return { result: 'COMPLETED', keyId, keyState: 'RETIRED', coverage: after.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE', problems: after.problems };
+        const after_ = await currentCoverage();
+        return { result: 'COMPLETED', keyId, keyState: 'RETIRED', aliasesPruned: pruned, coverage: after_.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE', problems: after_.problems };
       }
 
       if (firstRun) {
@@ -560,48 +671,42 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
         }
       }
 
-      const counts = { moved: 0, wouldMove: 0, withoutSource: 0, conflictActive: 0, conflictLifted: 0, versionConflict: 0, historyCap: 0 };
-      const entries = await register.findEntries(activeUnder, { limit });
-      for (const entry of entries) {
-        const usable = await usableSource(entry);
-        if (!usable) {
-          counts.withoutSource += 1;
-          continue;
-        }
-        const digest = keyring.digestUnder(currentKeyId, usable.emailNormalized);
-        const existing = await register.findEntry({ 'lookup.keyId': { $eq: currentKeyId }, 'lookup.digest': { $eq: digest }, scope: { $eq: SUPPRESSION_SCOPE } });
-        if (existing) {
-          counts[existing.state === 'ACTIVE' ? 'conflictActive' : 'conflictLifted'] += 1;
-          continue;
-        }
-        if (entry.history.length >= MAX_HISTORY) {
-          counts.historyCap += 1;
-          continue;
-        }
-        if (!write) {
-          counts.wouldMove += 1;
-          continue;
-        }
-        entry.lookup = { keyId: currentKeyId, digest };
-        entry.history.push(history(write, 'REKEY', { reason: 'SOURCE_UNVERIFIED', evidenceRef, decisionRef }));
-        try {
-          await register.save(entry);
-          counts.moved += 1;
-        } catch (error) {
-          if (!(error instanceof SuppressionWriteConflict)) throw error;
-          if (error.kind === 'DUPLICATE_KEY') counts.conflictActive += 1;
-          else counts.versionConflict += 1;
-        }
-      }
+      const counts = { moved: 0, wouldMove: 0, withoutSource: 0, conflictActive: 0, conflictLifted: 0, versionConflict: 0, historyCap: 0, lookupCap: 0 };
+      const pass = await boundedPass({
+        filter: activeUnder,
+        after,
+        limit,
+        handle: async (entry) => {
+          const usable = await usableSource(entry);
+          if (!usable) return void (counts.withoutSource += 1);
+          const digest = keyring.digestUnder(currentKeyId, usable.emailNormalized);
+          const existing = await register.findEntry({ 'lookup.keyId': { $eq: currentKeyId }, 'lookup.digest': { $eq: digest }, scope: { $eq: SUPPRESSION_SCOPE } });
+          if (existing) return void (counts[existing.state === 'ACTIVE' ? 'conflictActive' : 'conflictLifted'] += 1);
+          if (entry.history.length >= MAX_HISTORY) return void (counts.historyCap += 1);
+          if (!write) return void (counts.wouldMove += 1);
+          if (!moveLookup(entry, currentKeyId, digest)) return void (counts.lookupCap += 1);
+          entry.history.push(history(write, 'REKEY', { reason: 'SOURCE_UNVERIFIED', evidenceRef, decisionRef }));
+          try {
+            await register.save(entry);
+            counts.moved += 1;
+          } catch (error) {
+            if (!(error instanceof SuppressionWriteConflict)) throw error;
+            if (error.kind === 'DUPLICATE_KEY') counts.conflictActive += 1;
+            else counts.versionConflict += 1;
+          }
+        },
+      });
       const left = await register.countEntries(activeUnder);
-      const after = await currentCoverage();
+      const after_ = await currentCoverage();
       return {
         result: write ? 'RECOVERY_RUN' : 'DRY_RUN',
         keyId,
         keyState: write ? 'RECOVERING' : keyDocument?.state ?? 'NONE',
         ...counts,
+        examined: pass.examined,
+        nextAfter: pass.nextAfter,
         activeEntriesLeft: left,
-        coverage: after.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE',
+        coverage: after_.complete ? 'COVERAGE_COMPLETE' : 'COVERAGE_INCOMPLETE',
       };
     },
 

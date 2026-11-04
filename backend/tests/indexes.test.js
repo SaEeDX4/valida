@@ -14,8 +14,8 @@ const find = (collection, key) =>
   );
 
 describe('required index set', () => {
-  it('declares exactly the ten required indexes (B2-B5 six; B7 suppression register four)', () => {
-    expect(REQUIRED_INDEXES).toHaveLength(10);
+  it('declares exactly the eleven required indexes (B2-B5 six; B7 suppression register five, rev 8.2)', () => {
+    expect(REQUIRED_INDEXES).toHaveLength(11);
   });
 
   it.each([
@@ -29,7 +29,8 @@ describe('required index set', () => {
     ['recipient_suppressions', { 'lookup.keyId': 1, 'lookup.digest': 1, scope: 1 }, true],
     ['recipient_suppressions', { state: 1, updatedAt: -1 }, false],
     ['recipient_suppressions', { 'sources.applicationId': 1 }, false],
-    ['recipient_suppressions', { state: 1, scope: 1, 'lookup.keyId': 1 }, false],
+    ['recipient_suppressions', { state: 1, scope: 1, 'lookups.keyId': 1 }, false],
+    ['recipient_suppressions', { 'lookups.keyId': 1, 'lookups.digest': 1 }, false],
   ])('declares %s %j with unique=%s', (collection, key, unique) => {
     const index = find(collection, key);
     expect(index, `missing required index on ${collection}`).toBeTruthy();
@@ -114,14 +115,15 @@ describe('diff classification', () => {
       { name: 'lookup', key: { 'lookup.keyId': 1, 'lookup.digest': 1, scope: 1 }, unique: true },
       { name: 'listing', key: { state: 1, updatedAt: -1 } },
       { name: 'sources', key: { 'sources.applicationId': 1 } },
-      { name: 'coverage', key: { state: 1, scope: 1, 'lookup.keyId': 1 } },
+      { name: 'coverage', key: { state: 1, scope: 1, 'lookups.keyId': 1 } },
+      { name: 'match', key: { 'lookups.keyId': 1, 'lookups.digest': 1 } },
     ],
     ...overrides,
   });
 
   it('reports a fully indexed database as satisfied', () => {
     const { satisfied, missing, incompatible } = diffIndexes(REQUIRED_INDEXES, actualFor());
-    expect(satisfied).toHaveLength(10);
+    expect(satisfied).toHaveLength(11);
     expect(missing).toHaveLength(0);
     expect(incompatible).toHaveLength(0);
   });
@@ -135,7 +137,7 @@ describe('diff classification', () => {
 
   it('reports an empty database as all missing', () => {
     const { missing } = diffIndexes(REQUIRED_INDEXES, { jobs: [], applications: [], recipient_suppressions: [] });
-    expect(missing).toHaveLength(10);
+    expect(missing).toHaveLength(11);
   });
 
   it('reports a non-unique slug index as incompatible, not missing', () => {

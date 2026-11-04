@@ -90,10 +90,17 @@ export const REQUIRED_INDEXES = [
   },
   {
     collection: 'recipient_suppressions',
-    name: 'suppression_coverage',
-    key: { state: 1, scope: 1, 'lookup.keyId': 1 },
+    name: 'suppression_coverage_lookups',
+    key: { state: 1, scope: 1, 'lookups.keyId': 1 },
     options: {},
-    reason: 'Suppression design §3.1, §4.4 — the bounded key-coverage check on every acknowledgement attempt.',
+    reason: 'Suppression design §3.1, §4.4 (rev 8.2) — the bounded key-coverage check on every acknowledgement attempt, over every lookup (primary and alias).',
+  },
+  {
+    collection: 'recipient_suppressions',
+    name: 'suppression_lookups_match',
+    key: { 'lookups.keyId': 1, 'lookups.digest': 1 },
+    options: {},
+    reason: 'Suppression design §3.1, §3.2 (rev 8.2) — the send-path match: one index point lookup per configured key, stable across key moves.',
   },
 ];
 

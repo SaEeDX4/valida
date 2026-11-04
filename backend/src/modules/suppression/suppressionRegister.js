@@ -11,6 +11,17 @@ import { DatabaseUnavailableError, runBounded } from '../jobs/job.repository.js'
  * suppression applies to every lookup that starts after its add was
  * acknowledged by a majority (§3.5).
  *
+ * CONSISTENCY (rev 8.2, B7 r3 review): coverage and the match are separate
+ * reads, so they may observe the register at different moments. That is safe
+ * because both read the `lookups` array: a key move ADDS the new lookup and
+ * keeps the old one as an alias, and an alias is pruned only after
+ * ALIAS_QUIET_PERIOD_MS — far longer than the one bounded window (timeoutMs,
+ * all reads issued together) in which a check's reads execute. So for any
+ * sender keyring: if the sender holds a key the entry has ever been stored
+ * under, its match finds it; if it does not, coverage shows that key id as
+ * not configured. No interleaving of a move or a prune with the two reads
+ * yields PROCEED for a suppressed address (SUP-24).
+ *
  * WRITES (operator command only): one document per write, a validated save,
  * conditional on the loaded `version` (optimistic concurrency) and durable —
  * `w: majority, j: true` with `wtimeout` — exactly the Application policy.
@@ -52,10 +63,10 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
   const Keys = models.RecipientSuppressionKey ?? RecipientSuppressionKey;
   const bounded = (model, operation) => runBounded(model, operation, timeoutMs);
 
-  /** Coverage inputs (§4.4, §4.5.1): the key ids that hold ACTIVE entries, and every key document. */
+  /** Coverage inputs (§4.4, §4.5.1): every key id an ACTIVE entry can be matched under (primary or alias), and every key document. */
   function readCoverageInputs() {
     return Promise.all([
-      bounded(Suppression, () => Suppression.distinct('lookup.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).maxTimeMS(timeoutMs)),
+      bounded(Suppression, () => Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).maxTimeMS(timeoutMs)),
       bounded(Keys, () => Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).maxTimeMS(timeoutMs).lean()),
     ]).then(([activeKeyIds, keyDocuments]) => ({
       activeKeyIds: activeKeyIds.slice(0, COVERAGE_READ_LIMIT + 1),
@@ -64,7 +75,10 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
     }));
   }
 
-  /** An ACTIVE entry matching any of the `(keyId, digest)` pairs, or null. */
+  /**
+   * An ACTIVE entry matching any of the `(keyId, digest)` pairs, or null —
+   * through `lookups` only (primary and aliases), one index point lookup per pair.
+   */
   function findActiveMatch(pairs) {
     if (pairs.length === 0) return Promise.resolve(null);
     return bounded(Suppression, () =>
@@ -72,7 +86,7 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
         {
           state: { $eq: 'ACTIVE' },
           scope: { $eq: SUPPRESSION_SCOPE },
-          $or: pairs.map(({ keyId, digest }) => ({ 'lookup.keyId': { $eq: keyId }, 'lookup.digest': { $eq: digest } })),
+          $or: pairs.map(({ keyId, digest }) => ({ lookups: { $elemMatch: { keyId: { $eq: keyId }, digest: { $eq: digest } } } })),
         },
         { _id: 1 },
       )
@@ -132,13 +146,26 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
     },
 
     readCoverageInputs,
+    findActiveMatch,
 
-    /** Per-key counts for `coverage` (read-only): ACTIVE entries and how many still list a source. */
+    /**
+     * Per-key counts for `coverage` (read-only): ACTIVE entries whose PRIMARY
+     * lookup is under the key, how many of them still list a source, and ACTIVE
+     * entries that still hold an ALIAS under it (rev 8.2).
+     */
     activeCountsByKey() {
       return bounded(Suppression, () =>
         Suppression.aggregate([
           { $match: { state: 'ACTIVE', scope: SUPPRESSION_SCOPE } },
-          { $group: { _id: '$lookup.keyId', active: { $sum: 1 }, listingSource: { $sum: { $cond: [{ $gt: [{ $size: '$sources' }, 0] }, 1, 0] } } } },
+          { $unwind: '$lookups' },
+          {
+            $group: {
+              _id: '$lookups.keyId',
+              active: { $sum: { $cond: [{ $eq: ['$lookups.retiredAt', null] }, 1, 0] } },
+              listingSource: { $sum: { $cond: [{ $and: [{ $eq: ['$lookups.retiredAt', null] }, { $gt: [{ $size: '$sources' }, 0] }] }, 1, 0] } },
+              aliases: { $sum: { $cond: [{ $eq: ['$lookups.retiredAt', null] }, 0, 1] } },
+            },
+          },
           { $sort: { _id: 1 } },
           { $limit: COVERAGE_READ_LIMIT },
         ]).option({ maxTimeMS: timeoutMs }),

@@ -27,9 +27,9 @@ export const SUBCOMMANDS = Object.freeze({
   lift: ['--suppression', '--reason', '--evidence-ref'],
   forget: ['--application', '--reason', '--evidence-ref'],
   coverage: [],
-  rekey: ['--limit'],
+  rekey: ['--limit', '--after'],
   'key-register': ['--key-id'],
-  'recover-key': ['--key-id', '--decision-ref', '--evidence-ref', '--confirm-key-unavailable', '--expected-count', '--reason', '--limit', '--complete'],
+  'recover-key': ['--key-id', '--decision-ref', '--evidence-ref', '--confirm-key-unavailable', '--expected-count', '--reason', '--limit', '--after', '--complete'],
   'resolve-unrecoverable': ['--key-id', '--expected-count', '--confirm-key-unavailable', '--decision-ref', '--evidence-ref'],
 });
 const BOOLEAN_FLAGS = new Set(['--apply', '--from-refusal', '--from-bounce', '--complaint', '--confirm-key-unavailable', '--complete']);
@@ -92,7 +92,7 @@ export function runSubcommand(operations, { subcommand, flags }) {
     case 'coverage':
       return operations.coverage();
     case 'rekey':
-      return operations.rekey({ limit: flags['--limit'], ...write });
+      return operations.rekey({ limit: flags['--limit'], after: flags['--after'], ...write });
     case 'key-register':
       return operations.keyRegister({ keyId: flags['--key-id'], ...write });
     case 'recover-key':
@@ -104,6 +104,7 @@ export function runSubcommand(operations, { subcommand, flags }) {
         expectedCount: flags['--expected-count'],
         reason: flags['--reason'],
         limit: flags['--limit'],
+        after: flags['--after'],
         complete: flags['--complete'] === true,
         ...write,
       });
@@ -162,7 +163,8 @@ async function main() {
       console.error(`REFUSED: ${error.code}${Object.keys(error.details).length ? ` ${JSON.stringify(error.details)}` : ''}. Nothing was written by this step.`);
       exitCode = 2;
     } else if (error instanceof SuppressionWriteUnknown) {
-      console.error(`FAILED: a write outcome is unknown (${error.reason}); it may have applied. Nothing further was written. Re-run the same command (idempotent).`);
+      const resume = error.resumeAfter !== undefined ? ` Resume with ${error.resumeAfter ? `--after ${error.resumeAfter}` : 'no --after (from the start)'}.` : '';
+      console.error(`FAILED: a write outcome is unknown (${error.reason}); it may have applied. Nothing further was written. Re-run the same command (idempotent).${resume}`);
       exitCode = 1;
     } else {
       const { type, code } = safeErrorSummary(error);

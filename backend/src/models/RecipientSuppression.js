@@ -31,6 +31,20 @@ export const RECOVERY_REASONS = Object.freeze(['LOST', 'UNTRUSTED']);
 
 export const MAX_SOURCES = 10;
 export const MAX_HISTORY = 20;
+/**
+ * Rev 8.2 (B7 r3 review correction): the lookups an entry can currently be
+ * matched under — its primary `lookup` plus the earlier lookups a key move
+ * left behind (aliases), until they are pruned after ALIAS_QUIET_PERIOD_MS.
+ */
+export const MAX_LOOKUPS = 8;
+/**
+ * An alias is pruned only when it has been an alias for at least this long.
+ * It must exceed, by a wide margin, the longest window over which one
+ * send-path check reads the register (SUPPRESSION_LOOKUP_TIMEOUT_MS ≤ 10 s)
+ * plus any clock difference between operator processes: then no check can
+ * have read coverage before a move and its lookup after the prune.
+ */
+export const ALIAS_QUIET_PERIOD_MS = 10 * 60 * 1000;
 
 /** §3.1 — the R3 evidence-reference pattern, with no "@". */
 export const EVIDENCE_REF_PATTERN = /^[A-Za-z0-9._:/#-]{1,80}$/;
@@ -54,6 +68,16 @@ const sourceSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const lookupEntrySchema = new mongoose.Schema(
+  {
+    keyId: { type: String, required: true, match: KEY_ID_PATTERN },
+    digest: { type: String, required: true, match: DIGEST_PATTERN },
+    // null for the primary lookup; the time it stopped being primary for an alias.
+    retiredAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const historySchema = new mongoose.Schema(
   {
     at: { type: Date, required: true },
@@ -72,6 +96,18 @@ const recipientSuppressionSchema = new mongoose.Schema(
     lookup: {
       keyId: { type: String, required: true, match: KEY_ID_PATTERN },
       digest: { type: String, required: true, match: DIGEST_PATTERN },
+    },
+    /*
+     * Rev 8.2 — every lookup the entry can be matched under: the primary (also
+     * in `lookup`, retiredAt null) and the aliases a key move left behind. The
+     * send path matches ONLY through this array and computes coverage from its
+     * key ids, so a move never makes an entry unmatchable for a sender that
+     * holds the old key, and never hides the old key from a sender that lacks it.
+     */
+    lookups: {
+      type: [lookupEntrySchema],
+      default: undefined,
+      validate: [(items) => Array.isArray(items) && items.length >= 1 && items.length <= MAX_LOOKUPS, `1 to ${MAX_LOOKUPS} lookups`],
     },
     scope: { type: String, required: true, enum: SUPPRESSION_SCOPES },
     state: { type: String, required: true, enum: SUPPRESSION_STATES },
@@ -101,6 +137,23 @@ const recipientSuppressionSchema = new mongoose.Schema(
     optimisticConcurrency: true,
   },
 );
+
+/*
+ * Rev 8.2 — `lookups` holds the primary exactly once (retiredAt null, equal to
+ * `lookup`) and distinct aliases. A new entry derives it from `lookup` when
+ * none is given.
+ */
+recipientSuppressionSchema.pre('validate', function lookupsInvariant() {
+  if (this.isNew && (!Array.isArray(this.lookups) || this.lookups.length === 0) && this.lookup?.keyId) {
+    this.lookups = [{ keyId: this.lookup.keyId, digest: this.lookup.digest, retiredAt: null }];
+  }
+  const items = this.lookups ?? [];
+  const primaries = items.filter((item) => item.retiredAt === null || item.retiredAt === undefined);
+  if (primaries.length !== 1 || primaries[0].keyId !== this.lookup?.keyId || primaries[0].digest !== this.lookup?.digest) {
+    this.invalidate('lookups', 'lookups must hold the primary lookup exactly once');
+  }
+  if (new Set(items.map((item) => `${item.keyId}:${item.digest}`)).size !== items.length) this.invalidate('lookups', 'lookups must be distinct');
+});
 
 /* A history entry, once written, is never rewritten or dropped (SUP-14): only appends are valid. */
 const historyFingerprint = (entries) => JSON.stringify(entries.map((entry) => (typeof entry.toObject === 'function' ? entry.toObject() : entry)));

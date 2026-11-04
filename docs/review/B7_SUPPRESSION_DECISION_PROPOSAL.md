@@ -6,7 +6,8 @@
 | Design | [`docs/architecture/RECIPIENT_SUPPRESSION_DESIGN.md`](../architecture/RECIPIENT_SUPPRESSION_DESIGN.md) **rev 8** (PROPOSED) |
 | Plan | [`IMPLEMENTATION_PLANS_B6_TEMPLATES_B7_SUPPRESSION.md`](IMPLEMENTATION_PLANS_B6_TEMPLATES_B7_SUPPRESSION.md) Part B. Preconditions 1–2 are met. This proposal is what preconditions 3 and 5 need. |
 | Already approved — not asked again | D2a approach (OD-2026-10-26-01); DEV-B6-04 with the SUP-1 amendment (OD-2026-11-02-03); G-SUP closed (OD-2026-11-02-03 item 5); B7 authorisation (OD-2026-11-04-01) |
-| Status | **PROPOSED.** Nothing in this proposal is implemented. Production start-up keeps refusing `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`, commit `9e86465`). |
+| Outcome | **DECIDED — OD-2026-11-04-02** (2026-11-04): S1 keyed HMAC; S2–S6 approved, with the SUP-21 correction. Implemented in B7. |
+| Status (as proposed) | **PROPOSED.** Nothing in this proposal is implemented. Production start-up keeps refusing `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`, commit `9e86465`). |
 
 ## 1. Decisions requested — one approval covers all six
 

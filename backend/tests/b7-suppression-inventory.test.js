@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RecipientSuppression, RecipientSuppressionKey } from '../src/models/RecipientSuppression.js';
+import { PRUNE_SEQUENCE_COLLECTION, PRUNE_SEQUENCE_ID, RecipientSuppression, RecipientSuppressionKey } from '../src/models/RecipientSuppression.js';
 import { Application } from '../src/models/Application.js';
 
 /**
@@ -39,6 +39,20 @@ describe('SUP-6 — the suppression data-inventory entry (docs/privacy/DATA_INVE
     expect(body).toContain(`\`${model.collection.collectionName}\``);
     const missing = storedFields(model).filter((name) => !body.includes(`\`${name}\``));
     expect(missing).toEqual([]);
+  });
+
+  it('§1.2a names the prune-sequence counter collection and its one document (rev 8.3)', () => {
+    const body = section('### 1.2a');
+    expect(body).toContain(`\`${PRUNE_SEQUENCE_COLLECTION}\``);
+    expect(body).toContain(`\`${PRUNE_SEQUENCE_ID}\``);
+    expect(body).toContain('`value`');
+  });
+
+  it('describes alias retention as the final implementation does: kept until an operator prunes it, no time limit, retiredAt informational (r4)', () => {
+    const body = section('### 1.1');
+    expect(body).not.toMatch(/ALIAS_QUIET_PERIOD_MS|quiet period|for at most/);
+    expect(body).toMatch(/kept until an operator removes it[^\n]*no time limit/);
+    expect(body).toMatch(/`retiredAt`[^\n]*informational and no decision reads it/);
   });
 
   it('§1.3 names the Application channel field lastStatusCode with its stored pattern', () => {

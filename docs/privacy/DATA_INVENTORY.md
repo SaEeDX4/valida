@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | **Minimal entry — B7 r3 review correction (finding 4).** It records what the B7 recipient-suppression code actually stores, logs and needs, so that SUP-6 ("the entry is listed in the inventory") is met. Production inputs that have not been decided are marked **AWAITING INPUT**; nothing here is invented. |
+| Status | **Minimal entry — B7 r3 review correction (finding 4); alias wording and the prune sequence corrected in r4 (design rev 8.3).** It records what the B7 recipient-suppression code actually stores, logs and needs, so that SUP-6 ("the entry is listed in the inventory") is met. Production inputs that have not been decided are marked **AWAITING INPUT**; nothing here is invented. |
 | Governing text | Doc 13 §173 (data subjects), §§177–178 (purpose limitation, minimisation), §§183–184 (access), §§186–187 (storage limitation; retention **AWAITING**), §190 (privacy deletion workflow), §192 (data access request), §§197–198 (cross-border processing; provider inventory), §§199–201 (provider change, contracts, legal applicability); Doc 14 §§174, 178; design [`RECIPIENT_SUPPRESSION_DESIGN.md`](../architecture/RECIPIENT_SUPPRESSION_DESIGN.md) §§3.1, 3.3, 4 (rev 8.2) |
 | Scope | Only the entries B7 adds. The inventory Doc 13 §198 requires as a whole — for example Applications, resume objects and the corporate email backup entry proposed as AMD-OD-02 (`OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md`) — is **not** part of B7 and is not entered here. |
 | Checked by | `backend/tests/b7-suppression-inventory.test.js` (offline, in `verify:b7`): every field the two suppression models store is listed in §1, and every pending production input is marked. |
@@ -17,7 +17,7 @@
 | Data subjects | Candidates (Doc 13 §173) whose acknowledgement address was **confirmed** permanently invalid (relay refusal or DSN with 5.1.1, 5.1.2, 5.1.3 or 5.1.10), or who complained, or for whom a provider suppression notice was verified (design §2). |
 | Purpose (Doc 13 §177) | Stop **future candidate acknowledgements** to that address (Doc 14 MAIL-042–044; design §1). It is used for nothing else: no profiling, no recruitment decision, no effect on Application acceptance or the internal notification. |
 | Personal data held | **Pseudonymous** (Doc 13 §178; design §4.1). No plaintext address, name, DSN text, provider reply text or subject is stored. The keyed digest is still personal data. |
-| Fields | `_id` (the suppression id the command prints). `lookup.keyId`, `lookup.digest` — the current keyed HMAC-SHA-256 digest of `candidate.emailNormalized` and its key id. `lookups` (`keyId`, `digest`, `retiredAt`) — the same digest under every key the entry is still matchable under: the primary and, for at most `ALIAS_QUIET_PERIOD_MS` after a key move, the previous one (rev 8.2). `scope`, `state`, `reason`. `basis.kind`, `basis.statusCode` (an enhanced status code such as `5.1.1`), `basis.evidenceRef` (a bounce-log reference, never an address). `sources` (`applicationId`, `attempt`, `messageToken` — the r9 Message-ID token, derived, 32 hex) — at most 10. `duplicateReports`. `history` (`at`, `action`, `actor` — an operator identifier token, `reason`, `evidenceRef`, `decisionRef`, `requestId`) — at most 20. `createdAt`, `updatedAt`, `version`. |
+| Fields | `_id` (the suppression id the command prints). `lookup.keyId`, `lookup.digest` — the current keyed HMAC-SHA-256 digest of `candidate.emailNormalized` and its key id. `lookups` (`keyId`, `digest`, `retiredAt`) — the keyed digests the entry is matchable under, at most 8: the primary and, after a key move, the previous lookup kept as an alias. An alias is kept until an operator removes it — the next `rekey` run, or `recover-key --complete` for that key — and there is no time limit in either direction. `retiredAt` records when a lookup became an alias, by the operator's clock; it is informational and no decision reads it (design §9.6, rev 8.3). `pruneSeq` — the sequence number of the entry's last alias removal (0 if none); a counter value, not personal data (rev 8.3). `scope`, `state`, `reason`. `basis.kind`, `basis.statusCode` (an enhanced status code such as `5.1.1`), `basis.evidenceRef` (a bounce-log reference, never an address). `sources` (`applicationId`, `attempt`, `messageToken` — the r9 Message-ID token, derived, 32 hex) — at most 10. `duplicateReports`. `history` (`at`, `action`, `actor` — an operator identifier token, `reason`, `evidenceRef`, `decisionRef`, `requestId`) — at most 20. `createdAt`, `updatedAt`, `version`. |
 | Source | The operator command (`npm run ops:notifications:suppression`), from a **stored** Application's `candidate.emailNormalized` and its recorded acknowledgement outcome or a correlated DSN token. No address is typed in. |
 | Storage | The application's MongoDB database, the same database as Applications. **Production MongoDB hosting provider and region: AWAITING INPUT** (C6 provider selection; Doc 15 §§260–268). |
 | Provider, contractual / privacy role, transfers (Doc 13 §§197, 200–201) | **AWAITING INPUT** — decided with the production MongoDB provider (C6): provider, storage / processing location, contractual role and any transfer requirement. |
@@ -35,6 +35,14 @@
 | Purpose | Prove that each configured key's bytes are the bytes registered under its id (design §4.5.1). |
 | Fields | `_id` (the key id), `check` (HMAC of the key id under the key; reveals nothing about any address or the key), `state`, `recovery` (`decisionRef`, `evidenceRef`, `reason`, `startedAt`, `startedBy`, `startCount`, `completedAt`, `completedBy`), `createdBy`, `requestId`, `createdAt`, `updatedAt`, `version`. |
 | Storage, provider, access, retention | As §1.1 (same database; the same **AWAITING INPUT** items). Retained for as long as any entry or alias under the key id may exist; `RECOVERING` and `RETIRED` documents are kept permanently so an id is never trusted again (design §4.5.1). |
+
+### 1.2a `recipient_suppression_sequence` (MongoDB collection; rev 8.3)
+
+| Item | Entry |
+| --- | --- |
+| Data | One counter document: `_id` (`alias-prune`) and `value`, the last prune sequence number handed out (design §9.6). |
+| Personal data | **None**: no address, digest, identifier of a person or time. |
+| Storage, access, retention | As §1.1: the same database and the same **AWAITING INPUT** items. It is written only by the operator command, when it removes an alias. It is kept for as long as the register exists. |
 
 ### 1.3 Application field `lastStatusCode` (notification channels)
 
@@ -62,7 +70,7 @@
 
 | Provider category (Doc 13 §198) | Personal data from this entry | Status |
 | --- | --- | --- |
-| MongoDB hosting | §§1.1–1.3 | **AWAITING INPUT** (C6) |
+| MongoDB hosting | §§1.1–1.3 (and the counter of §1.2a) | **AWAITING INPUT** (C6) |
 | Hosting (secret store, logs) | §§1.4–1.5 | **AWAITING INPUT** (C6) |
 | Transactional email (relay) | None stored by the register; the relay's refusal status is the input of §1.3 | The relay's own entry belongs to the transactional email inventory item (Doc 14 §174), outside B7 |
 | Corporate email (bounce mailbox) | The DSNs that `evidenceRef` points to | The proposed AMD-OD-02 entry, outside B7 |

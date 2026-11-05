@@ -354,6 +354,22 @@ describe('SUP-12 / §3.5 — a stale former primary after the majority recorded 
       await responding.catch(() => {});
     }
     const rcptAfter = server.counter.rcptTo(target);
+    // After the partition heals: the deferred acknowledgement is retried on the healthy set, which now sees the
+    // suppression. Its stored state depends on timing: the FAILED / SUPPRESSION_CHECK_UNAVAILABLE outcome is on the
+    // majority when A stepped down while the outcome write waited (the driver retried it on the new primary); when
+    // the write timed out on A instead, it is rolled back and the claim is a stale attempt (UNCERTAIN, retried only
+    // with --include-uncertain). Both are recorded; the retry includes uncertain claims, so either way the gate runs.
+    await waitHealthy();
+    const storedAfterHeal = await mongoose.connection.collection('applications').findOne({ _id: claimed }, { projection: { _id: 0, 'notifications.candidateAcknowledgement': 1 } });
+    const acknowledgementAfterHeal = storedAfterHeal?.notifications?.candidateAcknowledgement ?? null;
+    const later = () => new Date(Date.now() + 10 * 60_000);
+    const retryGate = senderGate(keyring);
+    const applications = createApplicationRepository({ timeoutMs: 2_000 });
+    const notifier = createApplicationNotifier({ applications, notifications: held.notificationService, clock: later, logger: env.log.logger, suppression: retryGate.gate });
+    mark('after heal: retry run START');
+    const retried = await runNotificationRetry({ applications, notifier, clock: later, policy: POLICY, send: true, includeUncertain: true });
+    mark('after heal: retry run END', { results: retried.results });
+    const rcptAfterRetry = server.counter.rcptTo(target);
     const lookupReads = timeline.filter((entry) => entry.event === 'command' && entry.actor === 'sender' && entry.collection?.startsWith('recipient_suppression') && entry.t >= (timeline.find((item) => item.event === 'sender: suppression lookup START')?.t ?? Infinity));
     evidence('SP-1 EVIDENCE', {
       claimedApplication: String(claimed),
@@ -362,6 +378,9 @@ describe('SUP-12 / §3.5 — a stale former primary after the majority recorded 
       lookupServedBy: [...new Set(lookupReads.map((entry) => entry.node))],
       lookupReadConcern: [...new Set(lookupReads.map((entry) => entry.readConcern))],
       membersAtDecision: decisionSnapshot,
+      afterHeal: {
+        storedOnMajority: acknowledgementAfterHeal && { status: acknowledgementAfterHeal.status, attemptCount: acknowledgementAfterHeal.attemptCount, lastErrorCode: acknowledgementAfterHeal.lastErrorCode ?? null },
+        retryDue: retried.due, retryResults: retried.results, gateDecision: retryGate.decisions[0] ?? null, rcptToTarget: rcptAfterRetry },
       timeline,
     });
     expect(lookupReads.length).toBeGreaterThan(0);
@@ -371,7 +390,10 @@ describe('SUP-12 / §3.5 — a stale former primary after the majority recorded 
     // r6 (§9.8): the lookup was sent linearizable and failed closed — deferred before SMTP, not a stale PROCEED.
     expect(new Set(lookupReads.map((entry) => entry.readConcern))).toEqual(new Set(['linearizable']));
     expect(instrumented.decisions[0].errorCode).toBe('SUPPRESSION_CHECK_UNAVAILABLE');
-  }, 240_000);
+    // …and once healed, the deferred acknowledgement ends SUPPRESSED — still zero submissions.
+    expect(retryGate.decisions.map((decision) => decision.decision)).toEqual(['SUPPRESSED']);
+    expect(rcptAfterRetry).toBe(rcptBefore);
+  }, 300_000);
 
   it('SP-2 the retry path, claim attempted DURING the partition on the stale primary → zero SMTP submissions', async (context) => {
     if (!ENABLED) return context.skip(NOT_RUN);

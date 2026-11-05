@@ -519,6 +519,10 @@ describe('SUP-14 — durable writes, restart safety and audit integrity', () => 
     await failPoint({ failCommands: ['update'], closeConnection: true }, { times: 2 });
     const lift = () => suppression.operations.lift({ suppressionId: String(entry._id), reason: 'ENTERED_IN_ERROR', evidenceRef: EVIDENCE, apply: true, actor: QA_OPERATOR });
     await expect(lift()).rejects.toBeInstanceOf(SuppressionWriteUnknown);
+    // The injected failure ends here, explicitly, before the durable state is read and recovery is attempted. On a
+    // replica set the driver's retryable-write retry used the second activation; a standalone server has no
+    // retryable writes, so without this the recovery itself would meet the failure still armed.
+    expect((await mongoose.connection.db.admin().command({ configureFailPoint: 'failCommand', mode: 'off' })).ok).toBe(1);
     const between = await RecipientSuppression.findById(entry._id).lean();
     expect(between.state === 'ACTIVE' ? between.history.length === 1 : between.history.length === 2).toBe(true);
     if (between.state === 'ACTIVE') expect(await lift()).toMatchObject({ result: 'LIFTED' });

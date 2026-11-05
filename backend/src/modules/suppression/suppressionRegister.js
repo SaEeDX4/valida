@@ -8,9 +8,13 @@ import { DatabaseUnavailableError, runBounded } from '../jobs/job.repository.js'
  * §3.2, §4.4, §4.5.1; OD-2026-11-04-02).
  *
  * READS (send path and operator command): bounded by `timeoutMs` and sent to
- * the server as maxTimeMS, from the primary (the default read preference): a
- * suppression applies to every lookup that starts after its add was
- * acknowledged by a majority (§3.5).
+ * the server as maxTimeMS, and ALWAYS from the primary (§3.5): a suppression
+ * applies to every lookup that starts after its add was acknowledged by a
+ * majority. B7 r5: every read sets readPreference `primary` EXPLICITLY, so a
+ * connection-level preference (for example `readPreference=secondaryPreferred`
+ * in MONGODB_URI, which configuration accepts) never reaches them. Without a
+ * reachable primary a read fails, and the send path fails closed
+ * (SUPPRESSION_CHECK_UNAVAILABLE); no secondary is ever asked.
  *
  * CONSISTENCY (rev 8.3, B7 r4 review; design §9.6) — no clock is involved.
  * Coverage and the match are separate reads and may observe the register at
@@ -43,6 +47,9 @@ export const SUPPRESSION_SCOPE = 'APPLICATION_ACKNOWLEDGEMENT';
 export const SUPPRESSION_WRITE_CONCERN = Object.freeze({ w: 'majority', j: true });
 /** Upper bound on key ids / key documents one coverage read accepts; more is treated as incomplete. */
 export const COVERAGE_READ_LIMIT = 1_000;
+/** The one read preference of every register read (B7 r5; design §3.5). */
+export const SUPPRESSION_READ_PREFERENCE = 'primary';
+const PRIMARY = SUPPRESSION_READ_PREFERENCE;
 
 /** A write that did not apply because the document changed since it was read. */
 export class SuppressionWriteConflict extends Error {
@@ -75,8 +82,8 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
   /** Coverage inputs (§4.4, §4.5.1): every key id an ACTIVE entry can be matched under (primary or alias), and every key document. */
   function readCoverageInputs(ms = timeoutMs) {
     return Promise.all([
-      bounded(Suppression, () => Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).maxTimeMS(ms), ms),
-      bounded(Keys, () => Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).maxTimeMS(ms).lean(), ms),
+      bounded(Suppression, () => Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).read(PRIMARY).maxTimeMS(ms), ms),
+      bounded(Keys, () => Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).read(PRIMARY).maxTimeMS(ms).lean(), ms),
     ]).then(([activeKeyIds, keyDocuments]) => ({
       activeKeyIds: activeKeyIds.slice(0, COVERAGE_READ_LIMIT + 1),
       keyDocuments: keyDocuments.slice(0, COVERAGE_READ_LIMIT),
@@ -101,6 +108,7 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
           },
           { _id: 1 },
         )
+          .read(PRIMARY)
           .maxTimeMS(ms)
           .lean(),
       ms,
@@ -109,7 +117,7 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
 
   /** Rev 8.3 — the highest prune stamp in the register (0 when none): one index point read. */
   function highestPruneSeq(ms = timeoutMs) {
-    return bounded(Suppression, () => Suppression.findOne({}, { _id: 0, pruneSeq: 1 }).sort({ pruneSeq: -1 }).maxTimeMS(ms).lean(), ms).then((document) =>
+    return bounded(Suppression, () => Suppression.findOne({}, { _id: 0, pruneSeq: 1 }).sort({ pruneSeq: -1 }).read(PRIMARY).maxTimeMS(ms).lean(), ms).then((document) =>
       Number.isSafeInteger(document?.pruneSeq) ? document.pruneSeq : 0,
     );
   }
@@ -234,30 +242,32 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
           },
           { $sort: { _id: 1 } },
           { $limit: COVERAGE_READ_LIMIT },
-        ]).option({ maxTimeMS: timeoutMs }),
+        ])
+          .read(PRIMARY)
+          .option({ maxTimeMS: timeoutMs }),
       );
     },
 
     /** Loads documents for an operator action (full documents: they may be saved). */
     findEntries(filter, { limit = 500, sort = { _id: 1 } } = {}) {
-      return bounded(Suppression, () => Suppression.find(filter).sort(sort).limit(limit).maxTimeMS(timeoutMs));
+      return bounded(Suppression, () => Suppression.find(filter).sort(sort).limit(limit).read(PRIMARY).maxTimeMS(timeoutMs));
     },
     findEntry(filter) {
-      return bounded(Suppression, () => Suppression.findOne(filter).maxTimeMS(timeoutMs));
+      return bounded(Suppression, () => Suppression.findOne(filter).read(PRIMARY).maxTimeMS(timeoutMs));
     },
     countEntries(filter) {
-      return bounded(Suppression, () => Suppression.countDocuments(filter).maxTimeMS(timeoutMs));
+      return bounded(Suppression, () => Suppression.countDocuments(filter).read(PRIMARY).maxTimeMS(timeoutMs));
     },
     findKeyDocument(keyId) {
-      return bounded(Keys, () => Keys.findOne({ _id: { $eq: keyId } }).maxTimeMS(timeoutMs));
+      return bounded(Keys, () => Keys.findOne({ _id: { $eq: keyId } }).read(PRIMARY).maxTimeMS(timeoutMs));
     },
     listKeyDocuments() {
-      return bounded(Keys, () => Keys.find({}).sort({ _id: 1 }).limit(COVERAGE_READ_LIMIT).maxTimeMS(timeoutMs).lean());
+      return bounded(Keys, () => Keys.find({}).sort({ _id: 1 }).limit(COVERAGE_READ_LIMIT).read(PRIMARY).maxTimeMS(timeoutMs).lean());
     },
     /** The register's indexes as MongoDB reports them (fail closed when the unique one is missing). */
     async listIndexes() {
       try {
-        return await bounded(Suppression, () => Suppression.collection.listIndexes().toArray());
+        return await bounded(Suppression, () => Suppression.collection.listIndexes({ readPreference: PRIMARY }).toArray());
       } catch (error) {
         // A collection that does not exist yet has no indexes.
         if (error?.codeName === 'NamespaceNotFound' || error?.code === 26) return [];

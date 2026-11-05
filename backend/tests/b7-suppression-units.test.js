@@ -15,6 +15,7 @@ import {
 } from '../src/modules/suppression/suppressionKeys.js';
 import { assessCoverage, createSuppressionGate, COVERAGE_REASONS } from '../src/modules/suppression/suppressionGate.js';
 import { createSuppressionOperations, SuppressionRefused, messageTokenFor } from '../src/modules/suppression/suppressionOperations.js';
+import { createSuppressionRegister, SUPPRESSION_READ_PREFERENCE } from '../src/modules/suppression/suppressionRegister.js';
 import { parseSuppressionArgs } from '../scripts/ops-notifications-suppression.mjs';
 import { ConfigurationError, loadConfig } from '../src/config/env.js';
 import { assessChannel, createApplicationNotifier } from '../src/modules/applications/application.notifications.js';
@@ -216,6 +217,76 @@ describe('rev 8.3 — PROCEED needs a confirmed stable register view (§9.6; SUP
   });
 });
 
+describe('B7 r5 — every suppression read asks for the PRIMARY, whatever the connection default (§3.5; RP-1…3 offline guard)', () => {
+  /** Model stand-ins whose queries record the read preference they were given; nothing connects. */
+  function recordingModels() {
+    const reads = [];
+    const chain = (kind, result) => {
+      const query = { kind, readPreference: null };
+      const api = {
+        read(preference) {
+          query.readPreference = preference;
+          return api;
+        },
+        maxTimeMS: () => api,
+        lean: () => api,
+        limit: () => api,
+        sort: () => api,
+        option: () => api,
+        then(resolve, reject) {
+          reads.push({ ...query });
+          return Promise.resolve(result).then(resolve, reject);
+        },
+      };
+      return api;
+    };
+    const db = { readyState: 1 };
+    const Suppression = {
+      db,
+      distinct: () => chain('distinct', []),
+      find: () => chain('find', []),
+      findOne: () => chain('findOne', null),
+      countDocuments: () => chain('countDocuments', 0),
+      aggregate: () => chain('aggregate', []),
+      collection: { listIndexes: (options) => ({ toArray: async () => (reads.push({ kind: 'listIndexes', readPreference: options?.readPreference ?? null }), []) }) },
+    };
+    const Keys = { db, find: () => chain('keys.find', []), findOne: () => chain('keys.findOne', null) };
+    const Application = { db, findOne: () => chain('applications.findOne', null), find: () => chain('applications.find', []) };
+    return { reads, models: { RecipientSuppression: Suppression, RecipientSuppressionKey: Keys }, Application };
+  }
+
+  it('the send-path read (stamp, coverage key ids, key documents, match, stamp) and every operator read of the register', async () => {
+    const { reads, models } = recordingModels();
+    const register = createSuppressionRegister({ timeoutMs: 1_000, models });
+    const read = await register.readForAcknowledgement({ pairs: [{ keyId: 'k1', digest: 'a'.repeat(64) }] });
+    expect(read).toMatchObject({ match: null, registerChanged: false });
+    expect(reads.map((entry) => entry.kind)).toEqual(['findOne', 'distinct', 'keys.find', 'findOne', 'findOne']);
+    await register.readCoverageInputs();
+    await register.highestPruneSeq(); // the allocation's highest-stamp read
+    await register.activeCountsByKey();
+    await register.findEntries({});
+    await register.findEntry({});
+    await register.countEntries({});
+    await register.findKeyDocument('k1');
+    await register.listKeyDocuments();
+    await register.listIndexes();
+    expect(reads).toHaveLength(15); // 5 send-path reads + 10 more
+    expect(SUPPRESSION_READ_PREFERENCE).toBe('primary');
+    expect(reads.filter((entry) => entry.readPreference !== 'primary')).toEqual([]);
+  });
+
+  it('the operator command reads stored Applications from the primary (check, bounce correlation)', async () => {
+    const { reads, models, Application } = recordingModels();
+    const register = createSuppressionRegister({ timeoutMs: 1_000, models });
+    const operations = createSuppressionOperations({ register, keyring: syntheticKeyring(), operatorIds: ['qa-operator'], applicationModel: Application, timeoutMs: 1_000 });
+    await expect(operations.check({ applicationId: '65f0c0ffee0000000000b7a1' })).rejects.toMatchObject({ code: 'APPLICATION_NOT_FOUND' });
+    await operations.addFromBounce({ messageToken: 'a'.repeat(32), status: '5.1.1', dsnReceived: new Date().toISOString(), evidenceRef: 'BNC-2026-11-05-01' }).catch(() => {});
+    const applicationReads = reads.filter((entry) => entry.kind.startsWith('applications.'));
+    expect(applicationReads.map((entry) => entry.kind)).toEqual(['applications.findOne', 'applications.find']);
+    expect(reads.filter((entry) => entry.readPreference !== 'primary')).toEqual([]);
+  });
+});
+
 describe('the notifier fails closed (§3.2; SUP-4, SUP-11)', () => {
   const seed = (repo) => {
     const _id = '65f0c0ffee0000000000b7a1';
@@ -289,7 +360,7 @@ describe('operator command — arguments and refusals before any database work',
     const id = new mongoose.Types.ObjectId();
     const lastAttemptAt = new Date();
     const row = { _id: id, notifications: { candidateAcknowledgement: { status: 'SENT', lastAttemptAt }, internal: { lastAttemptAt: null } } };
-    const stubModel = { db: { readyState: 1 }, find: () => ({ limit: () => ({ maxTimeMS: () => ({ lean: async () => [row, { ...row }] }) }) }) };
+    const stubModel = { db: { readyState: 1 }, find: () => ({ limit: () => ({ read: (preference) => (expect(preference).toBe('primary'), { maxTimeMS: () => ({ lean: async () => [row, { ...row }] }) }) }) }) };
     const operations = createSuppressionOperations({ register: {}, keyring: syntheticKeyring(), operatorIds: ['op-one'], applicationModel: stubModel });
     await expect(
       operations.addFromBounce({ messageToken: messageTokenFor(NOTIFICATION_EVENTS.APPLICATION_ACKNOWLEDGEMENT, id), status: '5.1.1', dsnReceived: new Date(), evidenceRef: 'BNC-1' }),

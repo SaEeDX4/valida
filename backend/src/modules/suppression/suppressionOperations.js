@@ -85,8 +85,9 @@ export const messageTokenFor = (event, applicationId) => messageReference(`${eve
  */
 export function createSuppressionOperations({ register, keyring, operatorIds = [], clock = () => new Date(), applicationModel = Application, timeoutMs = 5_000 }) {
   const ApplicationModel = applicationModel;
+  // B7 r5 (§3.5): operator decisions read the stored Application from the primary too.
   const readApplication = (id, projection) =>
-    runBounded(ApplicationModel, () => ApplicationModel.findOne({ _id: { $eq: id } }, projection).maxTimeMS(timeoutMs).lean(), timeoutMs);
+    runBounded(ApplicationModel, () => ApplicationModel.findOne({ _id: { $eq: id } }, projection).read('primary').maxTimeMS(timeoutMs).lean(), timeoutMs);
 
   /** The write context: who, and with which request id. */
   function writer({ apply, actor, requestId }) {
@@ -400,6 +401,7 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
             { _id: 1, 'notifications.candidateAcknowledgement': 1, 'notifications.internal.lastAttemptAt': 1 },
           )
             .limit(OPERATION_LIMITS.bounceCandidates + 1)
+            .read('primary')
             .maxTimeMS(timeoutMs)
             .lean(),
         timeoutMs,

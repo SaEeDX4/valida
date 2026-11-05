@@ -2100,12 +2100,16 @@ confirmed under its old key). A lost or untrusted key is handled only by
 `recover-key` (owner decision; the id becomes permanently untrusted;
 acknowledgements stay blocked until `--complete`).
 
-**Rev 8.2 (B7 r3 review; design §9).** A key move keeps the old lookup as an
-alias; aliases are pruned by `rekey` (and, for that key, by `recover-key
---complete`) only after 10 minutes, so the two send-path reads can never see an
-entry vanish between them. Remove a previous key from the configuration only
-when `coverage` shows it `safeToRetire` (no `ACTIVE` entry and no alias);
-`--complete` refuses with `ALIASES_PENDING` until its aliases are pruned.
+**Rev 8.2 / 8.3 (B7 r3 and r4 reviews; design §9).** A key move keeps the old
+lookup as an alias. The next `rekey` run prunes the aliases (and `recover-key
+--complete` prunes those of its key). There is no waiting period, and no clock
+is used: each prune stamps the entry with a number from one counter, and every
+acknowledgement check reads the highest stamp before and after its reads. If
+the stamp changed, the acknowledgement is deferred as
+`SUPPRESSION_CHECK_UNAVAILABLE` (reason `REGISTER_CHANGED`, retried normally),
+never sent. Remove a previous key from the configuration only when `coverage`
+shows it `safeToRetire` (no `ACTIVE` entry and no alias). `--complete` refuses
+with `ALIASES_PENDING` while aliases beyond its `--limit` remain; run it again.
 `rekey` and `recover-key` examine at most `--limit` entries per run, in id
 order: when the output's `nextAfter` is not `null`, run again with
 `--after <nextAfter>`; after an unknown write, resume with the `--after` the

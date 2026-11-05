@@ -95,3 +95,15 @@ The full SUP-to-test mapping is in `docs/review/B7_REVIEW_PACKAGE_R2.md` §7. Si
 | The SUP-6 data-inventory entry lists every stored field; undecided production inputs marked AWAITING | Doc 13 §§197–198; design §9.4; SUP-6 | `b7-suppression-inventory.test.js` (5); mutation-checked (a field removed from the inventory) | EX |
 
 Results and the mapping: `docs/review/B7_REVIEW_PACKAGE_R3.md`.
+
+## 8. Clock-free acknowledgement authorisation (design rev 8.3 §9.6; r4; PROPOSED)
+
+| Control | Governing text | Tests | Status |
+| --- | --- | --- | --- |
+| No operator clock, alias age or late-visible write can let a suppressed address be acknowledged: the send path reads the highest prune stamp before and after its coverage and match reads, and never PROCEEDs when it changed | Design §3.2, §9.6; SUP-24b | `db/b7-suppression-consistency.test.js` › SUP-24b (B +11 min; A −11 min; a move held at the server by a fail point). Regression shown on r3 `45e2bf2` (acknowledgement SENT); zero submissions on r4 | EX on MongoDB 8.0.23 (replica set; the held-write case NOT RUN on standalone) |
+| The interleavings run through the REAL send-path read | Design §9.1, §9.6; SUP-24 | 18 cases through `readForAcknowledgement` (model-level seam); positive control (SENT); cost and recovery (deferred, then the retry sends once) | EX (replica set and standalone) |
+| Prune stamps are fresh, distinct, raised above stored values, and never decrease | Design §9.6 | counter-loss and monotonic-stamp cases; gate units for the stability rule (`b7-suppression-units`) | EX |
+| Mutation checks | — | Five controls, each disabled in turn, cause a real submission: the gate ignores the change, the prune is not stamped, the stamp is read once, the alias is replaced, coverage is read from the primary lookup only. Two more are caught by their own tests: the counter is not raised, the monotonic guard is removed | EX |
+
+Results: `docs/review/B7_REVIEW_PACKAGE_R4.md`.
+

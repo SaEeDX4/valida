@@ -13,6 +13,7 @@
 | Revision | **rev 8** (2026-11-04, after GPT's focused B7 review): (1) `key-register` can never establish trust for a key id that already has register entries or a key document, so a missing check value cannot be replaced (§4.5.1; SUP-22g); (2) ordinary rotation (`rekey`, verified keys only) is separated from **controlled recovery** of a lost or untrusted key (`recover-key`, owner decision, acknowledgements blocked until it completes; §3.1, §3.4, §4.2, §4.5.1; SUP-23a–f); (3) SUP-11's missing-key outcome corrected to `SUPPRESSION_COVERAGE_INCOMPLETE`. Still **PROPOSED**; nothing is implemented. |
 | Revision | **rev 8.1** (2026-11-04, OD-2026-11-04-02): approved; the SUP-21 correction recorded in §8; §8 tests written and run in B7. The design text is otherwise unchanged. |
 | Revision | **rev 8.2** (2026-11-04, after GPT's B7 r2 review): **review corrections — PROPOSED for GPT review and owner confirmation; implemented on `b7-work` for that review.** The approved text is kept; each change is in **§9** and marked *(rev 8.2, §9.n)* where it applies: (1) a consistent authorisation view under key migration — lookup aliases with a quiet period (§9.1); (2) bounded, resumable `rekey` / `recover-key` passes (§9.2); (3) no fixed maximum on verify-only keys, as §3.2 already says — the implementation's cap of 8 removed (§9.3); (4) the minimal data-inventory entry for SUP-6 (§9.4); (5) the history cap on the duplicate-report path (§9.5); tests SUP-24, SUP-25 and SUP-13b (§8). Production acknowledgements stay refused. |
+| Revision | **rev 8.3** (2026-11-04, after GPT's B7 r3 review): **clock-free authorisation — PROPOSED for GPT review and owner confirmation; implemented on `b7-work` for that review.** The rev 8.2 quiet period (§9.1) made a send decision depend on operator clocks and on when a delayed move became visible; it is **withdrawn** and replaced by the prune sequence of **§9.6**. The rev 8.2 text of §9.1 is kept as the record and marked where it is superseded. Tests SUP-24 (now through the real send-path read) and SUP-24b (§8). Production acknowledgements stay refused. |
 
 ## 1. What it must do — and what it cannot do
 
@@ -62,6 +63,8 @@ One small private register, a send-path lookup and one operator command. It uses
   _id,
   lookup:       { keyId: "k2026a", digest: "<64 hex>" },      // keyed HMAC; no plaintext address (§4)
   lookups:      [ { keyId, digest, retiredAt } ],               // rev 8.2 (§9.1): the primary (retiredAt null, = lookup) and aliases; 1..8
+                                                                // rev 8.3 (§9.6): retiredAt is informational only
+  pruneSeq:     0,                                              // rev 8.3 (§9.6): the stamp of the last alias prune; never decreases
   scope:        "APPLICATION_ACKNOWLEDGEMENT",                 // the internal notification is never suppressed
   state:        "ACTIVE" | "LIFTED",
   reason:       "INVALID_RECIPIENT_CONFIRMED" | "COMPLAINT_CONFIRMED" | "PROVIDER_SUPPRESSION_CONFIRMED",
@@ -83,6 +86,7 @@ One small private register, a send-path lookup and one operator command. It uses
 | `{ "sources.applicationId": 1 }` | Deletion coordination and re-keying |
 | `{ state: 1, scope: 1, "lookup.keyId": 1 }` | The key-coverage check (§4.4) and per-key counts. *(rev 8.2, §9.1: replaced by `{ state: 1, scope: 1, "lookups.keyId": 1 }`)* |
 | *(rev 8.2, §9.1)* `{ "lookups.keyId": 1, "lookups.digest": 1 }` | The send-path match (§3.2 step 3), one index point lookup per configured key |
+| *(rev 8.3, §9.6)* `{ pruneSeq: -1 }` | The highest prune stamp, read before and after the send-path reads (one index point read each) |
 
 **Field rules:**
 
@@ -99,7 +103,7 @@ In `createApplicationNotifier().attempt()` the r9 claim stays exactly as it is. 
 
 1. **Coverage check (§4.4).** One bounded, indexed read: is there any `ACTIVE` entry for this scope whose `lookup.keyId` *(rev 8.2, §9.1: any key id in its `lookups`)* is not a configured key (the current key or a verify-only previous key, §4.2)? In the same round trip (rev 7–8): the key check of every configured key and any `RECOVERING` key document (§4.5.1).
 2. Compute the lookup digest from `candidate.emailNormalized` (§4) under **every configured key**: the current key and each verify-only previous key. There is no fixed maximum; during a rotation there is normally one previous key. *(rev 8.2, §9.3: the implementation now imposes none; only the configuration value's length is bounded.)*
-3. Run one bounded read on the primary (`maxTimeMS`, proposed 2 000 ms): an `ACTIVE` document with `scope: APPLICATION_ACKNOWLEDGEMENT` matching any of those `(keyId, digest)` pairs *(rev 8.2, §9.1: in its `lookups`)*. Steps 1 and 3 may share one aggregation round trip; both stay inside the same time bound.
+3. Run one bounded read on the primary (`maxTimeMS`, proposed 2 000 ms): an `ACTIVE` document with `scope: APPLICATION_ACKNOWLEDGEMENT` matching any of those `(keyId, digest)` pairs *(rev 8.2, §9.1: in its `lookups`)*. Steps 1 and 3 may share one aggregation round trip; both stay inside the same time bound. *(rev 8.3, §9.6: steps 1 and 3 are bracketed by a read of the highest prune stamp before and after, all inside the same time bound; `PROCEED` needs the two stamps to be equal.)*
 4. Then one of four things happens:
    - **Coverage incomplete, or the current key unavailable** → no SMTP. The outcome is `FAILED` / **`SUPPRESSION_COVERAGE_INCOMPLETE`** (class **CONFIGURATION**: never due on its own; only an operator run with `--include-configuration`, after coverage is restored, reaches it). This applies to **every** acknowledgement, suppressed or not, because an entry under a missing key could match any address. The log line is `suppression_coverage_incomplete`, with application id and channel only.
    - **Found** → no SMTP. The outcome is `FAILED` / **`RECIPIENT_SUPPRESSED`** (class **PERMANENT**: never due, and reached by no retry flag). The log line is `notification_suppressed`, with application id, channel and suppression `_id` only.
@@ -135,7 +139,7 @@ The adapter already derives a value-free enhanced status (for example `5.1.1`) f
 | `coverage` | — | — | Read-only. For each key id: the number of `ACTIVE` entries, how many still have a source, whether the key is configured and, for a previous key, whether it is **safe to retire** (zero `ACTIVE` entries *(rev 8.2, §9.1: and zero aliases)*). Ends with `COVERAGE_COMPLETE` or `COVERAGE_INCOMPLETE`. Never prints an address or digest. |
 | `rekey` | `[--limit ≤ 500]` *(rev 8.2, §9.2: `[--after <id>]`)* | **Ordinary, verified rotation only (rev 8).** Coverage is complete; the current key and every previous key are configured and pass the §4.5 key check; no key document is `RECOVERING`. Otherwise it refuses and writes nothing | §4.2: one conditional write per entry, each confirmed under its old key first (history `REKEY`, reason `ROTATION`); resumable and idempotent; reports entries moved, already current, without a source, with a digest mismatch, and in conflict. It never writes `SOURCE_UNVERIFIED` |
 | `key-register` | `--key-id <id>` | The id is configured and is **not** `--key-id` of any register entry (any state) or any key document (any state) — a fresh id only (§4.5.1) | Conditional insert of the key's check value; never an overwrite |
-| `recover-key` | `--key-id <id> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable [--expected-count <n>] [--limit ≤ 500] [--complete]` *(rev 8.2, §9.2: `[--after <id>]`)* | §4.2 "Controlled recovery": the id is **not** configured; the current key is a different id and passes the §4.5 key check; the decision reference is valid; first run: `--expected-count` equals the `ACTIVE` entries under the id; later runs: the same decision reference as recorded | First run marks the id `RECOVERING` (permanently untrusted). Moves each `ACTIVE` entry that has a source to the current key (history `REKEY`, reason `SOURCE_UNVERIFIED`, with the decision reference). `--complete` sets the id `RETIRED` only when no `ACTIVE` entry remains under it *(rev 8.2, §9.1: and no alias under it remains — `ALIASES_PENDING` otherwise)* |
+| `recover-key` | `--key-id <id> --decision-ref <OD-…> --evidence-ref <ref> --confirm-key-unavailable [--expected-count <n>] [--limit ≤ 500] [--complete]` *(rev 8.2, §9.2: `[--after <id>]`)* | §4.2 "Controlled recovery": the id is **not** configured; the current key is a different id and passes the §4.5 key check; the decision reference is valid; first run: `--expected-count` equals the `ACTIVE` entries under the id; later runs: the same decision reference as recorded | First run marks the id `RECOVERING` (permanently untrusted). Moves each `ACTIVE` entry that has a source to the current key (history `REKEY`, reason `SOURCE_UNVERIFIED`, with the decision reference). `--complete` sets the id `RETIRED` only when no `ACTIVE` entry remains under it *(rev 8.2, §9.1: and no alias under it remains — `ALIASES_PENDING` otherwise; rev 8.3, §9.6: it prunes them at once, stamped, so `ALIASES_PENDING` now means aliases beyond `--limit` or in a write conflict)* |
 | `resolve-unrecoverable` | `--key-id <id> --expected-count <n> --confirm-key-unavailable --decision-ref <OD-…> --evidence-ref <ref>` | The key id is **not** configured; every selected entry is `ACTIVE` under it and has **no** remaining source; their number equals `--expected-count` | Each entry → `LIFTED`; history `RELEASE_UNRECOVERABLE` with the decision reference. **Nothing is resent.** §4.4 |
 
 **Refusals.** Each of these exits with a fixed code and writes nothing:
@@ -344,7 +348,8 @@ Environment: a real MongoDB replica set; a local SMTP test server with a submiss
 
 | # | Case |
 | --- | --- |
-| SUP-24 | **A consistent authorisation view under key migration (§9.1).** Real MongoDB; the real gate and notifier; SMTP counter. For each sender keyring — old `{k1}`, both `{k2, k1}`, new `{k2}` — and each order of the two send-path reads (coverage first, match first), a key step is executed **exactly between** the two reads: a move `k1 → k2`; a move followed at once by a prune attempt; a prune of the `k1` alias after the quiet period. For a suppressed address the outcome is never `PROCEED`: `FAILED` / `RECIPIENT_SUPPRESSED` or `SUPPRESSION_COVERAGE_INCOMPLETE`, **zero** submissions. A control proves the same steered path acknowledges an unsuppressed address. Mutation checks: replacing the alias, dropping the quiet period, or reading coverage from the primary lookup only each make it fail. SUP-12 (add versus send) is unchanged and still passes. |
+| SUP-24 | **A consistent authorisation view under key migration (§9.1).** Real MongoDB; the real gate and notifier; SMTP counter. For each sender keyring — old `{k1}`, both `{k2, k1}`, new `{k2}` — and each order of the two send-path reads (coverage first, match first), a key step is executed **exactly between** the two reads: a move `k1 → k2`; a move followed at once by a prune attempt; a prune of the `k1` alias after the quiet period. For a suppressed address the outcome is never `PROCEED`: `FAILED` / `RECIPIENT_SUPPRESSED` or `SUPPRESSION_COVERAGE_INCOMPLETE`, **zero** submissions. A control proves the same steered path acknowledges an unsuppressed address. Mutation checks: replacing the alias, dropping the quiet period, or reading coverage from the primary lookup only each make it fail. SUP-12 (add versus send) is unchanged and still passes. *(Rev 8.3, §9.6: the cases now run through the real `readForAcknowledgement`. The "prune attempt" really prunes, at once, and the prune no longer waits for any period. `SUPPRESSION_CHECK_UNAVAILABLE` with reason `REGISTER_CHANGED` joins the allowed outcomes.)* |
+| SUP-24b | **Clock-free authorisation (rev 8.3, §9.6).** The exact ordering, with operator B's clock 11 minutes ahead, and again with operator A's clock 11 minutes behind: an old-key sender `{k1}` reads coverage; A moves the suppression `k1 → k2`; B prunes at once; the sender reads the match. A third case has A's move really held at the server (fail point) while the sender reads coverage. Each gives **zero** submissions and `FAILED` / `SUPPRESSION_CHECK_UNAVAILABLE` (`REGISTER_CHANGED`). On the rev 8.2 code the first two **sent**. Controls: a move between the reads still lets an unsuppressed address through (`SENT`); a prune between the reads defers it, and the normal retry sends it once. |
 | SUP-25 | **Bounded, resumable passes (§9.2).** An unresolved prefix (source-less entries) longer than `--limit`, followed by eligible entries: a run examines `--limit` entries and returns `nextAfter`; a run with `--after` reaches and moves the eligible ones. An interrupted pass (fault injection) reports `resumeAfter`; resuming completes it with exactly one `REKEY` per entry. The unresolved entries and their history stay byte-for-byte unchanged. Both `rekey` and `recover-key`. An invalid cursor is refused. |
 | SUP-13b | **History cap (§9.5).** Near the cap, a duplicate report only increments `duplicateReports`. At the cap, a duplicate report and a re-apply are refused (`HISTORY_CAP_REACHED`) in a dry run and with `--apply`, and nothing is written. Alias pruning at the cap writes no history entry. |
 
@@ -361,11 +366,11 @@ These are corrections to the approved rev 8.1, made because GPT's B7 r2 review f
 **Correction — aliases with a quiet period.** Instead of making the two reads one snapshot (which needs a replica set and transactions), the register never presents a state in which a key the entry was ever matchable under silently disappears inside one read window:
 
 - Each entry holds `lookups`: the **primary** (`retiredAt: null`, equal to `lookup`) and **aliases**. A move (`rekey`, `recover-key`) adds the new primary in the same conditional write and keeps the old one as an alias, stamped `retiredAt`. Both reads use `lookups` only: coverage takes every key id in `lookups` of an `ACTIVE` entry; the match is `lookups: { $elemMatch: { keyId, digest } }` for each configured pair.
-- An alias is removed only once it has been an alias for at least `ALIAS_QUIET_PERIOD_MS` = **10 minutes** (by the operator's clock). Removal is done by `rekey` (all keys) and `recover-key --complete` (that key), bounded, one conditional durable write per entry, with **no** history entry because no suppression decision changes.
-- `coverage` counts aliases per key id; a key is `safeToRetire` only with zero `ACTIVE` entries **and** zero aliases. `recover-key --complete` refuses with `ALIASES_PENDING` while an alias under the id is younger than the quiet period.
+- *(Superseded by rev 8.3, §9.6: there is no quiet period; an alias is removed by the next run, stamped.)* An alias is removed only once it has been an alias for at least `ALIAS_QUIET_PERIOD_MS` = **10 minutes** (by the operator's clock). Removal is done by `rekey` (all keys) and `recover-key --complete` (that key), bounded, one conditional durable write per entry, with **no** history entry because no suppression decision changes.
+- `coverage` counts aliases per key id; a key is `safeToRetire` only with zero `ACTIVE` entries **and** zero aliases. `recover-key --complete` refuses with `ALIASES_PENDING` while an alias under the id is younger than the quiet period *(superseded, §9.6: while aliases beyond `--limit` remain)*.
 - An entry holds at most `MAX_LOOKUPS` = **8** lookups. A move that would exceed it is skipped and reported (`lookupCap`); the entry stays matchable under its current primary. This bounds one document; it is not a limit on configured keys (§9.3).
 
-**Why it is safe.** A `PROCEED` needs both reads to finish within the one send-path time bound `T` (`SUPPRESSION_LOOKUP_TIMEOUT_MS`, at most 10 s); otherwise the attempt is `SUPPRESSION_CHECK_UNAVAILABLE`. Take any sender keyring and an `ACTIVE` entry:
+**Why it is safe (rev 8.2 — WITHDRAWN in rev 8.3; see §9.6).** GPT's r3 review showed this argument rests on operator clocks and on when a delayed move becomes visible. SUP-24b demonstrates it on the rev 8.2 code: with operator B's clock 11 minutes ahead (or A's 11 minutes behind) an old-key sender was acknowledged. The text is kept as the record. A `PROCEED` needs both reads to finish within the one send-path time bound `T` (`SUPPRESSION_LOOKUP_TIMEOUT_MS`, at most 10 s); otherwise the attempt is `SUPPRESSION_CHECK_UNAVAILABLE`. Take any sender keyring and an `ACTIVE` entry:
 
 - if the sender holds a key the entry is matchable under at the moment of either read, coverage shows that key as configured and the match finds the entry;
 - if the sender holds none of them, coverage shows an unconfigured key id and the attempt is `SUPPRESSION_COVERAGE_INCOMPLETE`.
@@ -397,4 +402,49 @@ SUP-6 requires the entry to be listed in the inventory. The minimal entry is [`d
 - a re-apply at the cap is also refused in its dry run, so the dry run reports what `--apply` would do.
 
 The other write paths already refused at the cap: `lift`, `forget` source removal, `resolve-unrecoverable`, and the `rekey` / `recover-key` moves, which skip and report the entry. A privacy-request deletion by `forget` is not a history action and still deletes. Alias pruning records no action, so it is not refused: refusing it would keep an old key id in coverage permanently for that entry.
+
+### 9.6 Rev 8.3 — clock-free authorisation (supersedes the quiet period of §9.1; B7 r3 review)
+
+**Defect (r3).** Rev 8.2 decided whether an alias could be pruned by comparing its `retiredAt` stamp, written by one operator's clock, with another operator's clock. Two things could therefore let the prune fall inside a sender's read window: an operator clock running ahead (or behind), and a move that became visible long after it was stamped. **Demonstrated on `45e2bf2`** (SUP-24b, real MongoDB, local SMTP counter):
+
+1. an old-key sender `{k1}` reads coverage;
+2. operator A moves the `ACTIVE` suppression `k1 → k2`;
+3. operator B, with its clock 11 minutes ahead, prunes at once;
+4. the sender reads the match.
+
+The gate returned `PROCEED` and the suppressed address was submitted to (RCPT 1 → 2, acknowledgement `SENT`). The same happened with A's clock 11 minutes behind.
+
+**Correction — a prune sequence read before and after.**
+
+- **The stamp.** Every alias prune sets the entry's `pruneSeq` to a fresh value in the **same** conditional, durable write as the removal. The value comes from one counter document (`recipient_suppression_sequence`, `_id: alias-prune`) and is allocated **after** the entry was read. The counter is raised above the highest stored stamp first, so a lost or restored counter never repeats a value in use. A stored stamp never decreases (validation).
+- **What does not stamp.** Moves, adds, duplicate reports, lifts and `forget` never change `pruneSeq`.
+- **The send-path read** is three ordered phases inside the one time bound `T`:
+  1. the highest stamp `s1`;
+  2. coverage and the match (issued together);
+  3. the highest stamp `s2`.
+- **The gate** returns `PROCEED` only when the register confirms `s1 = s2`. Otherwise the attempt is `FAILED` / `SUPPRESSION_CHECK_UNAVAILABLE` (TRANSIENT, log reason `REGISTER_CHANGED`), which the normal bounded retry re-checks. A match still suppresses, and incomplete coverage still blocks.
+- **No quiet period.** `ALIAS_QUIET_PERIOD_MS` is removed. Aliases are pruned by the next `rekey` run, and by `recover-key --complete` for that key. `retiredAt` remains, informational only; no decision reads it.
+
+**Why it is safe (no clock, no timing assumption).** Take an `ACTIVE` entry E for the address and a sender keyring R.
+
+1. **One key change between the reads is harmless.** A move only adds a lookup and keeps the old one. A prune removes only an alias, never the primary. So the two lookup sets the reads can observe always share a key. If R holds a key of the set coverage saw, coverage is complete only if R holds every such key, and the match then finds E under the shared key. If R holds none, coverage reports `KEY_NOT_CONFIGURED`.
+2. **Two changes are needed to miss E**, and they must be a move followed by a prune that removes the old primary's alias. The primary can only stop being primary through a move, and only a prune removes a key.
+3. **That prune's write is conditional on E's version**, and that version includes the move. So its operator read E after the move was visible, which is after the sender's first phase. The stamp was allocated after that read, so it exceeds every stamp visible at `s1`.
+4. **The stamp is still visible at `s2`.** The prune is visible before `s2`, E still exists, and E's stamp only grows. So `s2 > s1`, and the gate does not `PROCEED`.
+5. **If E was deleted in the window** (`forget` for a privacy request), the address was intentionally re-enabled, as with a lift (§3.5).
+
+The argument uses only single-document atomicity, conditional writes on `version`, and the counter. It is unaffected by operator clocks, by how long a write is delayed, and by how long the sender takes between its reads. It works on a standalone server and on a replica set.
+
+**Cost.** An acknowledgement whose check overlaps an alias prune is deferred, not sent. It is TRANSIENT, and the normal retry sends it once. Moves alone defer nothing, and SUP-12 (add versus send) is unchanged. Each prune costs one extra read and one counter write; each send-path check costs two index point reads.
+
+**Tests.**
+
+- **SUP-24b:** the exact ordering above with B's clock +11 min, with A's clock −11 min, and with A's move really held at the server (fail point) while the sender reads coverage. Each gives zero submissions and `REGISTER_CHANGED`.
+- **SUP-24:** 18 interleavings, now through the real `readForAcknowledgement` via a model-level seam that only delays when its queries start.
+- **Positive control:** a move between the reads still lets an unsuppressed address through (`SENT`).
+- **Cost and recovery:** a prune between the reads defers an unsuppressed acknowledgement, and the retry sends it once.
+- **Counter loss; monotonic stamp; `ALIASES_PENDING` beyond `--limit`.**
+- **Mutation checks:** seven controls were each disabled in turn.
+  - Five cause a real submission to the suppressed address: ignoring the change, not stamping, reading the stamp only once, replacing the alias instead of keeping it, and taking coverage from the primary lookup only.
+  - Two are caught by their own tests: not raising the counter, and removing the monotonic guard.
 

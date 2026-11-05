@@ -5,7 +5,6 @@ import { NOTIFICATION_EVENTS } from '../../integrations/notifications/notificati
 import { REQUIRED_INDEXES, diffIndexes } from '../../db/indexes.js';
 import {
   ACTOR_PATTERN,
-  ALIAS_QUIET_PERIOD_MS,
   DECISION_REF_PATTERN,
   EVIDENCE_REF_PATTERN,
   MAX_HISTORY,
@@ -231,9 +230,11 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
 
   /**
    * Rev 8.2 — moves an entry's PRIMARY lookup to `(keyId, digest)` and keeps
-   * the old one as an alias (retiredAt now), so the entry stays matchable
-   * under its old key until the alias is pruned. Returns false when the entry
-   * already holds MAX_LOOKUPS lookups (left unchanged: prune first).
+   * the old one as an alias, so the entry stays matchable under its old key
+   * until the alias is pruned. `retiredAt` is informational only (rev 8.3: no
+   * decision reads it). Returns false when the entry already holds
+   * MAX_LOOKUPS lookups (left unchanged: prune first). A move does not change
+   * `pruneSeq`: one key change between the send path's reads is harmless.
    */
   function moveLookup(entry, keyId, digest) {
     const lookups = entry.lookups.map((item) => ({ keyId: item.keyId, digest: item.digest, retiredAt: item.retiredAt ?? null }));
@@ -249,25 +250,28 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
   }
 
   /**
-   * Rev 8.2 — removes aliases that have been aliases for at least
-   * ALIAS_QUIET_PERIOD_MS (optionally only those under `keyId`). Bounded
-   * (`limit` entries), one conditional durable write per entry, no history
-   * entry (no suppression decision changes). Never touches a primary lookup.
+   * Removes aliases (optionally only those under `keyId`), never a primary
+   * lookup. Rev 8.3 (§9.6): no age or clock decides it. Each pruned entry is
+   * stamped with a fresh prune sequence, allocated AFTER the entry was read and
+   * saved in the same conditional, durable write as the removal, so any
+   * send-path check that overlaps it sees the stamp change and does not
+   * PROCEED. Bounded (`limit` entries); no history entry (no suppression
+   * decision changes).
    */
   async function pruneAliases({ write, limit, keyId = null }) {
-    const cutoff = new Date(clock().getTime() - ALIAS_QUIET_PERIOD_MS);
-    const old = { retiredAt: { $ne: null, $lte: cutoff }, ...(keyId ? { keyId: { $eq: keyId } } : {}) };
-    const entries = await register.findEntries({ lookups: { $elemMatch: old } }, { limit });
+    const alias = { retiredAt: { $ne: null }, ...(keyId ? { keyId: { $eq: keyId } } : {}) };
+    const entries = await register.findEntries({ lookups: { $elemMatch: alias } }, { limit });
     let pruned = 0;
     let waiting = 0;
     for (const entry of entries) {
-      const keep = entry.lookups.filter((item) => item.retiredAt === null || item.retiredAt > cutoff || (keyId !== null && item.keyId !== keyId));
+      const keep = entry.lookups.filter((item) => item.retiredAt === null || (keyId !== null && item.keyId !== keyId));
       const removed = entry.lookups.length - keep.length;
       if (removed === 0) continue;
       if (!write) {
         waiting += removed;
         continue;
       }
+      entry.pruneSeq = await register.allocatePruneSeq();
       entry.lookups = keep.map((item) => ({ keyId: item.keyId, digest: item.digest, retiredAt: item.retiredAt ?? null }));
       try {
         await register.save(entry);
@@ -550,7 +554,8 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
      * rotation only (§4.2 rev 8; SUP-16, SUP-19, SUP-23a). Refused unless
      * coverage is complete; every entry is confirmed under its old key before
      * it moves; never SOURCE_UNVERIFIED. Rev 8.2: a move keeps the old lookup
-     * as an alias; aliases older than ALIAS_QUIET_PERIOD_MS are pruned first.
+     * as an alias; aliases left by earlier runs are pruned first (rev 8.3: no
+     * waiting period — the prune stamp protects the send path).
      * Bounded and resumable (SUP-25): `limit` entries examined after `after`.
      */
     async rekey({ limit = OPERATION_LIMITS.batch, after = null, apply = false, actor, requestId } = {}) {
@@ -606,8 +611,8 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
      * `apply` moves each ACTIVE entry that has a source to the current key
      * (REKEY / SOURCE_UNVERIFIED), keeping the old lookup as an alias (rev 8.2),
      * in bounded, resumable passes (`limit`, `after`; SUP-25). `complete` prunes
-     * the id's aliases once they are older than ALIAS_QUIET_PERIOD_MS and
-     * retires the id when no ACTIVE entry can be matched under it any more.
+     * the id's aliases (rev 8.3: at once, stamped) and retires the id when no
+     * ACTIVE entry can be matched under it any more.
      * Acknowledgements stay blocked until then (suppressionGate: a RECOVERING
      * key document — and any lookup under an unconfigured id — makes coverage
      * incomplete).
@@ -638,7 +643,7 @@ export function createSuppressionOperations({ register, keyring, operatorIds = [
         const { pruned, prunable } = await pruneAliases({ write, limit, keyId });
         const aliasesLeft = await register.countEntries(matchableUnder);
         if (!write) return { result: 'WOULD_COMPLETE', keyId, aliasesPrunable: prunable, aliasesWaiting: aliasesLeft - prunable };
-        // Aliases younger than the quiet period (or beyond this batch): run --complete again later.
+        // Aliases beyond this batch (--limit) or in a write conflict: run --complete again.
         if (aliasesLeft > 0) refuse('ALIASES_PENDING', { aliasEntries: aliasesLeft, aliasesPruned: pruned });
         await retryOnConflict(async () => {
           const fresh = await register.findKeyDocument(keyId);

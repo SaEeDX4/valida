@@ -13,7 +13,14 @@ import { hexValuesMatch } from './suppressionKeys.js';
  *    because an entry under an unusable key could match any address)
  *   suppressed                -> FAILED / RECIPIENT_SUPPRESSED             (PERMANENT)
  *   read failed or timed out  -> FAILED / SUPPRESSION_CHECK_UNAVAILABLE    (TRANSIENT)
+ *   register changed during   -> FAILED / SUPPRESSION_CHECK_UNAVAILABLE    (TRANSIENT;
+ *   the check (rev 8.3)          reason REGISTER_CHANGED: an alias prune became
+ *                                visible between the reads, so they may not
+ *                                describe one state; the normal retry re-checks)
  *   none of these             -> PROCEED (the unchanged r9 delivery)
+ *
+ * PROCEED needs the register to CONFIRM a stable view (`registerChanged ===
+ * false`): a register that cannot say so never authorises a send.
  *
  * Coverage is COMPLETE only when ALL of these hold:
  *   - a current key is configured;
@@ -112,6 +119,8 @@ export function createSuppressionGate({ register, keyring }) {
       const coverage = assessCoverage({ ...read, keyring });
       if (!coverage.complete) return incomplete(coverage.problems);
       if (read.match) return { decision: GATE_DECISIONS.SUPPRESSED, errorCode: 'RECIPIENT_SUPPRESSED', suppressionId: String(read.match._id) };
+      // Rev 8.3 (§9.6): no clock decides this — only the prune stamps read before and after.
+      if (read.registerChanged !== false) return unavailable('REGISTER_CHANGED');
       return { decision: GATE_DECISIONS.PROCEED };
     },
 

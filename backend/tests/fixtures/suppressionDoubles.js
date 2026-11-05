@@ -46,7 +46,7 @@ export function memorySuppressionRegister({ entries = [], keyDocuments = [], fai
       await wait();
       if (state.fail) throw state.fail;
       const match = state.entries.find((entry) => (entry.state ?? 'ACTIVE') === 'ACTIVE' && pairs.some((pair) => pair.keyId === entry.keyId && pair.digest === entry.digest));
-      return { ...coverageInputs(), match: match ? { _id: match._id } : null };
+      return { ...coverageInputs(), match: match ? { _id: match._id } : null, registerChanged: state.registerChanged ?? false };
     },
   };
 }

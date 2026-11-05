@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp } from '../../../src/app.js';
 import { Job } from '../../../src/models/Job.js';
 import { Application } from '../../../src/models/Application.js';
-import { RecipientSuppression, RecipientSuppressionKey } from '../../../src/models/RecipientSuppression.js';
+import { PRUNE_SEQUENCE_COLLECTION, RecipientSuppression, RecipientSuppressionKey } from '../../../src/models/RecipientSuppression.js';
 import { REQUIRED_INDEXES } from '../../../src/db/indexes.js';
 import { publishJob } from '../../../src/modules/jobs/job.service.js';
 import { createJobRepository } from '../../../src/modules/jobs/job.repository.js';
@@ -47,6 +47,7 @@ export async function clearAll(databaseName) {
   await Job.deleteMany({});
   await RecipientSuppression.deleteMany({});
   await RecipientSuppressionKey.deleteMany({});
+  await mongoose.connection.db.collection(PRUNE_SEQUENCE_COLLECTION).deleteMany({});
 }
 
 export async function publishedJob() {

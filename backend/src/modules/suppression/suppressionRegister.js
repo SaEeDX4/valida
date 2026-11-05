@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { RecipientSuppression, RecipientSuppressionKey } from '../../models/RecipientSuppression.js';
+import { performance } from 'node:perf_hooks';
+import { PRUNE_SEQUENCE_COLLECTION, PRUNE_SEQUENCE_ID, RecipientSuppression, RecipientSuppressionKey } from '../../models/RecipientSuppression.js';
 import { DatabaseUnavailableError, runBounded } from '../jobs/job.repository.js';
 
 /**
@@ -11,16 +12,24 @@ import { DatabaseUnavailableError, runBounded } from '../jobs/job.repository.js'
  * suppression applies to every lookup that starts after its add was
  * acknowledged by a majority (§3.5).
  *
- * CONSISTENCY (rev 8.2, B7 r3 review): coverage and the match are separate
- * reads, so they may observe the register at different moments. That is safe
- * because both read the `lookups` array: a key move ADDS the new lookup and
- * keeps the old one as an alias, and an alias is pruned only after
- * ALIAS_QUIET_PERIOD_MS — far longer than the one bounded window (timeoutMs,
- * all reads issued together) in which a check's reads execute. So for any
- * sender keyring: if the sender holds a key the entry has ever been stored
- * under, its match finds it; if it does not, coverage shows that key id as
- * not configured. No interleaving of a move or a prune with the two reads
- * yields PROCEED for a suppressed address (SUP-24).
+ * CONSISTENCY (rev 8.3, B7 r4 review; design §9.6) — no clock is involved.
+ * Coverage and the match are separate reads and may observe the register at
+ * different moments. Both read the `lookups` array, so ONE key change between
+ * them is harmless: a move only ADDS a lookup (the old one stays as an alias)
+ * and a prune only removes an alias (never the primary), so the two observed
+ * lookup sets of an entry always share a key. A suppressed address can be
+ * missed only if a move AND a prune of the same entry both become visible
+ * between the two reads. The prune is conditional on the entry's version,
+ * which includes the move, so its operator read the entry after the move was
+ * visible — after this check began — and only then allocated its prune
+ * sequence from a counter. That value is therefore above every stamp this
+ * check saw at its start. So the send path reads the highest prune stamp
+ * BEFORE and AFTER its coverage and match reads, and the gate never PROCEEDS
+ * when they differ (`registerChanged`; SUPPRESSION_CHECK_UNAVAILABLE, a
+ * TRANSIENT outcome the normal retry re-checks). Operator clocks, the age of
+ * an alias and when a delayed write becomes visible do not matter (SUP-24,
+ * SUP-24b). Adds and lifts never change the stamp, so the §3.5 add-versus-send
+ * boundary is unchanged (SUP-12). Works on a standalone server and a replica set.
  *
  * WRITES (operator command only): one document per write, a validated save,
  * conditional on the loaded `version` (optimistic concurrency) and durable —
@@ -61,13 +70,13 @@ const isDuplicateKey = (error) => error?.code === 11000 || error?.cause?.code ==
 export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 5_000, models = {} } = {}) {
   const Suppression = models.RecipientSuppression ?? RecipientSuppression;
   const Keys = models.RecipientSuppressionKey ?? RecipientSuppressionKey;
-  const bounded = (model, operation) => runBounded(model, operation, timeoutMs);
+  const bounded = (model, operation, ms = timeoutMs) => runBounded(model, operation, ms);
 
   /** Coverage inputs (§4.4, §4.5.1): every key id an ACTIVE entry can be matched under (primary or alias), and every key document. */
-  function readCoverageInputs() {
+  function readCoverageInputs(ms = timeoutMs) {
     return Promise.all([
-      bounded(Suppression, () => Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).maxTimeMS(timeoutMs)),
-      bounded(Keys, () => Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).maxTimeMS(timeoutMs).lean()),
+      bounded(Suppression, () => Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).maxTimeMS(ms), ms),
+      bounded(Keys, () => Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).maxTimeMS(ms).lean(), ms),
     ]).then(([activeKeyIds, keyDocuments]) => ({
       activeKeyIds: activeKeyIds.slice(0, COVERAGE_READ_LIMIT + 1),
       keyDocuments: keyDocuments.slice(0, COVERAGE_READ_LIMIT),
@@ -79,20 +88,61 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
    * An ACTIVE entry matching any of the `(keyId, digest)` pairs, or null —
    * through `lookups` only (primary and aliases), one index point lookup per pair.
    */
-  function findActiveMatch(pairs) {
+  function findActiveMatch(pairs, ms = timeoutMs) {
     if (pairs.length === 0) return Promise.resolve(null);
-    return bounded(Suppression, () =>
-      Suppression.findOne(
-        {
-          state: { $eq: 'ACTIVE' },
-          scope: { $eq: SUPPRESSION_SCOPE },
-          $or: pairs.map(({ keyId, digest }) => ({ lookups: { $elemMatch: { keyId: { $eq: keyId }, digest: { $eq: digest } } } })),
-        },
-        { _id: 1 },
-      )
-        .maxTimeMS(timeoutMs)
-        .lean(),
+    return bounded(
+      Suppression,
+      () =>
+        Suppression.findOne(
+          {
+            state: { $eq: 'ACTIVE' },
+            scope: { $eq: SUPPRESSION_SCOPE },
+            $or: pairs.map(({ keyId, digest }) => ({ lookups: { $elemMatch: { keyId: { $eq: keyId }, digest: { $eq: digest } } } })),
+          },
+          { _id: 1 },
+        )
+          .maxTimeMS(ms)
+          .lean(),
+      ms,
     );
+  }
+
+  /** Rev 8.3 — the highest prune stamp in the register (0 when none): one index point read. */
+  function highestPruneSeq(ms = timeoutMs) {
+    return bounded(Suppression, () => Suppression.findOne({}, { _id: 0, pruneSeq: 1 }).sort({ pruneSeq: -1 }).maxTimeMS(ms).lean(), ms).then((document) =>
+      Number.isSafeInteger(document?.pruneSeq) ? document.pruneSeq : 0,
+    );
+  }
+
+  /**
+   * Rev 8.3 — allocates the next prune sequence (operator command only). It is
+   * called AFTER the entry to be pruned was read, so the value exceeds every
+   * stamp visible before that read. The counter is first raised above the
+   * highest stored stamp, so a lost or restored counter document can never hand
+   * out a value at or below one already in use. Durable (w: majority, j: true);
+   * an unknown outcome stops the command (a skipped value is harmless).
+   */
+  async function allocatePruneSeq() {
+    const highest = await highestPruneSeq();
+    const native = Suppression.db?.db;
+    if (Suppression.db?.readyState !== 1 || !native) throw new SuppressionWriteUnknown('disconnected');
+    let allocated;
+    try {
+      allocated = await runBounded(
+        Suppression,
+        () =>
+          native.collection(PRUNE_SEQUENCE_COLLECTION).findOneAndUpdate(
+            { _id: { $eq: PRUNE_SEQUENCE_ID } },
+            [{ $set: { value: { $add: [{ $max: [{ $ifNull: ['$value', 0] }, highest] }, 1] } } }],
+            { upsert: true, returnDocument: 'after', maxTimeMS: writeTimeoutMs, writeConcern: { ...SUPPRESSION_WRITE_CONCERN, wtimeout: writeTimeoutMs } },
+          ),
+        writeTimeoutMs + 1_000,
+      );
+    } catch (error) {
+      throw new SuppressionWriteUnknown(error instanceof DatabaseUnavailableError ? error.reason ?? 'unavailable' : 'sequence_failed');
+    }
+    if (!Number.isSafeInteger(allocated?.value) || allocated.value <= highest) throw new SuppressionWriteUnknown('sequence_invalid');
+    return allocated.value;
   }
 
   /** One durable, conditional save. */
@@ -136,17 +186,33 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
     models: Object.freeze({ RecipientSuppression: Suppression, RecipientSuppressionKey: Keys }),
 
     /**
-     * The send-path read (§3.2 steps 1 and 3): coverage inputs and the lookup
-     * for `pairs`, issued together and bounded by ONE time limit. Rejects
+     * The send-path read (§3.2 steps 1 and 3; rev 8.3 §9.6), bounded by ONE
+     * time limit (`timeoutMs`) for all phases together:
+     *   1. the highest prune stamp;
+     *   2. coverage inputs and the lookup for `pairs`, issued together;
+     *   3. the highest prune stamp again.
+     * `registerChanged` is true when the two stamps differ: an alias prune
+     * became visible during the check, so its coverage and match may not
+     * describe one register state, and the gate must not PROCEED. Rejects
      * (DatabaseUnavailableError) when anything could not be read in time.
      */
     async readForAcknowledgement({ pairs }) {
-      const [coverage, match] = await Promise.all([readCoverageInputs(), findActiveMatch(pairs)]);
-      return { ...coverage, match };
+      const deadline = performance.now() + timeoutMs;
+      const left = () => {
+        const ms = Math.floor(deadline - performance.now());
+        if (ms < 1) throw new DatabaseUnavailableError('timeout');
+        return ms;
+      };
+      const before = await highestPruneSeq(left());
+      const [coverage, match] = await Promise.all([readCoverageInputs(left()), findActiveMatch(pairs, left())]);
+      const after = await highestPruneSeq(left());
+      return { ...coverage, match, pruneSeq: { before, after }, registerChanged: before !== after };
     },
 
     readCoverageInputs,
     findActiveMatch,
+    highestPruneSeq,
+    allocatePruneSeq,
 
     /**
      * Per-key counts for `coverage` (read-only): ACTIVE entries whose PRIMARY

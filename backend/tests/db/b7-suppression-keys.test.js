@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import mongoose from 'mongoose';
 import crypto, { randomUUID } from 'node:crypto';
-import { ALIAS_QUIET_PERIOD_MS, RecipientSuppression, RecipientSuppressionKey } from '../../src/models/RecipientSuppression.js';
+import { RecipientSuppression, RecipientSuppressionKey } from '../../src/models/RecipientSuppression.js';
 import { createApplicationRepository } from '../../src/modules/applications/application.repository.js';
 import { createApplicationNotifier, runNotificationRetry, staleAfterMs } from '../../src/modules/applications/application.notifications.js';
 import { createKeyring } from '../../src/modules/suppression/suppressionKeys.js';
@@ -77,9 +77,6 @@ function world(current, previous = [], { clock } = {}) {
     },
   };
 }
-
-/** The same configuration, operated after the alias quiet period has passed (rev 8.2). */
-const later = (w) => world(...w.args, { clock: () => new Date(Date.now() + ALIAS_QUIET_PERIOD_MS + 60_000) });
 
 /** An address refused 5.1.1 once and registered in world `w`: suppressed from now on. */
 async function suppress(w, label, { sourceless = false } = {}) {
@@ -335,10 +332,9 @@ describe('SUP-21 — audited resolution of unrecoverable entries (with the OD-20
     expect(released.problems).toEqual(expect.arrayContaining([{ keyId: 'k1', reason: 'KEY_RECOVERING' }]));
     expect(released.problems).toEqual(expect.arrayContaining([{ keyId: 'k1', reason: 'KEY_NOT_CONFIGURED' }]));
     await expectBlocked(w2, withSource.email);
-    // Rev 8.2: the moved entry keeps a k1 alias; completion waits for the quiet period, then prunes it.
-    await expect(w2.recover({ keyId: 'k1', complete: true })).rejects.toMatchObject({ code: 'ALIASES_PENDING' });
-    await expectBlocked(w2, withSource.email);
-    expect(await later(w2).recover({ keyId: 'k1', complete: true })).toMatchObject({ result: 'COMPLETED', keyState: 'RETIRED', coverage: 'COVERAGE_COMPLETE', aliasesPruned: 1 });
+    // The moved entry keeps a k1 alias (rev 8.2); completion prunes it at once, stamped (rev 8.3: no waiting period).
+    expect(await w2.recover({ keyId: 'k1', complete: true })).toMatchObject({ result: 'COMPLETED', keyState: 'RETIRED', coverage: 'COVERAGE_COMPLETE', aliasesPruned: 1 });
+    expect((await RecipientSuppression.findById(withSource.suppressionId).lean()).pruneSeq).toBeGreaterThan(0);
     expect((await ackOf((await w2.apply(address('sup21after'))).id)).status).toBe('SENT');
     expect((await ackOf((await w2.apply(withSource.email)).id)).lastErrorCode).toBe('RECIPIENT_SUPPRESSED');
     expect((await RecipientSuppression.findById(sourceless.suppressionId).lean()).state).toBe('LIFTED');
@@ -495,7 +491,7 @@ describe('SUP-22 — key-material integrity (synthetic keys)', () => {
     const fresh = world(['k2', bytes()]);
     await fresh.registerKey('k2');
     expect(await fresh.recover({ keyId: 'k1', expectedCount: 1, reason: 'UNTRUSTED' })).toMatchObject({ moved: 1, activeEntriesLeft: 0 });
-    expect(await later(fresh).recover({ keyId: 'k1', complete: true })).toMatchObject({ result: 'COMPLETED', coverage: 'COVERAGE_COMPLETE' });
+    expect(await fresh.recover({ keyId: 'k1', complete: true })).toMatchObject({ result: 'COMPLETED', coverage: 'COVERAGE_COMPLETE' });
     expect((await ackOf((await fresh.apply(target.email)).id)).lastErrorCode).toBe('RECIPIENT_SUPPRESSED');
   });
 });
@@ -555,7 +551,7 @@ describe('SUP-23 — controlled recovery (rev 8)', () => {
     // Started under one decision: a later run under another decision is refused; a RETIRED id cannot be recovered again.
     await w2.recover({ keyId: 'k1', expectedCount: 1, reason: 'LOST' });
     await expect(w2.recover({ keyId: 'k1', decisionRef: 'OD-2026-11-04-98' })).rejects.toMatchObject({ code: 'DECISION_REF_MISMATCH' });
-    await later(w2).recover({ keyId: 'k1', complete: true });
+    await w2.recover({ keyId: 'k1', complete: true });
     await expect(w2.recover({ keyId: 'k1', expectedCount: 0, reason: 'LOST' })).rejects.toMatchObject({ code: 'KEY_RETIRED' });
   });
 
@@ -673,9 +669,8 @@ describe('SUP-23 — controlled recovery (rev 8)', () => {
     await w2.registerKey('k2');
     const blocked = await w2.apply(address('sup23fblocked'));
     await w2.recover({ keyId: 'k1', expectedCount: 1, reason: 'LOST' });
-    await expect(w2.recover({ keyId: 'k1', complete: true })).rejects.toMatchObject({ code: 'ALIASES_PENDING', details: { aliasEntries: 1 } });
-    const completed = await later(w2).recover({ keyId: 'k1', complete: true });
-    expect(completed).toMatchObject({ result: 'COMPLETED', keyState: 'RETIRED', coverage: 'COVERAGE_COMPLETE', problems: [] });
+    const completed = await w2.recover({ keyId: 'k1', complete: true });
+    expect(completed).toMatchObject({ result: 'COMPLETED', keyState: 'RETIRED', coverage: 'COVERAGE_COMPLETE', problems: [], aliasesPruned: 1 });
     expect((await RecipientSuppressionKey.findById('k1').lean())).toMatchObject({ state: 'RETIRED', recovery: { decisionRef: DECISION, reason: 'LOST', completedBy: QA_OPERATOR } });
     const recovered = await w2.apply(target.email);
     expect((await ackOf(recovered.id)).lastErrorCode).toBe('RECIPIENT_SUPPRESSED');

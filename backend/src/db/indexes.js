@@ -102,6 +102,13 @@ export const REQUIRED_INDEXES = [
     options: {},
     reason: 'Suppression design §3.1, §3.2 (rev 8.2) — the send-path match: one index point lookup per configured key, stable across key moves.',
   },
+  {
+    collection: 'recipient_suppressions',
+    name: 'suppression_pruneSeq',
+    key: { pruneSeq: -1 },
+    options: {},
+    reason: 'Suppression design §3.1, §9.6 (rev 8.3) — the send path reads the highest prune sequence before and after its coverage and match reads (one index point read each).',
+  },
 ];
 
 /** Option keys that make an existing index incompatible if they differ. */

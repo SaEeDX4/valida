@@ -190,6 +190,32 @@ describe('coverage decision (§3.2, §4.4, §4.5.1; SUP-18, SUP-21 correction, S
   });
 });
 
+describe('rev 8.3 — PROCEED needs a confirmed stable register view (§9.6; SUP-24b)', () => {
+  const keyring = syntheticKeyring();
+  const keyDocuments = registeredKeyDocuments(keyring);
+  const gateOver = (read) => createSuppressionGate({ register: { readCoverageInputs: async () => read, readForAcknowledgement: async () => read }, keyring });
+  const base = { activeKeyIds: [], keyDocuments, limitReached: false, match: null };
+
+  it('stable (registerChanged === false) and nothing found → PROCEED', async () => {
+    expect(await gateOver({ ...base, registerChanged: false }).checkAcknowledgement({ emailNormalized: 'qa@x.test' })).toEqual({ decision: 'PROCEED' });
+  });
+
+  it('changed, or stability not reported at all → SUPPRESSION_CHECK_UNAVAILABLE (REGISTER_CHANGED), never PROCEED', async () => {
+    for (const registerChanged of [true, undefined, null, 'no']) {
+      expect(await gateOver({ ...base, registerChanged }).checkAcknowledgement({ emailNormalized: 'qa@x.test' })).toEqual({
+        decision: 'UNAVAILABLE',
+        errorCode: 'SUPPRESSION_CHECK_UNAVAILABLE',
+        reason: 'REGISTER_CHANGED',
+      });
+    }
+  });
+
+  it('a match still suppresses, and incomplete coverage still blocks, whether or not the register changed', async () => {
+    expect((await gateOver({ ...base, match: { _id: 'qa-entry' }, registerChanged: true }).checkAcknowledgement({ emailNormalized: 'qa@x.test' })).errorCode).toBe('RECIPIENT_SUPPRESSED');
+    expect((await gateOver({ ...base, activeKeyIds: ['k-unknown'], registerChanged: true }).checkAcknowledgement({ emailNormalized: 'qa@x.test' })).errorCode).toBe('SUPPRESSION_COVERAGE_INCOMPLETE');
+  });
+});
+
 describe('the notifier fails closed (§3.2; SUP-4, SUP-11)', () => {
   const seed = (repo) => {
     const _id = '65f0c0ffee0000000000b7a1';

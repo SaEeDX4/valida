@@ -34,17 +34,18 @@ export const MAX_HISTORY = 20;
 /**
  * Rev 8.2 (B7 r3 review correction): the lookups an entry can currently be
  * matched under — its primary `lookup` plus the earlier lookups a key move
- * left behind (aliases), until they are pruned after ALIAS_QUIET_PERIOD_MS.
+ * left behind (aliases), until an operator run prunes them.
  */
 export const MAX_LOOKUPS = 8;
 /**
- * An alias is pruned only when it has been an alias for at least this long.
- * It must exceed, by a wide margin, the longest window over which one
- * send-path check reads the register (SUPPRESSION_LOOKUP_TIMEOUT_MS ≤ 10 s)
- * plus any clock difference between operator processes: then no check can
- * have read coverage before a move and its lookup after the prune.
+ * Rev 8.3 (B7 r4 review correction) — the prune sequence. Every alias prune
+ * stamps the entry with a value from one counter document, allocated AFTER the
+ * entry was read; the send path reads the highest stamp before and after its
+ * coverage and match reads and refuses to PROCEED when it changed. No clock is
+ * involved anywhere (design §9.6).
  */
-export const ALIAS_QUIET_PERIOD_MS = 10 * 60 * 1000;
+export const PRUNE_SEQUENCE_COLLECTION = 'recipient_suppression_sequence';
+export const PRUNE_SEQUENCE_ID = 'alias-prune';
 
 /** §3.1 — the R3 evidence-reference pattern, with no "@". */
 export const EVIDENCE_REF_PATTERN = /^[A-Za-z0-9._:/#-]{1,80}$/;
@@ -72,7 +73,8 @@ const lookupEntrySchema = new mongoose.Schema(
   {
     keyId: { type: String, required: true, match: KEY_ID_PATTERN },
     digest: { type: String, required: true, match: DIGEST_PATTERN },
-    // null for the primary lookup; the time it stopped being primary for an alias.
+    // null for the primary lookup; for an alias, when it stopped being primary
+    // (informational, the operator's clock: never used for any decision).
     retiredAt: { type: Date, default: null },
   },
   { _id: false },
@@ -123,6 +125,11 @@ const recipientSuppressionSchema = new mongoose.Schema(
       validate: [(items) => items.length <= MAX_SOURCES, `at most ${MAX_SOURCES} sources`],
     },
     duplicateReports: { type: Number, required: true, default: 0, min: 0 },
+    /*
+     * Rev 8.3 — the prune sequence of the last alias prune on this entry (0:
+     * never pruned). Only an alias prune changes it, and it never decreases.
+     */
+    pruneSeq: { type: Number, required: true, default: 0, min: 0, validate: { validator: Number.isSafeInteger, message: 'pruneSeq must be an integer' } },
     history: {
       type: [historySchema],
       default: [],
@@ -155,6 +162,13 @@ recipientSuppressionSchema.pre('validate', function lookupsInvariant() {
   if (new Set(items.map((item) => `${item.keyId}:${item.digest}`)).size !== items.length) this.invalidate('lookups', 'lookups must be distinct');
 });
 
+/* Rev 8.3 — the prune sequence never goes back (a stale write cannot hide a prune from the send path). */
+recipientSuppressionSchema.pre('validate', function keepPruneSeqMonotonic() {
+  if (this.isNew) return;
+  const loaded = this.$locals.loadedPruneSeq;
+  if (Number.isInteger(loaded) && !(this.pruneSeq >= loaded)) this.invalidate('pruneSeq', 'pruneSeq never decreases');
+});
+
 /* A history entry, once written, is never rewritten or dropped (SUP-14): only appends are valid. */
 const historyFingerprint = (entries) => JSON.stringify(entries.map((entry) => (typeof entry.toObject === 'function' ? entry.toObject() : entry)));
 recipientSuppressionSchema.pre('validate', function keepHistoryAppendOnly() {
@@ -167,9 +181,11 @@ recipientSuppressionSchema.pre('validate', function keepHistoryAppendOnly() {
 });
 recipientSuppressionSchema.post('init', function rememberHistory() {
   this.$locals.loadedHistory = this.history.map((entry) => entry.toObject());
+  this.$locals.loadedPruneSeq = this.pruneSeq ?? 0;
 });
 recipientSuppressionSchema.post('save', function rememberSavedHistory() {
   this.$locals.loadedHistory = this.history.map((entry) => entry.toObject());
+  this.$locals.loadedPruneSeq = this.pruneSeq;
 });
 
 restrictToValidatedSaves(recipientSuppressionSchema, { model: 'RecipientSuppression' });

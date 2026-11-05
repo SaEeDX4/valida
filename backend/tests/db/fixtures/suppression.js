@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { RecipientSuppression, RecipientSuppressionKey } from '../../../src/models/RecipientSuppression.js';
+import { PRUNE_SEQUENCE_COLLECTION, RecipientSuppression, RecipientSuppressionKey } from '../../../src/models/RecipientSuppression.js';
 import { createSuppressionGate } from '../../../src/modules/suppression/suppressionGate.js';
 import { createSuppressionRegister } from '../../../src/modules/suppression/suppressionRegister.js';
 import { createSuppressionOperations } from '../../../src/modules/suppression/suppressionOperations.js';
@@ -24,9 +24,10 @@ export async function registerKeys(suppression) {
   for (const keyId of suppression.keyring.keyIds) await suppression.operations.keyRegister({ keyId, apply: true, actor: QA_OPERATOR });
 }
 
-/** Empties both suppression collections — test database only. */
+/** Empties the suppression collections (register, key documents, prune counter) — test database only. */
 export async function clearSuppression(databaseName) {
   assertConnectedToTestDatabase(mongoose.connection, databaseName);
   await RecipientSuppression.deleteMany({});
   await RecipientSuppressionKey.deleteMany({});
+  await mongoose.connection.db.collection(PRUNE_SEQUENCE_COLLECTION).deleteMany({});
 }

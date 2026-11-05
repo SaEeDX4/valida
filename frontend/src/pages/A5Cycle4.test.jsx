@@ -201,7 +201,7 @@ describe('dev fixtures are installed before the first render (finding 3)', () =>
 
   it('awaits the fixture installer inside the DEV-gated branch', () => {
     expect(mainSource).toMatch(
-      /if \(import\.meta\.env\.DEV && import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'\)/,
+      /if \(import\.meta\.env\.DEV && import\.meta\.env\.MODE === 'development' && import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'\)/,
     );
     expect(mainSource).toMatch(/await import\('\.\/dev\/installDevFixtures\.js'\)/);
   });

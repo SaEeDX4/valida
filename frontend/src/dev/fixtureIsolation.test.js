@@ -39,12 +39,30 @@ describe('fixtures cannot become production behaviour', () => {
     expect(getApplicationsService()).toBe(applicationsApi);
   });
 
-  it('gates activation on BOTH import.meta.env.DEV and the explicit flag', () => {
+  it('gates activation on import.meta.env.DEV, the development MODE and the explicit flag', () => {
     const env = read('config/env.js');
     expect(env).toMatch(/import\.meta\.env\.DEV === true/);
+    expect(env).toMatch(/import\.meta\.env\.MODE === 'development'/);
     expect(env).toMatch(/VITE_ENABLE_A5_FIXTURES === 'true'/);
-    // Both conditions in one expression: neither alone can enable fixtures.
-    expect(env).toMatch(/import\.meta\.env\.DEV === true\s*&&\s*import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'/);
+    // All conditions in one expression: none alone can enable fixtures.
+    expect(env).toMatch(
+      /import\.meta\.env\.DEV === true\s*&&\s*import\.meta\.env\.MODE === 'development'\s*&&\s*import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'/,
+    );
+  });
+
+  it('C1: is not admitted by DEV alone — a `vite build` with NODE_ENV=development is still mode "production"', () => {
+    // Vite derives DEV from NODE_ENV, but MODE from the command. Without the MODE
+    // condition, `NODE_ENV=development vite build` with the flag set shipped and
+    // ran the fixtures (observed in C1 on the production preview server).
+    const main = readCode('main.jsx');
+    const gate = main.match(/if \((import\.meta\.env\.[^)]*)\)\s*\{\s*const \{ default: installDevFixtures \}/);
+    expect(gate).not.toBeNull();
+    const conditions = gate[1].split('&&').map((part) => part.trim());
+    expect(conditions).toEqual([
+      'import.meta.env.DEV',
+      "import.meta.env.MODE === 'development'",
+      "import.meta.env.VITE_ENABLE_A5_FIXTURES === 'true'",
+    ]);
   });
 
   it('installs fixtures from exactly one place, behind a statically foldable gate', () => {
@@ -53,7 +71,7 @@ describe('fixtures cannot become production behaviour', () => {
     // import.meta.env.DEV with `false` at build time, so Rollup can eliminate
     // the branch and drop the fixture chunk. A helper call would hide the
     // constant and ship the fixtures.
-    expect(main).toMatch(/if \(import\.meta\.env\.DEV && import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'\)/);
+    expect(main).toMatch(/if \(import\.meta\.env\.DEV && import\.meta\.env\.MODE === 'development' && import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'\)/);
     expect(main).toMatch(/import\('\.\/dev\/installDevFixtures\.js'\)/);
     expect(main).not.toMatch(/^import .*installDevFixtures/m);
   });

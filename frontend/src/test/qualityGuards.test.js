@@ -284,9 +284,11 @@ describe("A6 — production source hygiene", () => {
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
-    // Written inline so Vite folds DEV to `false` and Rollup drops the chunk.
+    // Written inline so Vite folds the gate to `false` and the bundler drops the
+    // chunk. C1: MODE as well as DEV, because NODE_ENV=development makes DEV true
+    // in a `vite build`.
     expect(main).toMatch(
-      /import\.meta\.env\.DEV && import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'/,
+      /import\.meta\.env\.DEV && import\.meta\.env\.MODE === 'development' && import\.meta\.env\.VITE_ENABLE_A5_FIXTURES === 'true'/,
     );
 
     expect(main).toMatch(/import\('\.\/dev\/installDevFixtures\.js'\)/);

@@ -67,6 +67,28 @@ describe('A6 — focus on route change', () => {
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('main-content')));
   });
 
+  it('moves focus without scrolling, so the new page still starts at the top (C2)', async () => {
+    // Doc 08 §158: a new page navigation lands at the top. In a real browser a
+    // plain focus() scrolls <main> into view and cancels the smooth scroll to
+    // the top, leaving the page part-way down (C2 browser evidence: Careers →
+    // Job Detail settled at scrollY 72 with the breadcrumb under the sticky
+    // header). jsdom does not scroll, so this pins the contract; the browser
+    // probe in the C2 evidence proves the landing position.
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    const user = userEvent.setup();
+    renderRoute('/');
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    await user.click(within(nav).getByRole('link', { name: 'About' }));
+    const main = document.getElementById('main-content');
+    await waitFor(() => expect(document.activeElement).toBe(main));
+
+    const mainFocusCalls = focusSpy.mock.calls.filter((_, i) => focusSpy.mock.contexts[i] === main);
+    expect(mainFocusCalls.length).toBeGreaterThan(0);
+    for (const args of mainFocusCalls) expect(args[0]).toEqual({ preventScroll: true });
+    expect(window.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0, left: 0 }));
+    focusSpy.mockRestore();
+  });
+
   it('keeps main programmatically focusable without adding a tab stop', () => {
     renderRoute('/');
     const main = document.getElementById('main-content');

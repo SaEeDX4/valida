@@ -20,6 +20,13 @@ import { useLocation, useNavigationType } from 'react-router';
  *
  * Reduced motion is respected — scrolling is instant rather than smooth when
  * the user has asked for reduced motion (Doc 03 section 77).
+ *
+ * The focus call uses preventScroll (C2). A plain focus() scrolls the focused
+ * element into view, and in a browser that cancels the smooth scroll started
+ * just before it: the new page was left part-way down (Careers → Job Detail
+ * settled at the top of <main>, with the breadcrumb under the sticky header;
+ * a footer link from the bottom of Home left About deep inside the page).
+ * Scrolling is this handler's job; focus only has to land on <main>.
  */
 export default function RouteChangeHandler() {
   const { pathname } = useLocation();
@@ -40,7 +47,7 @@ export default function RouteChangeHandler() {
       window.scrollTo({ top: 0, left: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
     }
 
-    document.getElementById('main-content')?.focus();
+    document.getElementById('main-content')?.focus({ preventScroll: true });
   }, [pathname, navigationType]);
 
   return null;

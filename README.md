@@ -14,7 +14,7 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | --------- | -------------------------------------------------------------------- |
 | Release   | B — Recruitment Backend (Release A approved)                         |
 | Milestone | B6 — Notification Integration: **submitted for review (final-r9: the SMTP adapter for the selected provider, Bluehost Professional Email / Titan, with r5 corrections to the live smoke-test procedure and the archive proposal, the r6 ownership-verified smoke-test cleanup, r7: a dependency-security update — nodemailer 10.1.4, body-parser 2.4.0, zod 4.6.6, ip-address 10.7.4, vitest 5.0.3 / vite 8.3.3 — and a recoverable cleanup receipt, r8: test corrections for the first Windows run — deterministic local SMTP addressing and colour-independent output checks, and r9: the smoke-cleanup tests' fixtures corrected for MongoDB's unique indexes — complete synthetic Applications with distinct keys, index prerequisites applied and verified), not yet accepted** — the r9 Windows + MongoDB 8.0.9 rerun and the owner's live Titan tests have been reported (evidence: [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md)); acceptance awaits the remaining items in [`docs/review/B6_DECISION_PACKAGE.md`](docs/review/B6_DECISION_PACKAGE.md) and [`docs/review/B6_ACCEPTANCE_CHECKLIST.md`](docs/review/B6_ACCEPTANCE_CHECKLIST.md); the owner's decisions of 2026-10-26 (Titan long term, manual bounce monitoring, the suppression approach, the Concept A email direction, the manual-check-5 evidence) are recorded in [`docs/review/OWNER_DECISION_2026-10-26_B6_EMAIL.md`](docs/review/OWNER_DECISION_2026-10-26_B6_EMAIL.md); B6 is not accepted |
-| Frontend  | Release A public frontend. Not yet connected to the backend API — that is Release C1. |
+| Frontend  | Release A public frontend. C1 (submitted for review, not accepted): Careers (`/careers`) reads the real Jobs API (`GET /api/v1/jobs`). Job Detail (C2) and Apply (C3) follow. |
 | Backend   | B1–B5 approved and merged (B5: the Apply endpoint, `POST /api/v1/jobs/:jobSlug/applications`). B6 integrates notifications with Apply — events, templates, failure classification, a conditional claim against duplicate sends, a bounded retry command, truthful readiness — and (r4) an SMTP adapter over verified TLS for the selected provider (Bluehost Professional Email / Titan), tested against a local SMTP test server. Real sending happens only when configured (`TRANSACTIONAL_EMAIL_PROVIDER=smtp`); **live Titan evidence** (relay acceptance, Inbox delivery, SPF/DKIM/DMARC as reported, Reply-To routing, an observed bounce, and no Sent copy of SMTP submissions) is recorded in [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md); the former seven-year email archive request is **superseded** by the owner's decision of 2026-10-25 to keep Titan and make a monthly offline backup ([`docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md`](docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md); design: [`docs/architecture/EMAIL_BACKUP_PROPOSAL.md`](docs/architecture/EMAIL_BACKUP_PROPOSAL.md), proposed, not yet set up). Automated messages have no Sent copy; a copy design is proposed ([`docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`](docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md), not implemented). See [`backend/README.md`](backend/README.md). |
 | Database  | MongoDB (B2). The real initial role is provisioned only as a DRAFT — its content is AWAITING INPUT. |
 
@@ -27,15 +27,15 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | B4 — Private resume storage & validation | **Approved and merged** (final-r3; Windows Node 24: 1504 offline tests passed + 5 skipped, B4 acceptance 580 passed + 5 skipped, 89 real-MongoDB tests; audit: 0 vulnerabilities) |
 | B5 — Application submission workflow | **Approved and merged** (final-r2; Windows Node 24.21.0: 1743 offline tests passed + 5 skipped, B5 acceptance 232/232, 110 real-MongoDB tests; audit: 0 vulnerabilities) |
 | B6 — Notification integration | **Submitted for review (final-r9) — not yet accepted** (owner-reported, GPT-reviewed: r9 on Windows Node 24.21.0 with MongoDB 8.0.9 — real-database suite 145/145, smoke cleanup 11/11, rehearsal + cleanup 17/17, `verify:b6` exit 2 with only the live gate pending by design, audits 0, `npm audit signatures` verified; live Titan runs `e4e60b91` and `7fcb590e` passed their automated checks; the owner reported manual checks 1–4, 6 and 7, and check 5 is recorded as PASS for the visible body of one received internal notification (owner-supplied screenshot, GPT-inspected) — see the evidence addendum. Pending: the Doc 14 deviation decisions (including the Doc 14 §120 suppression gap and its production gate), the bounce-monitoring and copy decisions) |
-| C1 — Frontend ↔ Jobs API integration | Not started |
+| C1 — Frontend ↔ Jobs API integration | **Submitted for review — not yet accepted** (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) |
 | Phase 1 | **Not verified** — only after Release B and Release C |
 
 The public frontend (Home, About, Privacy, Legal, Careers, Job Detail, Apply
-and the 404) calls a real API boundary. A backend exists and serves the Jobs
-API, but the frontend is not connected to it until Release C1, so against a
-running frontend build Careers correctly shows its error state rather than
-inventing roles. Controlled development fixtures exist for UI review only; they
-are impossible to activate in a production build.
+and the 404) calls a real API boundary. Careers lists what the real Jobs API
+returns (C1): the open Jobs, the empty state when there are none, and the error
+state when the request fails — never invented roles. Controlled development
+fixtures exist for UI review only; they cannot be activated in a production
+build.
 
 The browser, device and assistive-technology checklist is
 [`docs/A6_WINDOWS_QA_MATRIX.md`](docs/A6_WINDOWS_QA_MATRIX.md). What is not yet
@@ -201,14 +201,23 @@ branded 404.
 
 There should be no browser console errors and no red text in the terminal.
 
-**Careers shows "Open roles are temporarily unavailable." — this is correct.**
-The frontend is not connected to the backend until Release C1, so the real API
-request fails and Careers reports the failure honestly instead of inventing
-roles or claiming there are none. Job Detail and Apply behave the same way.
+**Careers reads the real Jobs API (C1).** The frontend calls the backend named
+by `VITE_API_BASE_URL` in `frontend/.env` — `http://localhost:4000` in
+`.env.example` (copy it first: `Copy-Item .env.example .env` in `frontend/`).
+The backend's local default allows the dev and preview origins
+(`http://localhost:5173`, `http://localhost:4173`). With the backend running,
+Careers shows exactly what `GET /api/v1/jobs` returns:
 
-To review the Careers, Job Detail and Apply states before the frontend is
-connected to the backend (Release C1), enable the controlled development
-fixtures in `frontend/.env`:
+- **open Jobs** — each row links to `/careers/<slug>`;
+- **"No open roles right now."** — the API answered with no open Jobs. This is
+  what the real database shows today, because the real role is still a DRAFT;
+- **"Open roles are temporarily unavailable."** with **Try Again** — the request
+  failed (backend stopped, database unavailable, or no `frontend/.env`, which
+  sends the request to the frontend's own origin). A failure is never shown as
+  "no open roles".
+
+To review the Careers, Job Detail and Apply states with synthetic data instead,
+enable the controlled development fixtures in `frontend/.env`:
 
 ```powershell
 VITE_ENABLE_A5_FIXTURES=true
@@ -220,7 +229,9 @@ then restart `npm run dev`. Scenarios are chosen with a `?a5=` query parameter
 is visibly prefixed `[DEV FIXTURE]`.
 
 Fixtures only ever run under `npm run dev`. A production build cannot include
-them, even with the flag set. Set the flag back to `false` when you finish.
+them, even with the flag set — also when `NODE_ENV=development` is set in the
+shell (C1: the gate checks Vite's mode as well). Set the flag back to `false`
+when you finish.
 
 ---
 

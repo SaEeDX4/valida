@@ -50,6 +50,30 @@ export const COVERAGE_READ_LIMIT = 1_000;
 /** The one read preference of every register read (B7 r5; design §3.5). */
 export const SUPPRESSION_READ_PREFERENCE = 'primary';
 const PRIMARY = SUPPRESSION_READ_PREFERENCE;
+/**
+ * B7 r6 (SUP-12 / §3.5; design §9.8) — the read concern of the SEND-PATH reads
+ * on a replica set. A former primary that has lost its majority but not yet
+ * noticed still answers `local` reads, without a suppression the new primary
+ * has majority-committed. A `linearizable` read is confirmed by a majority
+ * after it is read, so such a node cannot answer it within the time bound: the
+ * check fails closed (SUPPRESSION_CHECK_UNAVAILABLE) before any SMTP.
+ */
+export const SEND_PATH_READ_CONCERN = 'linearizable';
+
+/**
+ * The send-path read concern for the server the driver currently sees:
+ * `linearizable` unless it is a standalone server, which rejects it
+ * (NotAReplicaSet) and has no other node that could hold a newer write.
+ * Anything else, including a topology not yet known, gets `linearizable`.
+ */
+export function sendPathReadConcern(model) {
+  const description = model?.db?.getClient?.()?.topology?.description;
+  const servers = description?.servers instanceof Map ? [...description.servers.values()] : [];
+  const standalone = description?.type === 'Single' && servers.length > 0 && servers.every((server) => server.type === 'Standalone');
+  return standalone ? null : SEND_PATH_READ_CONCERN;
+}
+/** Applies a read concern when one is given (`null`: the server default, `local`). */
+const withReadConcern = (query, level) => (level ? query.readConcern(level) : query);
 
 /** A write that did not apply because the document changed since it was read. */
 export class SuppressionWriteConflict extends Error {
@@ -80,10 +104,10 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
   const bounded = (model, operation, ms = timeoutMs) => runBounded(model, operation, ms);
 
   /** Coverage inputs (§4.4, §4.5.1): every key id an ACTIVE entry can be matched under (primary or alias), and every key document. */
-  function readCoverageInputs(ms = timeoutMs) {
+  function readCoverageInputs(ms = timeoutMs, readConcern = null) {
     return Promise.all([
-      bounded(Suppression, () => Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).read(PRIMARY).maxTimeMS(ms), ms),
-      bounded(Keys, () => Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).read(PRIMARY).maxTimeMS(ms).lean(), ms),
+      bounded(Suppression, () => withReadConcern(Suppression.distinct('lookups.keyId', { state: { $eq: 'ACTIVE' }, scope: { $eq: SUPPRESSION_SCOPE } }).read(PRIMARY), readConcern).maxTimeMS(ms), ms),
+      bounded(Keys, () => withReadConcern(Keys.find({}, { _id: 1, check: 1, state: 1 }).limit(COVERAGE_READ_LIMIT + 1).read(PRIMARY), readConcern).maxTimeMS(ms).lean(), ms),
     ]).then(([activeKeyIds, keyDocuments]) => ({
       activeKeyIds: activeKeyIds.slice(0, COVERAGE_READ_LIMIT + 1),
       keyDocuments: keyDocuments.slice(0, COVERAGE_READ_LIMIT),
@@ -95,20 +119,22 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
    * An ACTIVE entry matching any of the `(keyId, digest)` pairs, or null —
    * through `lookups` only (primary and aliases), one index point lookup per pair.
    */
-  function findActiveMatch(pairs, ms = timeoutMs) {
+  function findActiveMatch(pairs, ms = timeoutMs, readConcern = null) {
     if (pairs.length === 0) return Promise.resolve(null);
     return bounded(
       Suppression,
       () =>
-        Suppression.findOne(
-          {
-            state: { $eq: 'ACTIVE' },
-            scope: { $eq: SUPPRESSION_SCOPE },
-            $or: pairs.map(({ keyId, digest }) => ({ lookups: { $elemMatch: { keyId: { $eq: keyId }, digest: { $eq: digest } } } })),
-          },
-          { _id: 1 },
+        withReadConcern(
+          Suppression.findOne(
+            {
+              state: { $eq: 'ACTIVE' },
+              scope: { $eq: SUPPRESSION_SCOPE },
+              $or: pairs.map(({ keyId, digest }) => ({ lookups: { $elemMatch: { keyId: { $eq: keyId }, digest: { $eq: digest } } } })),
+            },
+            { _id: 1 },
+          ).read(PRIMARY),
+          readConcern,
         )
-          .read(PRIMARY)
           .maxTimeMS(ms)
           .lean(),
       ms,
@@ -116,8 +142,8 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
   }
 
   /** Rev 8.3 — the highest prune stamp in the register (0 when none): one index point read. */
-  function highestPruneSeq(ms = timeoutMs) {
-    return bounded(Suppression, () => Suppression.findOne({}, { _id: 0, pruneSeq: 1 }).sort({ pruneSeq: -1 }).read(PRIMARY).maxTimeMS(ms).lean(), ms).then((document) =>
+  function highestPruneSeq(ms = timeoutMs, readConcern = null) {
+    return bounded(Suppression, () => withReadConcern(Suppression.findOne({}, { _id: 0, pruneSeq: 1 }).sort({ pruneSeq: -1 }).read(PRIMARY), readConcern).maxTimeMS(ms).lean(), ms).then((document) =>
       Number.isSafeInteger(document?.pruneSeq) ? document.pruneSeq : 0,
     );
   }
@@ -203,6 +229,10 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
      * became visible during the check, so its coverage and match may not
      * describe one register state, and the gate must not PROCEED. Rejects
      * (DatabaseUnavailableError) when anything could not be read in time.
+     *
+     * B7 r6 (§9.8): on a replica set all five reads are `linearizable`, so a
+     * former primary that still believes it is writable cannot serve them; on
+     * a standalone server they use the default (`local`).
      */
     async readForAcknowledgement({ pairs }) {
       const deadline = performance.now() + timeoutMs;
@@ -211,10 +241,11 @@ export function createSuppressionRegister({ timeoutMs = 2_000, writeTimeoutMs = 
         if (ms < 1) throw new DatabaseUnavailableError('timeout');
         return ms;
       };
-      const before = await highestPruneSeq(left());
-      const [coverage, match] = await Promise.all([readCoverageInputs(left()), findActiveMatch(pairs, left())]);
-      const after = await highestPruneSeq(left());
-      return { ...coverage, match, pruneSeq: { before, after }, registerChanged: before !== after };
+      const readConcern = sendPathReadConcern(Suppression);
+      const before = await highestPruneSeq(left(), readConcern);
+      const [coverage, match] = await Promise.all([readCoverageInputs(left(), readConcern), findActiveMatch(pairs, left(), readConcern)]);
+      const after = await highestPruneSeq(left(), readConcern);
+      return { ...coverage, match, pruneSeq: { before, after }, registerChanged: before !== after, readConcern: readConcern ?? 'local' };
     },
 
     readCoverageInputs,

@@ -15,7 +15,7 @@ import {
 } from '../src/modules/suppression/suppressionKeys.js';
 import { assessCoverage, createSuppressionGate, COVERAGE_REASONS } from '../src/modules/suppression/suppressionGate.js';
 import { createSuppressionOperations, SuppressionRefused, messageTokenFor } from '../src/modules/suppression/suppressionOperations.js';
-import { createSuppressionRegister, SUPPRESSION_READ_PREFERENCE } from '../src/modules/suppression/suppressionRegister.js';
+import { createSuppressionRegister, SEND_PATH_READ_CONCERN, SUPPRESSION_READ_PREFERENCE, sendPathReadConcern } from '../src/modules/suppression/suppressionRegister.js';
 import { parseSuppressionArgs } from '../scripts/ops-notifications-suppression.mjs';
 import { ConfigurationError, loadConfig } from '../src/config/env.js';
 import { assessChannel, createApplicationNotifier } from '../src/modules/applications/application.notifications.js';
@@ -219,13 +219,17 @@ describe('rev 8.3 — PROCEED needs a confirmed stable register view (§9.6; SUP
 
 describe('B7 r5 — every suppression read asks for the PRIMARY, whatever the connection default (§3.5; RP-1…3 offline guard)', () => {
   /** Model stand-ins whose queries record the read preference they were given; nothing connects. */
-  function recordingModels() {
+  function recordingModels({ topology = null } = {}) {
     const reads = [];
     const chain = (kind, result) => {
-      const query = { kind, readPreference: null };
+      const query = { kind, readPreference: null, readConcern: null };
       const api = {
         read(preference) {
           query.readPreference = preference;
+          return api;
+        },
+        readConcern(level) {
+          query.readConcern = level;
           return api;
         },
         maxTimeMS: () => api,
@@ -240,7 +244,7 @@ describe('B7 r5 — every suppression read asks for the PRIMARY, whatever the co
       };
       return api;
     };
-    const db = { readyState: 1 };
+    const db = { readyState: 1, getClient: () => ({ topology: topology ? { description: topology } : undefined }) };
     const Suppression = {
       db,
       distinct: () => chain('distinct', []),
@@ -271,8 +275,34 @@ describe('B7 r5 — every suppression read asks for the PRIMARY, whatever the co
     await register.listKeyDocuments();
     await register.listIndexes();
     expect(reads).toHaveLength(15); // 5 send-path reads + 10 more
+    // B7 r6 (§9.8): the five send-path reads are linearizable (topology not known = not standalone); no other read is.
+    expect(read.readConcern).toBe('linearizable');
+    expect(reads.slice(0, 5).map((entry) => entry.readConcern)).toEqual(Array(5).fill('linearizable'));
+    expect(reads.slice(5).filter((entry) => entry.readConcern !== null && entry.readConcern !== undefined)).toEqual([]);
     expect(SUPPRESSION_READ_PREFERENCE).toBe('primary');
     expect(reads.filter((entry) => entry.readPreference !== 'primary')).toEqual([]);
+  });
+
+  it('B7 r6 (§9.8): send-path read concern by topology — linearizable on any replica set, the server default only on a standalone server', async () => {
+    const description = (type, ...serverTypes) => ({ type, servers: new Map(serverTypes.map((serverType, index) => [`127.0.0.1:${27_017 + index}`, { type: serverType }])) });
+    const cases = [
+      [description('ReplicaSetWithPrimary', 'RSPrimary', 'RSSecondary', 'RSSecondary'), 'linearizable'],
+      [description('ReplicaSetNoPrimary', 'RSSecondary'), 'linearizable'],
+      [description('Single', 'RSPrimary'), 'linearizable'], // a replica-set member reached with directConnection
+      [description('Single', 'Unknown'), 'linearizable'], // not known yet: never assume standalone
+      [description('Unknown'), 'linearizable'],
+      [description('Single', 'Standalone'), null],
+    ];
+    expect(SEND_PATH_READ_CONCERN).toBe('linearizable');
+    for (const [topology, expected] of cases) {
+      const { reads, models } = recordingModels({ topology });
+      expect(sendPathReadConcern(models.RecipientSuppression)).toBe(expected);
+      const register = createSuppressionRegister({ timeoutMs: 1_000, models });
+      const read = await register.readForAcknowledgement({ pairs: [{ keyId: 'k1', digest: 'a'.repeat(64) }] });
+      expect(read.readConcern).toBe(expected ?? 'local');
+      expect(reads.map((entry) => entry.readConcern)).toEqual(Array(5).fill(expected));
+      expect(reads.every((entry) => entry.readPreference === 'primary')).toBe(true);
+    }
   });
 
   it('the operator command reads stored Applications from the primary (check, bounce correlation)', async () => {

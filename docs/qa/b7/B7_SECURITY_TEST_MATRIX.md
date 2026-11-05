@@ -107,3 +107,15 @@ Results and the mapping: `docs/review/B7_REVIEW_PACKAGE_R3.md`.
 
 Results: `docs/review/B7_REVIEW_PACKAGE_R4.md`.
 
+## 9. Primary reads in suppression authorisation (design rev 8.4 §9.7; r5)
+
+| Control | Governing text | Tests | Status |
+| --- | --- | --- | --- |
+| Every suppression read selects the primary, whatever the connection's read preference; an already-suppressed recipient gets zero submissions; the positive control still sends once | Design §3.5, §9.7 | `db/b7-suppression-read-preference.test.js` RP-1, RP-2, RP-3 (command monitoring: name, collection, read preference, server) | EX on MongoDB 8.0.23: single-node replica set, three-node replica set, standalone |
+| No primary → fail closed; no command reaches a secondary; nothing allocated | Design §9.7 | RP-4 (old and freshly opened connection) | EX on the disposable three-node set (`MONGODB_TEST_DISPOSABLE_TOPOLOGY=1`); NOT RUN elsewhere |
+| A stale secondary cannot cause an acknowledgement | Design §3.5, §9.7 | RP-5 (replication paused on the readable secondary) | EX on the disposable three-node set; on `bbbd638` it SENT |
+| Offline guard | Design §9.7 | `b7-suppression-units.test.js` (2): every register read and the operator's Application reads ask for the primary | EX |
+| Mutation checks | — | Removing the primary read from any one of these makes a test fail: the stamp read, the match, coverage ids, key documents, the Application read, or the module constant. Removing it from the match, or setting the constant to `secondaryPreferred`, caused a real submission in RP-5 | EX |
+
+Results: `docs/review/B7_REVIEW_PACKAGE_R5.md`.
+

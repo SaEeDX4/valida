@@ -212,6 +212,7 @@ node tests/diagnostics/localhost-addressing.mjs
 | `MONGODB_CONNECT_TIMEOUT_MS` | no | `10000` | 1000–120000. How long startup waits for MongoDB before failing |
 | `MONGODB_QUERY_TIMEOUT_MS` | no | `5000` | 500–60000 (B3). Upper bound on one public Jobs read; also sent to MongoDB as `maxTimeMS`. A slower or unresponsive database gives `503`, never a hung request or an empty list |
 | `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4` / `verify:b5` / `verify:b6`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
+| `MONGODB_TEST_DISPOSABLE_TOPOLOGY` | tests only (B7) | unset | `1` lets the suppression read-preference cases RP-4 and RP-5 step the replica set's primary down and pause a secondary's replication. **Set it only for a replica set created for the test.** Unset, those two cases report NOT RUN |
 | `RESUME_STORAGE_DRIVER` | no (B4) | unset | `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. The production provider is selected at deployment (C6, AWAITING INPUT) |
 | `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
 | `APPLICATION_RATE_LIMIT_WINDOW_MS` | no (B5) | `900000` | 1000–86400000. Apply rate-limit window (Doc 09 section 34: 15 minutes) |
@@ -2115,6 +2116,15 @@ order: when the output's `nextAfter` is not `null`, run again with
 `--after <nextAfter>`; after an unknown write, resume with the `--after` the
 error message prints. Entries that stay unresolved are reported in every run and
 never hold the later ones back.
+
+**Primary reads (B7 r5; design §9.7).** Every read the suppression check and
+the operator command make goes to the **primary**, set explicitly on each
+query: the prune stamps, coverage, key documents, the recipient match, the
+allocation's stamp read, entries, counts, indexes and stored Applications. A
+`readPreference` in `MONGODB_URI` (for example `secondaryPreferred`) is
+therefore ignored there. Without a reachable primary, the acknowledgement is
+`SUPPRESSION_CHECK_UNAVAILABLE` (retried normally) and the operator command
+fails without writing. Neither ever reads a secondary.
 
 The register's indexes
 are part of `npm run db:indexes:apply`; `add` refuses (`INDEXES_MISSING`) until

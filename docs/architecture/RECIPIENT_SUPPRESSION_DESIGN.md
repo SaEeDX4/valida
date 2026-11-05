@@ -14,6 +14,7 @@
 | Revision | **rev 8.1** (2026-11-04, OD-2026-11-04-02): approved; the SUP-21 correction recorded in §8; §8 tests written and run in B7. The design text is otherwise unchanged. |
 | Revision | **rev 8.2** (2026-11-04, after GPT's B7 r2 review): **review corrections — PROPOSED for GPT review and owner confirmation; implemented on `b7-work` for that review.** The approved text is kept; each change is in **§9** and marked *(rev 8.2, §9.n)* where it applies: (1) a consistent authorisation view under key migration — lookup aliases with a quiet period (§9.1); (2) bounded, resumable `rekey` / `recover-key` passes (§9.2); (3) no fixed maximum on verify-only keys, as §3.2 already says — the implementation's cap of 8 removed (§9.3); (4) the minimal data-inventory entry for SUP-6 (§9.4); (5) the history cap on the duplicate-report path (§9.5); tests SUP-24, SUP-25 and SUP-13b (§8). Production acknowledgements stay refused. |
 | Revision | **rev 8.3** (2026-11-04, after GPT's B7 r3 review): **clock-free authorisation — PROPOSED for GPT review and owner confirmation; implemented on `b7-work` for that review.** The rev 8.2 quiet period (§9.1) made a send decision depend on operator clocks and on when a delayed move became visible; it is **withdrawn** and replaced by the prune sequence of **§9.6**. The rev 8.2 text of §9.1 is kept as the record and marked where it is superseded. Tests SUP-24 (now through the real send-path read) and SUP-24b (§8). Production acknowledgements stay refused. |
+| Revision | **rev 8.4** (2026-11-05, after GPT's B7 r4 review): **primary reads enforced — a correction to the implementation; no design rule changes.** §3.5 and the register always required reads from the primary; the code relied on the connection's default, which `readPreference=secondaryPreferred` in `MONGODB_URI` overrides. Now every suppression read sets `primary` itself. Recorded in **§9.7**. Tests RP-1…RP-5 (§8). Production acknowledgements stay refused. |
 
 ## 1. What it must do — and what it cannot do
 
@@ -164,7 +165,7 @@ The adapter already derives a value-free enhanced status (for example `5.1.1`) f
 
 ### 3.5 Race boundaries
 
-- A suppression applies to every lookup that **starts after** its add is acknowledged (`w: majority`, read from the primary).
+- A suppression applies to every lookup that **starts after** its add is acknowledged (`w: majority`, read from the primary). *(rev 8.4, §9.7: every suppression read sets readPreference `primary` itself, whatever the connection default; without a primary the check fails closed.)*
 - An acknowledgement whose lookup completed before that point may still be submitted. **An already-submitted message cannot be recalled.**
 - Two adds for the same address converge on one document (unique index plus conditional writes).
 - A lift and a send racing: the send uses whatever state its lookup read; a lift never triggers a send.
@@ -353,6 +354,10 @@ Environment: a real MongoDB replica set; a local SMTP test server with a submiss
 | SUP-25 | **Bounded, resumable passes (§9.2).** An unresolved prefix (source-less entries) longer than `--limit`, followed by eligible entries: a run examines `--limit` entries and returns `nextAfter`; a run with `--after` reaches and moves the eligible ones. An interrupted pass (fault injection) reports `resumeAfter`; resuming completes it with exactly one `REKEY` per entry. The unresolved entries and their history stay byte-for-byte unchanged. Both `rekey` and `recover-key`. An invalid cursor is refused. |
 | SUP-13b | **History cap (§9.5).** Near the cap, a duplicate report only increments `duplicateReports`. At the cap, a duplicate report and a re-apply are refused (`HISTORY_CAP_REACHED`) in a dry run and with `--apply`, and nothing is written. Alias pruning at the cap writes no history entry. |
 
+| # | Case (rev 8.4, §9.7) |
+| --- | --- |
+| RP-1…RP-5 | **Primary reads under a non-primary connection preference.** The real register is bound to a connection opened with `readPreference=secondaryPreferred`, and every command it sends is recorded (name, collection, read preference, server). **RP-1:** an already-suppressed recipient gets **zero** submissions, and all five send-path reads select the primary. **RP-2:** positive control — an unsuppressed address is acknowledged once. **RP-3:** the operator path — Application reads, coverage, and a prune with its allocation's stamp read. **RP-4:** no primary (disposable multi-node set) — the check fails closed on the existing connection and on a freshly opened one, no command reaches the secondary, and no sequence is allocated. **RP-5:** a stale secondary (replication paused) — zero submissions. On the rev 8.3 code, all of these reads went to the secondary, and RP-5 **sent**. |
+
 **Live verification** (separately authorised later): one real asynchronous Titan DSN processed end to end by the operator command against a non-production database. **Not authorised now.**
 
 ## 9. Rev 8.2 — B7 r3 review corrections (PROPOSED for GPT review and owner confirmation)
@@ -447,4 +452,31 @@ The argument uses only single-document atomicity, conditional writes on `version
 - **Mutation checks:** seven controls were each disabled in turn.
   - Five cause a real submission to the suppressed address: ignoring the change, not stamping, reading the stamp only once, replacing the alias instead of keeping it, and taking coverage from the primary lookup only.
   - Two are caught by their own tests: not raising the counter, and removing the monotonic guard.
+
+### 9.7 Rev 8.4 — primary reads enforced (B7 r4 review)
+
+**Defect.** §3.5 and the register require every suppression read to come from the primary. A suppression must apply to every lookup that starts after its add was acknowledged by a majority. The code relied on the connection's default read preference instead. Configuration accepts `readPreference=secondaryPreferred` in `MONGODB_URI`, and that preference reached every suppression query.
+
+**Demonstrated on `bbbd638`** (real MongoDB, synthetic data, local SMTP counter). The register was bound to a `secondaryPreferred` connection on a three-node replica set: a primary, a hidden member, and a readable priority-0 secondary.
+
+- These reads all went to the secondary with `readPreference=secondaryPreferred`:
+  - both prune-stamp reads;
+  - coverage key ids and key documents;
+  - the match;
+  - the allocation's stamp read;
+  - the operator's entry, count, index and Application reads.
+- With replication paused on that secondary, an already-suppressed recipient was acknowledged (RCPT 1 → 2).
+- With no primary, a connection opened after the primary left decided `SUPPRESSED` from the secondary instead of failing closed.
+
+**Correction.**
+
+- Every register read sets readPreference `primary` explicitly (`SUPPRESSION_READ_PREFERENCE`). That covers `highestPruneSeq` (both send-path stamps and the allocation's read), the coverage `distinct`, the key documents, the match, the operator's entries, entry, count, per-key aggregate, key documents and `listIndexes`.
+- The operator command reads stored Applications from the primary too.
+- Writes already go to the primary.
+- Without a reachable primary, every read fails. The send path is then `FAILED` / `SUPPRESSION_CHECK_UNAVAILABLE` (TRANSIENT), and the operator command fails without writing.
+- On a standalone server nothing changes: there is only one server, and the driver sends no read preference to it.
+
+**What it does not change.** No design rule, data, index, configuration variable or API changes. The rev 8.3 prune-sequence design is kept as it is.
+
+**Not covered.** During a network partition, a primary that has lost its majority but not yet stepped down can still answer reads. This is a known property of primary reads with read concern `local`, not of this change. Closing it would need `linearizable` reads, which are listed for confirmation and not implemented. Other repositories, such as Applications on the Apply path, also inherit the URI preference. That is outside suppression authorisation and is noted for review.
 

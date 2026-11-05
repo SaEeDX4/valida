@@ -119,3 +119,17 @@ Results: `docs/review/B7_REVIEW_PACKAGE_R4.md`.
 
 Results: `docs/review/B7_REVIEW_PACKAGE_R5.md`.
 
+
+## 10. A stale former primary cannot authorise an acknowledgement (design rev 8.5 §9.8; r6)
+
+| Control | Governing text | Tests | Status |
+| --- | --- | --- | --- |
+| After the majority acknowledges a suppression on a new primary, a lookup that starts afterwards on the former primary (still `isWritablePrimary: true`) never authorises a submission; the claim was obtained before the partition | Design §3.5, §9.8; SUP-12 | `db/b7-suppression-stale-primary.test.js` SP-1 (TCP partition bridge; every command recorded with its serving member and read concern) | EX on MongoDB 8.0.23 (disposable three-member set, `MONGODB_TEST_PARTITION_NODES`); on `921c299` it SENT (RCPT 1 → 2); on the corrected commit zero submissions, `SUPPRESSION_CHECK_UNAVAILABLE`; NOT RUN elsewhere |
+| The deferred acknowledgement is not lost: after the heal, the normal retry decides `RECIPIENT_SUPPRESSED`, still zero submissions | Design §3.2 step 4, §9.8 | SP-1 (after the heal) | EX on the disposable set |
+| The retry path: a claim attempted during the partition cannot be majority-acknowledged, so there is no lookup and no SMTP | Design §3.2, §9.8 | SP-2 (`CLAIM_FAILED`) | EX on the disposable set (also on `921c299`) |
+| Healthy positive control: an unsuppressed address is acknowledged once; its five send-path reads are linearizable on the primary | Design §9.8 | SP-3 | EX on the disposable set |
+| Send-path read concern by topology: `linearizable` for any replica set or unknown topology, the server default only on a standalone server; no other register read sets one | Design §9.8 | `b7-suppression-units.test.js` (2); the topology probe in the r6 package (single-node set, standalone, both with `directConnection`) | EX |
+| Standalone parity | Design §9.8 | The suppression and B6 notification DB suites on a standalone server (`local`; positive controls send) | EX (the one standalone failure, SUP-14 with fail points, is pre-existing on `921c299` and unrelated — r6 package §8) |
+| Mutation check | — | With the read concern forced back to `local`, SP-1 sends again (RCPT 1 → 2), SP-3 and both offline guards fail | EX |
+
+Results: `docs/review/B7_REVIEW_PACKAGE_R6.md`.

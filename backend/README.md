@@ -213,6 +213,7 @@ node tests/diagnostics/localhost-addressing.mjs
 | `MONGODB_QUERY_TIMEOUT_MS` | no | `5000` | 500–60000 (B3). Upper bound on one public Jobs read; also sent to MongoDB as `maxTimeMS`. A slower or unresponsive database gives `503`, never a hung request or an empty list |
 | `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4` / `verify:b5` / `verify:b6`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
 | `MONGODB_TEST_DISPOSABLE_TOPOLOGY` | tests only (B7) | unset | `1` lets the suppression read-preference cases RP-4 and RP-5 step the replica set's primary down and pause a secondary's replication. **Set it only for a replica set created for the test.** Unset, those two cases report NOT RUN |
+| `MONGODB_TEST_PARTITION_NODES` | tests only (B7 r6) | unset | Three `127.0.0.1:<port>` addresses of **fresh, disposable** `mongod --replSet rs2 --setParameter enableTestCommands=1` processes, comma-separated. Lets the stale-primary cases SP-1…SP-3 (`tests/db/b7-suppression-stale-primary.test.js`) initiate `rs2` behind a TCP partition bridge (each member at its port + 1000) and partition it. `MONGODB_TEST_URI` must then name the bridge addresses with `replicaSet=rs2`. A set already initiated with other members is refused. Unset, those cases report NOT RUN |
 | `RESUME_STORAGE_DRIVER` | no (B4) | unset | `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. The production provider is selected at deployment (C6, AWAITING INPUT) |
 | `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
 | `APPLICATION_RATE_LIMIT_WINDOW_MS` | no (B5) | `900000` | 1000–86400000. Apply rate-limit window (Doc 09 section 34: 15 minutes) |
@@ -2125,6 +2126,30 @@ allocation's stamp read, entries, counts, indexes and stored Applications. A
 therefore ignored there. Without a reachable primary, the acknowledgement is
 `SUPPRESSION_CHECK_UNAVAILABLE` (retried normally) and the operator command
 fails without writing. Neither ever reads a secondary.
+
+**Linearizable send-path reads (B7 r6; design §9.8).** On a replica set, the
+five reads of the suppression check (both prune stamps, coverage key ids, key
+documents and the recipient match) use read concern `linearizable`, each
+bounded by the remaining `SUPPRESSION_LOOKUP_TIMEOUT_MS`. A former primary
+that has lost its majority but still believes it is writable cannot answer
+them, so an acknowledgement is never authorised from a view older than a
+suppression the majority has already acknowledged: the check fails closed
+(`SUPPRESSION_CHECK_UNAVAILABLE`, retried normally) before any SMTP. Each read
+waits for one majority confirmation, so a check takes a few replication round
+trips longer. On a standalone server the reads keep the server default
+(`local`), which a standalone server requires. Operator reads and writes, and
+every other repository, are unchanged; no read preference or read concern is
+set for the application as a whole.
+
+To run the stale-primary cases on Windows (three fresh members; synthetic data
+only):
+
+```powershell
+# three fresh mongod processes, e.g. ports 27061-27063, each with its own empty --dbpath
+$env:MONGODB_TEST_PARTITION_NODES = "127.0.0.1:27061,127.0.0.1:27062,127.0.0.1:27063"
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:28061,127.0.0.1:28062,127.0.0.1:28063/valida_test?replicaSet=rs2"
+npx vitest run --config vitest.db.config.js tests/db/b7-suppression-stale-primary.test.js
+```
 
 The register's indexes
 are part of `npm run db:indexes:apply`; `add` refuses (`INDEXES_MISSING`) until

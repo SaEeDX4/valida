@@ -15,6 +15,7 @@
 | Revision | **rev 8.2** (2026-11-04, after GPT's B7 r2 review): **review corrections — PROPOSED for GPT review and owner confirmation; implemented on `b7-work` for that review.** The approved text is kept; each change is in **§9** and marked *(rev 8.2, §9.n)* where it applies: (1) a consistent authorisation view under key migration — lookup aliases with a quiet period (§9.1); (2) bounded, resumable `rekey` / `recover-key` passes (§9.2); (3) no fixed maximum on verify-only keys, as §3.2 already says — the implementation's cap of 8 removed (§9.3); (4) the minimal data-inventory entry for SUP-6 (§9.4); (5) the history cap on the duplicate-report path (§9.5); tests SUP-24, SUP-25 and SUP-13b (§8). Production acknowledgements stay refused. |
 | Revision | **rev 8.3** (2026-11-04, after GPT's B7 r3 review): **clock-free authorisation — PROPOSED for GPT review and owner confirmation; implemented on `b7-work` for that review.** The rev 8.2 quiet period (§9.1) made a send decision depend on operator clocks and on when a delayed move became visible; it is **withdrawn** and replaced by the prune sequence of **§9.6**. The rev 8.2 text of §9.1 is kept as the record and marked where it is superseded. Tests SUP-24 (now through the real send-path read) and SUP-24b (§8). Production acknowledgements stay refused. |
 | Revision | **rev 8.4** (2026-11-05, after GPT's B7 r4 review): **primary reads enforced — a correction to the implementation; no design rule changes.** §3.5 and the register always required reads from the primary; the code relied on the connection's default, which `readPreference=secondaryPreferred` in `MONGODB_URI` overrides. Now every suppression read sets `primary` itself. Recorded in **§9.7**. Tests RP-1…RP-5 (§8). Production acknowledgements stay refused. |
+| Revision | **rev 8.5** (2026-11-05, owner-authorised SUP-12 / §3.5 investigation): **a stale former primary cannot authorise a send — an implementation correction; PROPOSED for GPT review and owner confirmation.** On a replica set, the five send-path reads now use read concern `linearizable`, so a former primary that still believes it is writable cannot answer them, and the check fails closed before SMTP. A standalone server keeps `local`. No design rule, data, index, configuration variable or API changes. Recorded in **§9.8**. Tests SP-1…SP-3 (§8). Production acknowledgements stay refused. |
 
 ## 1. What it must do — and what it cannot do
 
@@ -104,7 +105,7 @@ In `createApplicationNotifier().attempt()` the r9 claim stays exactly as it is. 
 
 1. **Coverage check (§4.4).** One bounded, indexed read: is there any `ACTIVE` entry for this scope whose `lookup.keyId` *(rev 8.2, §9.1: any key id in its `lookups`)* is not a configured key (the current key or a verify-only previous key, §4.2)? In the same round trip (rev 7–8): the key check of every configured key and any `RECOVERING` key document (§4.5.1).
 2. Compute the lookup digest from `candidate.emailNormalized` (§4) under **every configured key**: the current key and each verify-only previous key. There is no fixed maximum; during a rotation there is normally one previous key. *(rev 8.2, §9.3: the implementation now imposes none; only the configuration value's length is bounded.)*
-3. Run one bounded read on the primary (`maxTimeMS`, proposed 2 000 ms): an `ACTIVE` document with `scope: APPLICATION_ACKNOWLEDGEMENT` matching any of those `(keyId, digest)` pairs *(rev 8.2, §9.1: in its `lookups`)*. Steps 1 and 3 may share one aggregation round trip; both stay inside the same time bound. *(rev 8.3, §9.6: steps 1 and 3 are bracketed by a read of the highest prune stamp before and after, all inside the same time bound; `PROCEED` needs the two stamps to be equal.)*
+3. Run one bounded read on the primary (`maxTimeMS`, proposed 2 000 ms): an `ACTIVE` document with `scope: APPLICATION_ACKNOWLEDGEMENT` matching any of those `(keyId, digest)` pairs *(rev 8.2, §9.1: in its `lookups`)*. Steps 1 and 3 may share one aggregation round trip; both stay inside the same time bound. *(rev 8.3, §9.6: steps 1 and 3 are bracketed by a read of the highest prune stamp before and after, all inside the same time bound; `PROCEED` needs the two stamps to be equal.)* *(rev 8.5, §9.8: on a replica set these five reads use read concern `linearizable`.)*
 4. Then one of four things happens:
    - **Coverage incomplete, or the current key unavailable** → no SMTP. The outcome is `FAILED` / **`SUPPRESSION_COVERAGE_INCOMPLETE`** (class **CONFIGURATION**: never due on its own; only an operator run with `--include-configuration`, after coverage is restored, reaches it). This applies to **every** acknowledgement, suppressed or not, because an entry under a missing key could match any address. The log line is `suppression_coverage_incomplete`, with application id and channel only.
    - **Found** → no SMTP. The outcome is `FAILED` / **`RECIPIENT_SUPPRESSED`** (class **PERMANENT**: never due, and reached by no retry flag). The log line is `notification_suppressed`, with application id, channel and suppression `_id` only.
@@ -165,7 +166,7 @@ The adapter already derives a value-free enhanced status (for example `5.1.1`) f
 
 ### 3.5 Race boundaries
 
-- A suppression applies to every lookup that **starts after** its add is acknowledged (`w: majority`, read from the primary). *(rev 8.4, §9.7: every suppression read sets readPreference `primary` itself, whatever the connection default; without a primary the check fails closed.)*
+- A suppression applies to every lookup that **starts after** its add is acknowledged (`w: majority`, read from the primary). *(rev 8.4, §9.7: every suppression read sets readPreference `primary` itself, whatever the connection default; without a primary the check fails closed.)* *(rev 8.5, §9.8: on a replica set the send-path reads are also `linearizable`, so this holds when a former primary that has lost its majority still believes it is writable: it cannot answer them, and the check fails closed before SMTP.)*
 - An acknowledgement whose lookup completed before that point may still be submitted. **An already-submitted message cannot be recalled.**
 - Two adds for the same address converge on one document (unique index plus conditional writes).
 - A lift and a send racing: the send uses whatever state its lookup read; a lift never triggers a send.
@@ -358,6 +359,10 @@ Environment: a real MongoDB replica set; a local SMTP test server with a submiss
 | --- | --- |
 | RP-1…RP-5 | **Primary reads under a non-primary connection preference.** The real register is bound to a connection opened with `readPreference=secondaryPreferred`, and every command it sends is recorded (name, collection, read preference, server). **RP-1:** an already-suppressed recipient gets **zero** submissions, and all five send-path reads select the primary. **RP-2:** positive control — an unsuppressed address is acknowledged once. **RP-3:** the operator path — Application reads, coverage, and a prune with its allocation's stamp read. **RP-4:** no primary (disposable multi-node set) — the check fails closed on the existing connection and on a freshly opened one, no command reaches the secondary, and no sequence is allocated. **RP-5:** a stale secondary (replication paused) — zero submissions. On the rev 8.3 code, all of these reads went to the secondary, and RP-5 **sent**. |
 
+| # | Case (rev 8.5, §9.8) |
+| --- | --- |
+| SP-1…SP-3 | **A stale former primary after the majority recorded a suppression.** A disposable three-member replica set behind a TCP partition bridge, partitioned in two steps, so the new primary and the former primary both report `isWritablePrimary: true` (read directly on each member). The sender can reach only the former primary. Every command is recorded with the member that served it and the read concern it carried. **SP-1:** the acknowledgement is claimed on the healthy set **before** the partition; the suppression is then added on the new primary (`w: majority, j: true`); only then does the lookup start. Result: **zero** submissions and `SUPPRESSION_CHECK_UNAVAILABLE`. After the heal, the normal retry decides `RECIPIENT_SUPPRESSED`, still with zero submissions. **SP-2:** the retry path, its claim attempted during the partition (`CLAIM_FAILED`, zero submissions). **SP-3:** healthy positive control (sent once). On the rev 8.4 code, SP-1 **sent** (RCPT 1 → 2). The cases need `MONGODB_TEST_PARTITION_NODES`; without it they report NOT RUN. |
+
 **Live verification** (separately authorised later): one real asynchronous Titan DSN processed end to end by the operator command against a non-production database. **Not authorised now.**
 
 ## 9. Rev 8.2 — B7 r3 review corrections (PROPOSED for GPT review and owner confirmation)
@@ -478,5 +483,56 @@ The argument uses only single-document atomicity, conditional writes on `version
 
 **What it does not change.** No design rule, data, index, configuration variable or API changes. The rev 8.3 prune-sequence design is kept as it is.
 
-**Not covered.** During a network partition, a primary that has lost its majority but not yet stepped down can still answer reads. This is a known property of primary reads with read concern `local`, not of this change. Closing it would need `linearizable` reads, which are listed for confirmation and not implemented. Other repositories, such as Applications on the Apply path, also inherit the URI preference. That is outside suppression authorisation and is noted for review.
+**Not covered.** During a network partition, a primary that has lost its majority but not yet stepped down can still answer reads. This is a known property of primary reads with read concern `local`, not of this change. Closing it would need `linearizable` reads, which are listed for confirmation and not implemented. *(Rev 8.5: demonstrated and corrected for the send path — §9.8.)* Other repositories, such as Applications on the Apply path, also inherit the URI preference. That is outside suppression authorisation and is noted for review.
 
+### 9.8 Rev 8.5 — a stale former primary cannot authorise a send (SUP-12 / §3.5 investigation)
+
+**Question (owner-authorised, 2026-11-05).** After the current primary majority-acknowledges a suppression, can an acknowledgement whose lookup starts afterwards reach SMTP through a former primary that still considers itself writable?
+
+**Path traced.** Apply → bounded notification attempt → claim (`w: majority, j: true`) → the gate (§3.2) → `readForAcknowledgement` (stamp; coverage key ids ∥ key documents ∥ match; stamp) → `notifications.deliver` (SMTP) → outcome (`w: majority`). The retry command uses the same attempt after its own claim. Before rev 8.5 the five reads used read concern `local`.
+
+**Topology.** A disposable replica set: A, B and C, election timeout 10 s, each member behind a TCP bridge that drops or refuses traffic per direction (`tests/db/fixtures/partitionBridge.js`). Step 1 cuts A from B, cuts the sender from B and C, and cuts the majority-side operator from A. Step 2, eight seconds later, cuts A from C. The majority elects B while A still counts C as reachable. Read directly on each member, B is then `PRIMARY` and writable in a higher term, and A is still `PRIMARY` and writable.
+
+**Demonstrated on `921c299` (rev 8.4)** — synthetic keys and recipients, local SMTP counter:
+
+| Step | What happened |
+| --- | --- |
+| 1 | The acknowledgement was claimed on the healthy set, before the partition, and its lookup was held. |
+| 2 | The window opened: A was `PRIMARY`, term 3, writable; B was `PRIMARY`, term 4, writable. |
+| 3 | The suppression was added on B (`w: majority, j: true`). Entries per member: A 0, B 1, C 1. |
+| 4 | The lookup started 8 ms after the add was acknowledged. All five reads were served by A. The gate decided `PROCEED`. |
+| 5 | The suppressed recipient's RCPT TO count went from 1 to 2. |
+
+- **The claim did not protect the send.** It was majority-committed before the partition, so nothing after it needed a majority.
+- **A claim attempted inside the window is protected.** In the retry path (SP-2), the claim's own majority write cannot be acknowledged, so the result is `CLAIM_FAILED` with no lookup and no SMTP.
+
+**Correction (smallest, in the authorisation path only).**
+
+- On a replica set, the five send-path reads use read concern **`linearizable`**. Each read keeps readPreference `primary` (§9.7) and `maxTimeMS` equal to the time left in the check (`SUPPRESSION_LOOKUP_TIMEOUT_MS`).
+- A former primary cannot get a majority to confirm such a read. The read therefore fails within the bound, and the gate returns `SUPPRESSION_CHECK_UNAVAILABLE` before any SMTP. The acknowledgement is deferred: TRANSIENT, retried with a fresh check.
+- When freshness cannot be established, the check fails closed: a timeout, an error, or a topology that is not yet known all lead to the same result.
+
+**Standalone and other scopes.**
+
+- A standalone server (driver topology `Single`, every server `Standalone`) keeps the server default, `local`. It rejects `linearizable` and has no other member that could hold a newer write.
+- Operator reads, all writes, the allocation's stamp read and every other repository are unchanged.
+- No application-wide read preference or read concern is set.
+
+**After the correction** (the same regression on the corrected commit):
+
+- SP-1: A's first linearizable read failed after the bound (about 3 s, `MaxTimeMSExpired`). The decision was `SUPPRESSION_CHECK_UNAVAILABLE`. The reason was `TIMEOUT` or `READ_FAILED`, depending on whether the client timer or the server's `maxTimeMS` fired first; both fail closed. RCPT stayed 1 → 1, and A was still writable at the decision.
+- After the heal, the majority held `FAILED` / `SUPPRESSION_CHECK_UNAVAILABLE`, and the normal retry decided `RECIPIENT_SUPPRESSED` with RCPT unchanged.
+- SP-2 still gave `CLAIM_FAILED` with zero submissions.
+- SP-3 (healthy control) sent once. Its five linearizable reads took 5–14 ms each in the final runs, on a local three-member set.
+- Mutation check: with the read concern forced back to `local`, SP-1 sent again (1 → 2).
+
+**Why this is enough, and its limits.**
+
+- MongoDB documents that a linearizable read "confirms with secondary members that the read operation is reading from a primary that is capable of confirming writes with `{ w: "majority" }`". It also documents that such a read reflects every majority-acknowledged write completed before it started.
+- MongoDB states those guarantees for filters that uniquely identify a single document. The register's multi-document reads (coverage ids, key documents, the stamp sort) rely here only on the primary confirmation, which is made for every read.
+- Writes made concurrently with the check are still governed by the rev 8.3 prune stamps (§9.6) and by the approved boundary of §3.5 / SUP-12: an add not yet acknowledged when the lookup starts may be missed, and a submitted message cannot be recalled.
+- Linearizable reads are unavailable in causally consistent sessions. The register uses none.
+- **Cost:** one majority confirmation per read, so about three replication round trips per check (stamp; three reads in parallel; stamp). A cluster too slow to confirm within the bound defers acknowledgements; it never sends blindly.
+- Sharded deployments are not tested.
+
+**What it does not change.** No design rule, data, index, configuration variable, API or retry policy changes. SUP-12's add-versus-send boundary is unchanged.

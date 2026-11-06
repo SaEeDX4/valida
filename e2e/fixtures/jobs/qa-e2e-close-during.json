@@ -1,0 +1,49 @@
+{
+  "status": "PUBLISHED",
+  "awaitingInput": [],
+  "notes": [
+    "SYNTHETIC E2E DATA (C3) - disposable test database only (Doc 17 sections 25-26). Not a real vacancy."
+  ],
+  "internalOccupationalReference": "NOC 99999 QA-INTERNAL-E2E",
+  "location": {
+    "displayName": "QA E2E Region, Canada",
+    "countryCode": "CA",
+    "regionCode": "QE",
+    "locality": null
+  },
+  "workArrangement": "FULLY_REMOTE",
+  "employmentType": "PART_TIME",
+  "schedule": "QA TEST DATA: synthetic schedule, Monday to Wednesday",
+  "weeklyHours": 24,
+  "compensation": {
+    "currency": "CAD",
+    "amountMinor": 4321,
+    "unit": "HOUR",
+    "gross": true
+  },
+  "description": "QA TEST DATA (E2E close-during): synthetic role used by the critical browser E2E against the real Apply API.",
+  "responsibilities": [
+    "QA TEST DATA (E2E close-during) responsibility one.",
+    "QA TEST DATA (E2E close-during) responsibility two."
+  ],
+  "requirements": [
+    "QA TEST DATA (E2E close-during) requirement one."
+  ],
+  "preferredQualifications": [],
+  "closesAt": null,
+  "slug": "qa-e2e-close-during",
+  "title": "QA E2E Synthetic Incident Analyst (C3, closes during Apply)",
+  "applicationConfig": {
+    "resumeRequired": true,
+    "phone": {
+      "enabled": false,
+      "required": false
+    },
+    "message": {
+      "enabled": false,
+      "required": false,
+      "maxLength": 5000
+    },
+    "screeningQuestions": []
+  }
+}

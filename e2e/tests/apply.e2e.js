@@ -395,7 +395,7 @@ test('C3-03 Doc 17 section 209 — network failure: no false success, data kept;
 });
 
 // =============================================================================
-test('C3-04 Doc 09 section 121, Doc 17 section 200 — response lost after acceptance: the retry keeps the key and replays; one Application, no second notification', async ({ page }) => {
+test('C3-04 Doc 09 sections 121, 200 — response lost after acceptance: the retry keeps the key and replays; one Application, no second notification', async ({ page }) => {
   const job = OPEN();
   const person = candidate('Lost');
   const posts = await trackApply(page);
@@ -461,7 +461,7 @@ test('C3-04 Doc 09 section 121, Doc 17 section 200 — response lost after accep
 
   record('C3-04-response-loss-retry', {
     observation: 'FAULT INJECTION (Chromium DevTools Fetch, Response stage: the real 201 was failed with ConnectionReset before the page saw it); the request, backend, database, storage and SMTP REAL',
-    requirement: 'Doc 09 sections 75, 79, 121, 126, 135; Doc 17 section 200; Doc 12 sections 63-65',
+    requirement: 'Doc 09 sections 75, 79, 121, 126, 135, 200; Doc 17 section 106 (QA-P1-API-020); Doc 12 sections 63-65',
     firstAttempt: { serverStatus: lost.status, serverBody: lost.body, pageSaw: posts[0].failure },
     retry: { status: posts[1].status, replayed: posts[1].body.meta.replayed, sameLogicalResult: true },
     requests: postsEvidence(posts),

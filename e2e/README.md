@@ -31,7 +31,7 @@ Acknowledgements are switched on **only inside this local run**:
 | C3-01 Home → Careers → Job → Apply → resume → submit → success, with database, storage and mail evidence | 198–207 (QA-P1-E2E-001..004) | REAL |
 | C3-02 Rapid double submission (browser), and a same-key race (API) | 108, 211 | HOLD (the request is delayed 1.5 s, then sent unchanged) / REAL |
 | C3-03 Network failure: no false success; Try Again reuses the key | 209 | FAULT INJECTION (the browser goes offline) |
-| C3-04 Lost response: the retry replays; one Application, no second notification | 200 | FAULT INJECTION (the real 201 is reset before the page sees it) |
+| C3-04 Lost response: the retry replays; one Application, no second notification | 106 (and Doc 09 §§121, 200) | FAULT INJECTION (the real 201 is reset before the page sees it) |
 | C3-05 Server validation shown in the form | 210 | REAL |
 | C3-06 Apply open → the Job closes in the backend → submit → controlled rejection | 96, 208 | REAL (the Job is closed by the provisioning CLI) |
 | C3-07 Acknowledgement refused by the mail server: the Application stays accepted | 110 | REAL (the test server refuses one synthetic recipient) |

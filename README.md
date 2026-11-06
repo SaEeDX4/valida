@@ -12,31 +12,64 @@ One repository. One React frontend. One Express backend. One MongoDB database
 
 | Item      | Status                                                               |
 | --------- | -------------------------------------------------------------------- |
-| Release   | B — Recruitment Backend (Release A approved)                         |
-| Milestone | B6 — Notification Integration: **submitted for review (final-r9: the SMTP adapter for the selected provider, Bluehost Professional Email / Titan, with r5 corrections to the live smoke-test procedure and the archive proposal, the r6 ownership-verified smoke-test cleanup, r7: a dependency-security update — nodemailer 10.1.4, body-parser 2.4.0, zod 4.6.6, ip-address 10.7.4, vitest 5.0.3 / vite 8.3.3 — and a recoverable cleanup receipt, r8: test corrections for the first Windows run — deterministic local SMTP addressing and colour-independent output checks, and r9: the smoke-cleanup tests' fixtures corrected for MongoDB's unique indexes — complete synthetic Applications with distinct keys, index prerequisites applied and verified), not yet accepted** — the r9 Windows + MongoDB 8.0.9 rerun and the owner's live Titan tests have been reported (evidence: [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md)); acceptance awaits the remaining items in [`docs/review/B6_DECISION_PACKAGE.md`](docs/review/B6_DECISION_PACKAGE.md) and [`docs/review/B6_ACCEPTANCE_CHECKLIST.md`](docs/review/B6_ACCEPTANCE_CHECKLIST.md); the owner's decisions of 2026-10-26 (Titan long term, manual bounce monitoring, the suppression approach, the Concept A email direction, the manual-check-5 evidence) are recorded in [`docs/review/OWNER_DECISION_2026-10-26_B6_EMAIL.md`](docs/review/OWNER_DECISION_2026-10-26_B6_EMAIL.md); B6 is not accepted |
-| Frontend  | Release A public frontend. C1 (owner-accepted): Careers (`/careers`) reads the real Jobs API (`GET /api/v1/jobs`). C2 (submitted for review, not accepted): Job Detail (`/careers/<slug>`) reads `GET /api/v1/jobs/<slug>`. Apply (C3) follows. |
-| Backend   | B1–B5 approved and merged (B5: the Apply endpoint, `POST /api/v1/jobs/:jobSlug/applications`). B6 integrates notifications with Apply — events, templates, failure classification, a conditional claim against duplicate sends, a bounded retry command, truthful readiness — and (r4) an SMTP adapter over verified TLS for the selected provider (Bluehost Professional Email / Titan), tested against a local SMTP test server. Real sending happens only when configured (`TRANSACTIONAL_EMAIL_PROVIDER=smtp`); **live Titan evidence** (relay acceptance, Inbox delivery, SPF/DKIM/DMARC as reported, Reply-To routing, an observed bounce, and no Sent copy of SMTP submissions) is recorded in [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md); the former seven-year email archive request is **superseded** by the owner's decision of 2026-10-25 to keep Titan and make a monthly offline backup ([`docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md`](docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md); design: [`docs/architecture/EMAIL_BACKUP_PROPOSAL.md`](docs/architecture/EMAIL_BACKUP_PROPOSAL.md), proposed, not yet set up). Automated messages have no Sent copy; a copy design is proposed ([`docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`](docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md), not implemented). See [`backend/README.md`](backend/README.md). |
+| Release   | C — Production Public Launch (Release A approved; Release B complete: B1–B5 approved and merged, B6 and B7 owner-accepted) |
+| Milestone | C3 — Real Apply Integration: **submitted for review, not accepted** (branch `c3-work`, local only) |
+| Frontend  | Release A public frontend, connected to the real backend: Careers (`/careers`) reads `GET /api/v1/jobs` (C1), Job Detail (`/careers/<slug>`) reads `GET /api/v1/jobs/<slug>` (C2), and Apply (`/careers/<slug>/apply`) submits to `POST /api/v1/jobs/<slug>/applications` (C3, under review). |
+| Backend   | Release B: the Express foundation, MongoDB models and indexes, the public Jobs API and Job provisioning, private resume storage and validation, the Apply endpoint, notifications with the SMTP adapter for the selected provider (Bluehost Professional Email / Titan), and the B7 security, failure and QA gate with recipient suppression. Production candidate acknowledgements stay **refused at start-up** (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`). Live Titan evidence is in [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md). The owner decided on 2026-10-25 to keep Titan and make a monthly offline email backup ([`docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md`](docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md)); the backup is proposed, not yet set up. Automated messages have no Sent copy; a copy design is proposed ([`docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`](docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md), not implemented). See [`backend/README.md`](backend/README.md). |
 | Database  | MongoDB (B2). The real initial role is provisioned only as a DRAFT — its content is AWAITING INPUT. |
 
-| Milestone | Status |
-| --- | --- |
-| Release A (A1–A6) — public frontend foundation | **Approved** |
-| B1 — Backend runtime & configuration | **Verified and merged** |
-| B2 — MongoDB models & indexes | **Verified and merged** |
-| B3 — Job provisioning & public Jobs API | **Verified and GPT-approved** (Windows Node v24.21.0; 917 offline tests + 82 real-MongoDB tests; audit: 0 vulnerabilities) |
-| B4 — Private resume storage & validation | **Approved and merged** (final-r3; Windows Node 24: 1504 offline tests passed + 5 skipped, B4 acceptance 580 passed + 5 skipped, 89 real-MongoDB tests; audit: 0 vulnerabilities) |
-| B5 — Application submission workflow | **Approved and merged** (final-r2; Windows Node 24.21.0: 1743 offline tests passed + 5 skipped, B5 acceptance 232/232, 110 real-MongoDB tests; audit: 0 vulnerabilities) |
-| B6 — Notification integration | **Submitted for review (final-r9) — not yet accepted** (owner-reported, GPT-reviewed: r9 on Windows Node 24.21.0 with MongoDB 8.0.9 — real-database suite 145/145, smoke cleanup 11/11, rehearsal + cleanup 17/17, `verify:b6` exit 2 with only the live gate pending by design, audits 0, `npm audit signatures` verified; live Titan runs `e4e60b91` and `7fcb590e` passed their automated checks; the owner reported manual checks 1–4, 6 and 7, and check 5 is recorded as PASS for the visible body of one received internal notification (owner-supplied screenshot, GPT-inspected) — see the evidence addendum. Pending: the Doc 14 deviation decisions (including the Doc 14 §120 suppression gap and its production gate), the bounce-monitoring and copy decisions) |
-| C1 — Frontend ↔ Jobs API integration | **Owner-accepted** (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) |
-| C2 — Real Job Detail | **Submitted for review — not yet accepted** (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) |
-| Phase 1 | **Not verified** — only after Release B and Release C |
+Four states are kept apart below, and one does not imply another:
+
+- **Accepted** — the owner's acceptance of the milestone at the named commit.
+- **Branch-published** — the milestone branch is on GitHub (`SaEeDX4/valida`). Remote branch heads were last observed on **2026-11-06, 23:06–23:08 UTC** (read-only).
+- **Merged** — contained in `main`. `main` is at `ec15048` (B5).
+- **Deployed** — running in production. Nothing is deployed; deployment is C6.
+
+| Milestone | Accepted | Branch-published | Merged into `main` | Deployed |
+| --- | --- | --- | --- | --- |
+| Release A (A1–A6) — public frontend foundation | **Approved** | yes — `a6-work` | yes | no |
+| B1 — Backend runtime & configuration | **Verified and merged** | yes — `b1-work` | yes | no |
+| B2 — MongoDB models & indexes | **Verified and merged** | yes — `b2-work` | yes | no |
+| B3 — Job provisioning & public Jobs API | **Verified and GPT-approved** (Windows Node v24.21.0; 917 offline tests + 82 real-MongoDB tests; audit: 0 vulnerabilities) | yes — `b3-work` | yes | no |
+| B4 — Private resume storage & validation | **Approved and merged** (final-r3; Windows Node 24: 1504 offline tests passed + 5 skipped, B4 acceptance 580 passed + 5 skipped, 89 real-MongoDB tests; audit: 0 vulnerabilities) | yes — `b4-work` | yes | no |
+| B5 — Application submission workflow | **Approved and merged** (final-r2; Windows Node 24.21.0: 1743 offline tests passed + 5 skipped, B5 acceptance 232/232, 110 real-MongoDB tests; audit: 0 vulnerabilities) | yes (`b5-work` = `main`) | yes — `ec15048` | no |
+| B6 — Notification integration | **Owner-accepted** — B6 r12, OD-2026-11-04-01, at `6173eea` ([`docs/review/B6_ACCEPTANCE_ADDENDUM_2026-11-04.md`](docs/review/B6_ACCEPTANCE_ADDENDUM_2026-11-04.md), with its four accepted NOT TESTED limitations) | yes — `b6-work` at `2b00a62` (the acceptance addendum on top of `6173eea`) | no | no |
+| B7 — Backend security, failure & QA gate | **Owner-accepted** — at `eabd604`, the `b7-work` head that C1 was built on (the owner's C3 instruction preserves "accepted B7"; the suppression design was approved in [OD-2026-11-04-02](docs/review/OWNER_DECISION_2026-11-04-02_B7_SUPPRESSION_APPROVAL.md); no separate acceptance record is in this repository) | yes — `b7-work` at `eabd604` | no | no |
+| C1 — Frontend ↔ Jobs API integration | **Owner-accepted** at `24b92a7` (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) | no — `c1-work` is local only | no | no |
+| C2 — Real Job Detail | **Owner-accepted** at `46818bb`, including the focus correction (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) | no — `c2-work` is local only | no | no |
+| C3 — Real Apply Integration | **Submitted for review — not accepted** (the critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md)) | no — `c3-work` is local only | no | no |
+| Phase 1 | **Not verified** — only after Release C (C7) | — | — | — |
+
+The C1, C2 and C3 commits descend from `eabd604`, so `c3-work` holds the
+whole accepted line B7 → C1 → C2 followed by C3. None of B6, B7, C1, C2 or C3
+is in `main`.
+
+### Repository history and publication (standing requirement)
+
+- Accepted commits are never rewritten: no rebase, amend, squash or
+  force-push of a commit the owner has accepted, on any branch.
+- New work starts from the accepted commit and descends from it, so the
+  accepted history stays an unchanged prefix of the next milestone's branch.
+- A milestone branch reaches GitHub only on the owner's authorisation, by a
+  normal (fast-forward) push of that branch.
+- Merging into `main` and deploying are separate owner decisions; neither
+  follows from acceptance or publication.
+- Unrelated local work, including the owner's working copy, is preserved and
+  never committed or published as part of a milestone.
+- Evidence that is not published stays recoverable in the private review
+  package (bundle and evidence archive, with SHA-256).
+- Credentials, `.env` files, private evidence, logs, database files, build
+  output, bundles and temporary artifacts are never committed or published.
+- Historical review packages and evidence records are kept unchanged; a later
+  status is recorded in a new document or in this table.
 
 The public frontend (Home, About, Privacy, Legal, Careers, Job Detail, Apply
 and the 404) calls a real API boundary. Careers lists what the real Jobs API
 returns (C1): the open Jobs, the empty state when there are none, and the error
-state when the request fails — never invented roles. Controlled development
-fixtures exist for UI review only; they cannot be activated in a production
-build.
+state when the request fails — never invented roles. Job Detail shows the real
+Job or its closed or unavailable state (C2). Apply shows success only after the
+backend has accepted the Application (C3). Controlled development fixtures exist
+for UI review only; they cannot be activated in a production build.
 
 The browser, device and assistive-technology checklist is
 [`docs/A6_WINDOWS_QA_MATRIX.md`](docs/A6_WINDOWS_QA_MATRIX.md). What is not yet
@@ -227,6 +260,17 @@ Careers shows exactly what `GET /api/v1/jobs` returns:
 - **"This role isn't available."** — the API answered 404: the slug is unknown,
   or the Job is a draft or archived. These cases look the same on purpose.
 
+**Apply submits to the real Application API (C3).** `/careers/<slug>/apply`
+sends the form and the resume as one multipart request to
+`POST /api/v1/jobs/<slug>/applications`. The browser's checks only help the
+candidate; the server decides. The page shows success only after the backend
+accepts the Application, shows the server's field errors in the form, and keeps
+one Idempotency-Key per submission, so **Try Again** after a network failure
+cannot create a second Application. If the Job closes while the form is open,
+the submission is refused and the page says **"Applications for this role have
+closed."** The browser suite that proves this against the real stack is in
+[`e2e/README.md`](e2e/README.md).
+
 To review the Careers, Job Detail and Apply states with synthetic data instead,
 enable the controlled development fixtures in `frontend/.env`:
 
@@ -349,9 +393,12 @@ error and that you opened <http://localhost:5173>, not the `dist/` files
 directly.
 
 **Careers says "Open roles are temporarily unavailable."**
-Correct until Release C1 connects the frontend to the backend: the Jobs
-request fails and the page reports it rather than showing invented roles. To review the role states,
-use the development fixtures described under **Daily development**.
+The Jobs request failed, and the page says so rather than showing invented
+roles. Check that the backend is running and reports ready, that MongoDB is
+reachable, and that `frontend/.env` sets `VITE_API_BASE_URL` to the backend
+(without it the request goes to the frontend's own origin). Then choose
+**Try Again**. To review the role states without a backend, use the development
+fixtures described under **Daily development**.
 
 **Text on the page is prefixed `[DEV FIXTURE]`**
 Development fixtures are enabled. Set `VITE_ENABLE_A5_FIXTURES=false` in
@@ -384,16 +431,14 @@ and C.
 ## Not yet built
 
 These are scheduled, not forgotten. Each is owned by a named milestone in
-`18_IMPLEMENTATION_ROADMAP.md`. (B1–B4 — the Express foundation, MongoDB models
-and indexes, the public Jobs API and Job provisioning, and private resume
-storage and validation, and the application submission workflow — are
-approved and merged, and B6 — notification integration, with the SMTP adapter
-for the selected provider — is submitted for review; see
-[`backend/README.md`](backend/README.md).)
+`18_IMPLEMENTATION_ROADMAP.md`. (Release B is built: B1–B5 are approved and
+merged, and B6 and B7 are accepted and branch-published, not merged; see
+[`backend/README.md`](backend/README.md). C1 and C2 are accepted, and C3 is
+under review; see **Current state**.)
 
 | Capability                                                                                                           | Milestone |
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
-| Monthly offline email backup (owner decision 2026-10-25; setup not yet verified); automated-message Sent-copy preservation (design proposed, not implemented); bounce processing beyond manual mailbox monitoring (a review decision) | Backup: owner's operational task; copy: B7 candidate; bounce handling: decision pending |
+| Monthly offline email backup (owner decision 2026-10-25; setup not yet verified); automated-message Sent-copy preservation (design proposed, not implemented); bounce processing beyond the manual procedure (the manual bounce procedures are approved: OD-2026-11-03-01) | Backup: owner's operational task; copy: gate G-COPY proposed for C6, awaiting the owner's decision; automated bounce processing: no decision (the manual procedure is approved) |
 | Production deployment, domain, HTTPS                                                                                 | C         |
 | Production SEO: canonical host, sitemap, robots.txt, JobPosting data (need the production domain and real Jobs)      | C         |
 

@@ -401,6 +401,53 @@ describe('Apply — resume selection', () => {
       .forEach((p) => expect(text).not.toMatch(p));
   });
 
+  /*
+   * C3 (D-C3-01) — found by the C3 browser run: after a submit that reported
+   * "Upload your resume to continue.", choosing a valid file left the field
+   * marked invalid and still announcing that message next to "Selected: …",
+   * until the next submit. A new selection replaces every earlier answer about
+   * the resume field — the client's missing-file message and a server's
+   * refusal of the PREVIOUS file — and is checked on its own (Doc 05 sections
+   * 119 and 124; Doc 08 section 102).
+   */
+  it('a new selection replaces the earlier "missing resume" message (C3)', async () => {
+    const user = userEvent.setup();
+    installApplicationsService({ submitApplication: vi.fn() });
+    renderRoute(PATH);
+    await screen.findByRole('heading', { level: 1 });
+    await user.click(submitButton());
+    expect((await screen.findAllByText('Upload your resume to continue.')).length).toBeGreaterThanOrEqual(2);
+
+    await user.upload(screen.getByLabelText(/Upload Resume/), pdf('cv.pdf'));
+    expect(screen.queryByText('Upload your resume to continue.')).toBeNull();
+    expect(screen.getByText(APPLY.resume.valid)).toBeTruthy();
+    expect(screen.getByLabelText(/Upload Resume/).getAttribute('aria-invalid')).toBeNull();
+    // The other fields still report what the last submit found.
+    expect(screen.getAllByText('Enter your full name.').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a new selection replaces the server's refusal of the previous file (C3)", async () => {
+    const user = userEvent.setup();
+    const refusal = "We couldn't process this file. Remove it and try another file.";
+    installApplicationsService({
+      submitApplication: vi.fn(async () => {
+        throw httpError(422, 'INVALID_RESUME_FILE', { fieldErrors: [{ field: 'resume', code: 'INVALID_RESUME_FILE', message: refusal }] });
+      }),
+    });
+    renderRoute(PATH);
+    await screen.findByRole('heading', { level: 1 });
+    await fillRequiredFields(user);
+    await user.click(submitButton());
+    expect((await screen.findAllByText(refusal)).length).toBeGreaterThanOrEqual(1);
+
+    await user.click(screen.getByRole('button', { name: /Remove/ }));
+    expect(screen.queryByText(refusal)).toBeNull();
+    await user.upload(screen.getByLabelText(/Upload Resume/), pdf('another.pdf'));
+    expect(screen.queryByText(refusal)).toBeNull();
+    expect(screen.getByText(APPLY.resume.valid)).toBeTruthy();
+    expect(screen.getByLabelText(/Upload Resume/).getAttribute('aria-invalid')).toBeNull();
+  });
+
   it('handles a very long filename without breaking layout semantics', async () => {
     const user = userEvent.setup();
     const longName = `${'a'.repeat(180)}.pdf`;

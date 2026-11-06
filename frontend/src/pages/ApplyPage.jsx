@@ -147,8 +147,21 @@ function ApplyFlow({ jobSlug }) {
     submission.beginNewLogicalSubmission();
   };
 
+  /*
+   * C3 (D-C3-01): a new selection, or a removal, replaces every earlier answer
+   * about the resume — the last submit's "Upload your resume to continue." and
+   * a server refusal of the PREVIOUS file. Without this the field kept showing
+   * that message, marked invalid, next to the file just chosen, until the next
+   * submit. The new file is checked on its own, immediately (below).
+   */
+  const forgetEarlierResumeErrors = () => {
+    setClientErrors(({ resume: _resume, ...rest }) => rest);
+    submission.clearFieldError('resume');
+  };
+
   const handleResumeSelect = (file) => {
     setResumeFile(file);
+    forgetEarlierResumeErrors();
     // Immediate feedback on selection is appropriate; this is the one field
     // where waiting for submit would waste the candidate's time.
     setResumeError(file ? validateResumeFile(file, applicationForm?.resume) : null);
@@ -531,6 +544,7 @@ function ApplyFlow({ jobSlug }) {
                 onRemove={() => {
                   setResumeFile(null);
                   setResumeError(null);
+                  forgetEarlierResumeErrors();
                 }}
                 onInputId={setResumeInputId}
               />

@@ -52,6 +52,19 @@ export default function useApplicationSubmission(jobSlug, { screeningQuestionIds
     idempotencyKeyRef.current = null;
   }, []);
 
+  /**
+   * Drops the server's field error for `key` once it no longer describes the
+   * field — e.g. a refusal of a resume the candidate has since replaced (C3).
+   * The status is left alone: the summary simply lists one item fewer.
+   */
+  const clearFieldError = useCallback((key) => {
+    setFieldErrors((previous) => {
+      if (!Object.hasOwn(previous, key)) return previous;
+      const { [key]: _cleared, ...rest } = previous;
+      return rest;
+    });
+  }, []);
+
   const submit = useCallback(
     async (formData) => {
       // Re-entry guard: a second activation while a request is open must not
@@ -153,6 +166,7 @@ export default function useApplicationSubmission(jobSlug, { screeningQuestionIds
     fieldErrors,
     submit,
     beginNewLogicalSubmission,
+    clearFieldError,
     isSubmitting: status === SUBMIT_STATUS.SUBMITTING,
   };
 }

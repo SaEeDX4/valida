@@ -28,11 +28,19 @@ export const keyRef = (key) => (key ? sha256(`e2e-key-ref:${key}`).slice(0, 12) 
 export { hashIdempotencyKey, storageObjectRef, IDENTITY };
 
 /** A unique synthetic candidate for one case. */
+// A short tag that makes each run's synthetic candidates distinct. It is never empty: a run directory whose
+// name has no digits (E2E_RUN_DIR=.../run-final) gets a tag from a hash of its name. An empty tag left a
+// trailing space in the name, which the server rightly trims, so the stored name differed from the typed one.
+export function runTag(runId = process.env.E2E_RUN_ID) {
+  const digits = runId.replace(/[^0-9]/g, '').slice(-8);
+  return digits || sha256(`e2e-run-tag:${runId}`).slice(0, 8);
+}
+
 export function candidate(tag) {
-  const runTag = process.env.E2E_RUN_ID.replace(/[^0-9]/g, '').slice(-8);
+  const suffix = runTag();
   return {
-    fullName: `QA E2E Candidate ${tag} ${runTag}`,
-    email: `qa+e2e-${tag.toLowerCase()}-${runTag}@example.test`,
+    fullName: `QA E2E Candidate ${tag} ${suffix}`,
+    email: `qa+e2e-${tag.toLowerCase()}-${suffix}@example.test`,
     // 555-01xx: reserved fictional numbers. Digits only: the server refuses letters (Doc 09 section 85).
     phone: '+1 555 0100 2026',
     message: `QA TEST DATA (E2E ${tag}): synthetic message.\nSecond line kept.`,

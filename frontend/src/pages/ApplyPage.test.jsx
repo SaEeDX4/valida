@@ -448,6 +448,57 @@ describe('Apply — resume selection', () => {
     expect(screen.getByLabelText(/Upload Resume/).getAttribute('aria-invalid')).toBeNull();
   });
 
+  /*
+   * C3 (D-C3-02) — the same C3 screenshot (03-selected-resume) showed every
+   * other field keeping the last submit's message after the candidate had
+   * corrected it: "Enter your full name." under a filled name, "Answer this
+   * question to continue." under an answered question. Changing a field now
+   * drops that field's earlier answer, client or server; the new value is
+   * checked at the next submit, as before (no validation while typing).
+   */
+  it('changing a field drops its earlier client error, and only that one (C3)', async () => {
+    resetServices();
+    serveJob(testJob({
+      applicationForm: {
+        ...testJob().applicationForm,
+        screeningQuestions: [{ id: 'q1', type: 'YES_NO', prompt: 'Required yes or no', required: true, options: [] }],
+      },
+    }));
+    installApplicationsService({ submitApplication: vi.fn() });
+    const user = userEvent.setup();
+    renderRoute(PATH);
+    await screen.findByRole('heading', { level: 1 });
+    await user.click(submitButton());
+    expect((await screen.findAllByText('Enter your full name.')).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Answer this question to continue.').length).toBeGreaterThanOrEqual(2);
+
+    await user.type(screen.getByLabelText(/Full Name/), 'Jane Doe');
+    expect(screen.queryByText('Enter your full name.')).toBeNull();
+    expect(screen.getByLabelText(/Full Name/).getAttribute('aria-invalid')).toBeNull();
+    expect(screen.getAllByText('Enter your email address.').length).toBeGreaterThanOrEqual(2);
+
+    await user.click(screen.getByRole('radio', { name: 'Yes' }));
+    expect(screen.queryByText('Answer this question to continue.')).toBeNull();
+  });
+
+  it("changing a field drops the server's error for it (C3)", async () => {
+    const message = 'Enter a valid email address.';
+    const submitApplication = vi.fn(async () => {
+      throw httpError(422, 'VALIDATION_FAILED', { fieldErrors: [{ field: 'email', code: 'INVALID_EMAIL', message }] });
+    });
+    installApplicationsService({ submitApplication });
+    const user = userEvent.setup();
+    renderRoute(PATH);
+    await screen.findByRole('heading', { level: 1 });
+    await fillRequiredFields(user);
+    await user.click(submitButton());
+    expect((await screen.findAllByText(message)).length).toBeGreaterThanOrEqual(1);
+
+    await user.type(screen.getByLabelText(/Email Address/), 'x');
+    expect(screen.queryByText(message)).toBeNull();
+    expect(screen.getByLabelText(/Email Address/).getAttribute('aria-invalid')).toBeNull();
+  });
+
   it('handles a very long filename without breaking layout semantics', async () => {
     const user = userEvent.setup();
     const longName = `${'a'.repeat(180)}.pdf`;

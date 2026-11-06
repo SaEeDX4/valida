@@ -132,8 +132,27 @@ function ApplyFlow({ jobSlug }) {
     if (summaryVisible) summaryRef.current?.focus();
   }, [summaryVisible]);
 
+  /*
+   * C3 (D-C3-01, D-C3-02): changing a field replaces every earlier answer
+   * about THAT field — the last submit's client message and the server's
+   * field error. Without this a corrected field kept saying what was wrong
+   * before ("Enter your full name." under a filled name; "Upload your resume
+   * to continue." next to the file just chosen), marked invalid, until the
+   * next submit. The new value is checked at the next submit, as before; the
+   * resume, as before, is also checked the moment it is chosen.
+   */
+  const forgetEarlierErrors = (key) => {
+    setClientErrors((previous) => {
+      if (!Object.hasOwn(previous, key)) return previous;
+      const { [key]: _forgotten, ...rest } = previous;
+      return rest;
+    });
+    submission.clearFieldError(key);
+  };
+
   const setValue = (name, value) => {
     setValues((prev) => ({ ...prev, [name]: value }));
+    forgetEarlierErrors(name);
     // Editing after a failure begins a new logical submission, so the next
     // attempt gets a fresh idempotency key.
     submission.beginNewLogicalSubmission();
@@ -144,24 +163,13 @@ function ApplyFlow({ jobSlug }) {
       ...prev,
       screeningAnswers: { ...prev.screeningAnswers, [questionId]: value },
     }));
+    forgetEarlierErrors(`screening:${questionId}`);
     submission.beginNewLogicalSubmission();
-  };
-
-  /*
-   * C3 (D-C3-01): a new selection, or a removal, replaces every earlier answer
-   * about the resume — the last submit's "Upload your resume to continue." and
-   * a server refusal of the PREVIOUS file. Without this the field kept showing
-   * that message, marked invalid, next to the file just chosen, until the next
-   * submit. The new file is checked on its own, immediately (below).
-   */
-  const forgetEarlierResumeErrors = () => {
-    setClientErrors(({ resume: _resume, ...rest }) => rest);
-    submission.clearFieldError('resume');
   };
 
   const handleResumeSelect = (file) => {
     setResumeFile(file);
-    forgetEarlierResumeErrors();
+    forgetEarlierErrors('resume');
     // Immediate feedback on selection is appropriate; this is the one field
     // where waiting for submit would waste the candidate's time.
     setResumeError(file ? validateResumeFile(file, applicationForm?.resume) : null);
@@ -544,7 +552,7 @@ function ApplyFlow({ jobSlug }) {
                 onRemove={() => {
                   setResumeFile(null);
                   setResumeError(null);
-                  forgetEarlierResumeErrors();
+                  forgetEarlierErrors('resume');
                 }}
                 onInputId={setResumeInputId}
               />

@@ -113,8 +113,8 @@ describe('access log: unmatched paths are logged by shape, never raw (C3, GPT fi
   });
 });
 
-describe('access log: matched routes are unchanged (C3)', () => {
-  it('a matched route keeps its exact path (without the query), the request id and the status', async () => {
+describe('access log: matched routes (C3; templates since r3)', () => {
+  it('a static route keeps its path (never the query); a dynamic one is its template; request id and status kept', async () => {
     const { app, log } = appWithLog();
     const list = await request(app).get('/api/v1/jobs?page=1&limit=5');
     const refused = await request(app).get(`/api/v1/jobs?email=${QUERY_MARKER}`);

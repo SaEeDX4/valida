@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 import {
   IDENTITY, PNG_AS_PDF, RESUMES, api, applicationCount, applicationEvidence, applicationsFor, axe, backendCli,
   backendEvents, backendLog, candidate, closeDatabase, eventually, hashIdempotencyKey, jobBySlug, keyRef,
-  messageEvidence, messagesForApplication, rcptLog, record, run, sha256, shot, smtpSessions, storageObjects,
+  messageEvidence, messagesForApplication, rcptLog, record, run, runTag, sha256, shot, smtpSessions, storageObjects,
   storedObjectFor, suppressionEntries,
 } from '../support/evidence.js';
 import { BACKEND_ORIGIN, FRONTEND_ORIGIN, REPO_ROOT, isInside } from '../support/paths.js';
@@ -661,6 +661,33 @@ test('C3-09 Doc 09 section 205, Doc 17 section 406 — the backend log holds no 
   // EVERY line of the backend log is scanned, the access-log lines of C3-01's two public-access probes
   // included (C3 r2, GPT finding 3). Those probes requested /<storageKey> and /api/v1/<storageKey>; no route
   // matched, so the access log records only the shape of each path, never the key.
+  //
+  // C3 r3: a synthetic e-mail address in a ROUTE PARAMETER. Express counts GET /api/v1/jobs/<value> and
+  // POST /api/v1/jobs/<value>/applications as matched before the controller validates the slug, so these
+  // requests reach their routes and are refused there. Their lines must hold the route TEMPLATE only.
+  const marker = `qa+e2e-route-marker-${runTag()}@example.test`;
+  const markerForms = [marker, encodeURIComponent(marker), marker.split('@')[0]];
+  const markerApply = () => {
+    const data = new FormData();
+    data.append('fullName', 'QA E2E Route Marker');
+    data.append('email', marker);
+    data.append('resume', new Blob([readFileSync(RESUMES.pdf)], { type: 'application/pdf' }), 'qa-libreoffice.pdf');
+    return data;
+  };
+  const markerRequests = [
+    ['Job Detail, the marker as the slug', 'GET', '/api/v1/jobs/:jobSlug', 404, () => api(`/api/v1/jobs/${marker}`)],
+    ['Job Detail, percent-encoded', 'GET', '/api/v1/jobs/:jobSlug', 404, () => api(`/api/v1/jobs/${encodeURIComponent(marker)}`)],
+    ['Apply, no Idempotency-Key', 'POST', '/api/v1/jobs/:jobSlug/applications', 400, () => api(`/api/v1/jobs/${marker}/applications`, { method: 'POST', body: markerApply() })],
+    ['Apply, a full submission to the marker slug', 'POST', '/api/v1/jobs/:jobSlug/applications', 404, () => api(`/api/v1/jobs/${encodeURIComponent(marker)}/applications`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: markerApply() })],
+  ];
+  const markerProbes = [];
+  for (const [label, method, template, status, send] of markerRequests) {
+    const response = await send();
+    markerProbes.push({ label, method, template, expectedStatus: status, status: response.status, requestId: response.headers['x-request-id'] });
+  }
+  // The access log is written when each response finishes: wait until all four lines are in the file.
+  await eventually(() => markerProbes.every((probe) => backendEvents((entry) => entry.req?.id === probe.requestId).length === 1), { timeoutMs: 10_000 });
+
   const log = backendLog();
   const lines = log.split('\n').filter(Boolean);
   const applications = [];
@@ -678,6 +705,7 @@ test('C3-09 Doc 09 section 205, Doc 17 section 406 — the backend log holds no 
       process.env.E2E_SMTP_PASSWORD,
       process.env.E2E_SUPPRESSION_HMAC_KEY,
       process.env.MONGODB_TEST_URI,
+      ...markerForms,
     ]),
   ].filter(Boolean);
   const linesWithAValue = lines.filter((line) => forbidden.some((value) => line.includes(value)));
@@ -689,6 +717,10 @@ test('C3-09 Doc 09 section 205, Doc 17 section 406 — the backend log holds no 
     const matching = accessLines.filter((entry) => entry.req.id === probe.requestId);
     return { target: probe.target, requestId: probe.requestId, lines: matching.length, req: matching[0]?.req, statusCode: matching[0]?.res?.statusCode };
   });
+  const markerLines = markerProbes.map((probe) => {
+    const matching = accessLines.filter((entry) => entry.req.id === probe.requestId);
+    return { label: probe.label, requestId: probe.requestId, lines: matching.length, req: matching[0]?.req, statusCode: matching[0]?.res?.statusCode, expectedStatus: probe.expectedStatus, responseStatus: probe.status, template: probe.template, method: probe.method };
+  });
   const events = backendEvents((entry) => typeof entry.event === 'string');
   const counts = events.reduce((total, entry) => ({ ...total, [entry.event]: (total[entry.event] ?? 0) + 1 }), {});
 
@@ -699,6 +731,7 @@ test('C3-09 Doc 09 section 205, Doc 17 section 406 — the backend log holds no 
     linesScanned: lines.length,
     linesExcluded: 0,
     probeLines,
+    routeParameterMarker: { forms: markerForms.length, lines: markerLines.map(({ label, lines: count, statusCode, req }) => ({ label, count, statusCode, path: req?.path, routeMatched: req?.routeMatched })) },
     valuesChecked: forbidden.length,
     storageKeysChecked: storageKeys.length,
     valuesFound: found.length,
@@ -716,5 +749,13 @@ test('C3-09 Doc 09 section 205, Doc 17 section 406 — the backend log holds no 
     { target: '/<storageKey>', count: 1, statusCode: 404, path: '/{segment}/{segment}/{segment}', routeMatched: false },
     { target: '/api/v1/<storageKey>', count: 1, statusCode: 404, path: '/api/v1/{segment}/{segment}/{segment}', routeMatched: false },
   ]);
+  // C3 r3: each route-parameter request refused as expected, one line each, the route's template and no value.
+  for (const line of markerLines) {
+    expect(line.responseStatus, line.label).toBe(line.expectedStatus);
+    expect({ count: line.lines, statusCode: line.statusCode, method: line.req?.method, path: line.req?.path, routeMatched: line.req?.routeMatched }, line.label).toEqual({
+      count: 1, statusCode: line.expectedStatus, method: line.method, path: line.template, routeMatched: true,
+    });
+  }
+  for (const form of markerForms) expect(log.includes(form), `the marker (${form === marker ? 'raw' : 'encoded or local part'}) is nowhere in the log`).toBe(false);
   expect(statSync(run().dirs.logs).isDirectory()).toBe(true);
 });

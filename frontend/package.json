@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "serve:documents": "node server/serve.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:budgets": "node scripts/check-quality-budgets.mjs",

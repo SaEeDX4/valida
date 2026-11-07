@@ -96,6 +96,10 @@ describe('local root rules — POSIX paths', () => {
     ['/home/qa/valida', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
     ['/home/qa', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
     ['/home/qa/valida/../valida/frontend/x', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
+    // C3 r2: a name that merely starts with ".." is a child, not the parent (the E2E run-directory finding).
+    ['/home/qa/valida/..private', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
+    ['/home/qa/valida/backend/..qa', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
+    ['/home/qa/valida..private', null],
     ['', 'RESUME_STORAGE_LOCAL_ROOT_REQUIRED'],
     ['/tmp/a\nb', 'RESUME_STORAGE_LOCAL_ROOT_NOT_ABSOLUTE'],
   ])('%j -> %s', (value, expected) => {
@@ -125,6 +129,8 @@ describe('local root rules — Windows paths (checked with path.win32 on any pla
     ['C:\\ME\\valida\\backend\\storage', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
     ['c:\\me\\VALIDA\\frontend', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
     ['C:\\ME', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
+    ['C:\\ME\\valida\\..qa', 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION'],
+    ['C:\\ME\\valida..qa', null],
   ])('%j -> %s', (value, expected) => {
     expect(check(value)).toBe(expected);
   });

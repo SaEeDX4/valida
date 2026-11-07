@@ -396,9 +396,13 @@ export function checkLocalStorageRoot(
   // lower-cased first ("/Users/me/Valida" is the same folder as ".../valida").
   const fold = pathApi !== path.win32 && caseInsensitive ? (value_) => value_.toLowerCase() : (value_) => value_;
   const application = pathApi.resolve(applicationRoot);
+  // C3 r2: only ".." itself, or "../…", leaves the parent. A first segment
+  // that merely STARTS with ".." ("..private") is a child of it.
   const isWithin = (parent, child) => {
     const relative = pathApi.relative(fold(parent), fold(child));
-    return relative === '' || (!relative.startsWith('..') && !pathApi.isAbsolute(relative));
+    if (relative === '') return true;
+    if (pathApi.isAbsolute(relative)) return false;
+    return relative !== '..' && !relative.startsWith(`..${pathApi.sep}`);
   };
   if (isWithin(application, resolved) || isWithin(resolved, application)) {
     return 'RESUME_STORAGE_LOCAL_ROOT_INSIDE_APPLICATION';

@@ -62,13 +62,39 @@ npm run test:e2e
 Remove-Item Env:MONGODB_TEST_URI
 ```
 
+The guards that keep a run's files out of the repository can be checked on their own. This needs no database, browser or server:
+
+```powershell
+cd e2e
+npm run test:guards
+```
+
 **Database guard.** The suite refuses to start unless `MONGODB_TEST_URI` names a database called `valida_test` or `valida_test_<suffix>`. It uses the backend's own guard, `backend/scripts/test-database.mjs`, and it also refuses the database named in `backend/.env`. It then **drops that database** and starts clean.
 
 **Ports.** It uses 4100 for the backend and 4183 for the preview. Change them with `E2E_BACKEND_PORT` and `E2E_FRONTEND_PORT`. The SMTP test server picks a free port.
 
 ## Where the output goes
 
-Everything a run creates goes into **one directory outside the repository**: `%TEMP%\valida-e2e\<run id>` on Windows, or `$TMPDIR/valida-e2e/<run id>`. The path is printed at the start of the run. You can choose a directory with `E2E_RUN_DIR`, but it must be outside the repository: the backend refuses a private storage root inside it.
+Everything a run creates goes into **one new directory outside the repository**:
+
+- By default: `%TEMP%\valida-e2e\<timestamp>-XXXXXX` on Windows, or `$TMPDIR/valida-e2e/<timestamp>-XXXXXX`.
+- Or the path you give in `E2E_RUN_DIR`.
+
+The path is printed when the stack is ready.
+
+Before Playwright, Vite or the setup can write or clean anything, the configuration does three things (`support/runDirectory.js`):
+
+1. **It resolves the location canonically, and refuses it if it is inside the repository.** The parent is resolved with `realpath`, so symlinks and Windows junctions are followed. A name that only starts with dots, such as `<repo>\..qa`, is inside too.
+2. **It creates the directory exclusively.** The directory must not exist yet: an earlier run's directory, or any other existing one, is refused and left untouched. Its parent must already exist.
+3. **It writes a one-time token into the directory.** Playwright's worker and the setup verify that token, and verify the canonical path again.
+
+Any `playwright` command that loads this configuration creates a new run directory, even `--list`.
+
+The setup then creates each subdirectory exclusively. So `dist/` is always new and empty, and the build never deletes anything: `--emptyOutDir` is not used.
+
+`npm run test:guards` checks these rules. It also starts the real Playwright runner with an existing directory that holds sentinel files in `dist/` and `output/playwright/`, an in-repository `..qa`, and a junction into the repository. The runner stops in its configuration, and the sentinels survive.
+
+Before C3 r2, the run directory was checked only lexically, and an existing one was reused. That let `..qa` and a link into the repository through, and Playwright and `vite build --emptyOutDir` emptied an existing directory's `output/playwright/` and `dist/`. The review package has the before-and-after evidence.
 
 | Path | Contents |
 | --- | --- |
@@ -79,6 +105,7 @@ Everything a run creates goes into **one directory outside the repository**: `%T
 | `logs/` | Set-up steps, build, backend, preview, SMTP and CLI output |
 | `private-storage/` | The stored synthetic resumes |
 | `run.json` | The run's facts: HEAD, ports, database name, Jobs. It holds no secret |
+| `.valida-e2e-run` | The run's one-time token. It is not a secret: it only marks the directory as this run's |
 
 All data is synthetic. Even so, treat the directory as **private review evidence**: never commit it, and delete it when it is no longer needed.
 

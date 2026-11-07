@@ -1,12 +1,15 @@
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRunDirectory, isInside, verifyRunDirectory } from './runDirectory.js';
+
+export { isInside };
 
 /**
  * Locations and fixed settings of one E2E run.
  *
- * EVERYTHING A RUN CREATES lives OUTSIDE the repository, in one run directory
- * (default: <os temp>/valida-e2e/<run id>): the production frontend build,
+ * EVERYTHING A RUN CREATES lives OUTSIDE the repository, in one NEW run
+ * directory (default: <os temp>/valida-e2e/<timestamp>-XXXXXX; see
+ * resolveRunDirectory below): the production frontend build,
  * the private resume storage, the captured messages, the backend log, the
  * screenshots and the evidence records. Nothing is written into the working
  * tree, so nothing a run produces can be committed by accident. The private
@@ -27,22 +30,19 @@ export const FRONTEND_ORIGIN = `http://127.0.0.1:${FRONTEND_PORT}`;
 export const BACKEND_ORIGIN = `http://127.0.0.1:${BACKEND_PORT}`;
 
 /**
- * The run directory. Decided ONCE, in the runner, when the configuration is
- * first evaluated, and handed to every worker through the environment (a
- * worker evaluates the configuration again and must find the same value).
+ * The run directory. Created ONCE, by the runner, the first time the
+ * configuration is evaluated — before Playwright, Vite or the setup can write
+ * or clean anything — and handed to every worker through the environment. A
+ * worker evaluates the configuration again; it only verifies the directory
+ * (support/runDirectory.js). Each run gets a NEW directory: an existing path,
+ * a path inside the repository (also through a symlink or junction, or a
+ * name like "..qa") and a missing parent are refused.
  */
 export function resolveRunDirectory() {
-  if (!process.env.E2E_RUN_DIR) {
-    const runId = new Date().toISOString().replace(/[:.]/g, '-');
-    process.env.E2E_RUN_ID = runId;
-    process.env.E2E_RUN_DIR = path.join(os.tmpdir(), 'valida-e2e', runId);
-  }
-  process.env.E2E_RUN_ID ??= path.basename(process.env.E2E_RUN_DIR);
-  return process.env.E2E_RUN_DIR;
-}
-
-/** True when `candidate` is inside `directory` (or is it). */
-export function isInside(directory, candidate) {
-  const relative = path.relative(directory, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  if (process.env.E2E_RUN_DIR_TOKEN) return verifyRunDirectory({ repoRoot: REPO_ROOT });
+  const { runDir, runId, token } = createRunDirectory({ repoRoot: REPO_ROOT });
+  process.env.E2E_RUN_DIR = runDir;
+  process.env.E2E_RUN_ID = runId;
+  process.env.E2E_RUN_DIR_TOKEN = token;
+  return runDir;
 }

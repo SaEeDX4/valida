@@ -1,13 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkTestDatabaseTarget } from '../../backend/scripts/test-database.mjs';
 import {
-  BACKEND_DIR, BACKEND_ORIGIN, FIXTURES_DIR, FRONTEND_DIR, FRONTEND_ORIGIN, FRONTEND_PORT, REPO_ROOT, isInside,
+  BACKEND_DIR, BACKEND_ORIGIN, FIXTURES_DIR, FRONTEND_DIR, FRONTEND_ORIGIN, FRONTEND_PORT, REPO_ROOT,
 } from './paths.js';
+import { RunDirectoryRefused, createRunSubdirectories, verifyRunDirectory } from './runDirectory.js';
 import { baseEnvironment, runNode, startNode, stopChild, waitForHttp, waitForReadyLine } from './processes.js';
 import { IDENTITY, backendEnvironment } from './stackConfig.js';
 
@@ -23,8 +24,13 @@ import { IDENTITY, backendEnvironment } from './stackConfig.js';
  *   3. applies the indexes, provisions the synthetic Jobs and registers the
  *      synthetic suppression key — through the backend's own CLIs;
  *   4. builds the frontend for production (vite build, NODE_ENV unset) with
- *      VITE_API_BASE_URL pointing at the backend;
+ *      VITE_API_BASE_URL pointing at the backend, into the run's NEW, empty
+ *      dist/ (never emptied: nothing else is ever in it);
  *   5. starts the backend (node src/server.js) and `vite preview`.
+ *
+ * Before step 1, the run directory is verified again (support/runDirectory.js):
+ * the configuration created it, new, outside the repository by its canonical
+ * location. Its subdirectories are created here, each one exclusively.
  *
  * Returns the teardown. The run directory, with the evidence, is kept.
  */
@@ -32,16 +38,8 @@ export default async function globalSetup() {
   const guard = checkTestDatabaseTarget({ env: process.env });
   if (!guard.ok) throw new Error(`E2E refused: ${guard.reason}`);
 
-  const runDir = process.env.E2E_RUN_DIR;
-  if (isInside(REPO_ROOT, runDir)) throw new Error('E2E refused: E2E_RUN_DIR must be outside the repository (private storage and evidence never go into the working tree).');
-  const dirs = {
-    logs: path.join(runDir, 'logs'),
-    smtp: path.join(runDir, 'smtp'),
-    storage: path.join(runDir, 'private-storage'),
-    output: path.join(runDir, 'output'),
-    dist: path.join(runDir, 'dist'),
-  };
-  for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const runDir = verifyRunDirectory({ repoRoot: REPO_ROOT });
+  const dirs = createRunSubdirectories(runDir);
   const setupLog = path.join(dirs.logs, 'setup.log');
 
   // Per-run synthetic secrets: environment only, never written down.
@@ -119,8 +117,10 @@ export default async function globalSetup() {
 
     // 4. ------------------------------------------------- production build --
     const vite = path.join(FRONTEND_DIR, 'node_modules', 'vite', 'bin', 'vite.js');
+    // dist/ was created empty, above. No --emptyOutDir: the build never deletes anything (C3, GPT finding 1).
+    if (readdirSync(dirs.dist).length) throw new RunDirectoryRefused('dist/ is not empty before the build.');
     // NODE_ENV and APP_ENV are not inherited (baseEnvironment): `vite build` is a production build (C1).
-    const build = await runNode([vite, 'build', '--outDir', dirs.dist, '--emptyOutDir'], {
+    const build = await runNode([vite, 'build', '--outDir', dirs.dist], {
       cwd: FRONTEND_DIR,
       env: { ...baseEnvironment(), VITE_API_BASE_URL: BACKEND_ORIGIN },
       logFile: path.join(dirs.logs, 'build.log'),

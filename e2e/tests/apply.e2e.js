@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import {
@@ -211,7 +211,7 @@ test('C3-01 QA-P1-E2E-001..004 — Home → Careers → Job → Apply → resume
   const stored = storedObjectFor(application.resume.storageKey);
   expect(stored).toMatchObject({ exists: true, sizeBytes: resumeBytes.length, sha256: application.resume.checksumSha256 });
   if (process.platform !== 'win32') expect(stored.mode).toBe('600');
-  expect(isInside(REPO_ROOT, run().storageRoot)).toBe(false);
+  expect(isInside(realpathSync.native(REPO_ROOT), realpathSync.native(run().storageRoot))).toBe(false);
   const publicAttempts = [];
   for (const url of [`${FRONTEND_ORIGIN}/${application.resume.storageKey}`, `${BACKEND_ORIGIN}/${application.resume.storageKey}`, `${BACKEND_ORIGIN}/api/v1/${application.resume.storageKey}`]) {
     seen.probePaths.push(new URL(url).pathname); // this suite's own probe: the backend access-logs its path (C3-09)

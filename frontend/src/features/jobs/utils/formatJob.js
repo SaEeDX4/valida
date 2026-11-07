@@ -69,3 +69,71 @@ export function isJobClosed(job) {
 export function toContentList(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item.trim()) : [];
 }
+
+/*
+ * C4 — the Job's dates (owner decision OD-2026-11-07-01: the labels
+ * "Date Posted" and "Applications Close").
+ *
+ * The API sends publishedAt and closesAt as ISO 8601 instants in UTC
+ * (Date#toISOString). They are shown in UTC — the server's time, which decides
+ * whether a Job is open (Doc 12 section 15) — never in the visitor's own zone:
+ * a deadline then reads the same on every device and in the structured data,
+ * and cannot shift by a day with the reader's location. The closing time is
+ * labelled "UTC"; the posting date needs no time.
+ *
+ * Only a well-formed instant WITH an explicit zone is accepted: a zoneless
+ * value would be read in the reader's local time, which is exactly the
+ * ambiguity being avoided. Anything else returns null and is not shown.
+ */
+const MONTHS = Object.freeze([
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]);
+const INSTANT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):(\d{2}))$/;
+
+/**
+ * A Date for an ISO 8601 instant with an explicit zone, or null.
+ * Each field is range-checked: Date.parse would silently roll an impossible
+ * date such as 30 February over into March.
+ */
+export function parseJobInstant(value) {
+  const match = typeof value === 'string' ? INSTANT_PATTERN.exec(value) : null;
+  if (!match) return null;
+  const [, y, mo, d, h, mi, sec = '0', zone, zh = '0', zm = '0'] = match;
+  const [year, month, day] = [Number(y), Number(mo), Number(d)];
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth) return null;
+  if (Number(h) > 23 || Number(mi) > 59 || Number(sec) > 59) return null;
+  if (zone !== 'Z' && (Number(zh) > 23 || Number(zm) > 59)) return null;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? null : new Date(time);
+}
+
+const two = (n) => String(n).padStart(2, '0');
+
+/** "1 November 2026" — the instant's UTC calendar date — or null. */
+export function formatJobDate(value) {
+  const date = parseJobInstant(value);
+  return date ? `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}` : null;
+}
+
+/** "31 March 2027, 23:59 UTC" — the instant in UTC, to the minute — or null. */
+export function formatJobDeadline(value) {
+  const date = parseJobInstant(value);
+  return date ? `${formatJobDate(value)}, ${two(date.getUTCHours())}:${two(date.getUTCMinutes())} UTC` : null;
+}
+
+/**
+ * The date rows of an OPEN Job's "Employment Details" (the same predicates
+ * decide datePosted / validThrough in src/seo/jobPosting.js):
+ *   Date Posted         from publishedAt;
+ *   Applications Close  only for a valid closesAt — no closing date, no row.
+ * `dateTime` is the instant as the API sent it, for a <time> element.
+ */
+export function buildJobDateFacts(job, labels) {
+  if (!job || typeof job !== 'object') return [];
+  return [
+    { label: labels.datePosted, value: formatJobDate(job.publishedAt), dateTime: job.publishedAt },
+    { label: labels.applicationsClose, value: formatJobDeadline(job.closesAt), dateTime: job.closesAt },
+  ].filter((fact) => Boolean(fact.value));
+}

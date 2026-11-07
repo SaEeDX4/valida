@@ -10,7 +10,7 @@ import StatusMessage from '../components/ui/StatusMessage/StatusMessage.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
 import { getJobsService } from '../features/jobs/api/jobsService.js';
 import useAsyncResource, { RESOURCE_STATUS } from '../features/jobs/hooks/useAsyncResource.js';
-import { isJobOpen, isJobClosed, toContentList } from '../features/jobs/utils/formatJob.js';
+import { buildJobDateFacts, isJobOpen, isJobClosed, toContentList } from '../features/jobs/utils/formatJob.js';
 import resolveJobMarketPresentation, {
   buildRegionalJobFacts,
 } from '../features/jobs/utils/resolveJobMarketPresentation.js';
@@ -141,7 +141,12 @@ export default function JobDetailPage() {
    * view; nothing is converted and nothing is inferred.
    */
   const presentation = resolveJobMarketPresentation(job, region);
-  const facts = buildRegionalJobFacts(presentation);
+  /*
+   * The dates (OD-2026-11-07-01) are shown for an OPEN Job only: on a retained
+   * closed page a closing date could contradict the closed state (Doc 12
+   * section 33), and the accepted closed page is kept as it was.
+   */
+  const facts = [...buildRegionalJobFacts(presentation), ...(open ? buildJobDateFacts(job, JOB_DETAIL.labels) : [])];
   const responsibilities = toContentList(job.responsibilities);
   const requirements = toContentList(job.requirements);
   const preferred = toContentList(job.preferredQualifications);
@@ -150,9 +155,10 @@ export default function JobDetailPage() {
   return (
     <>
       {/*
-        Open: indexable, self-canonical, with JobPosting built from this same
-        DTO. Closed: still reachable at its stable URL, "noindex, follow", no
-        JobPosting (Doc 16 sections 121-125, 140). See src/seo/routeHeads.js.
+        Open: indexable, self-canonical; JobPosting only when its inputs
+        exist (withheld today, src/seo/jobPosting.js). Closed: still reachable
+        at its stable URL, "noindex, follow", no JobPosting (Doc 16 sections
+        121-125, 140). See src/seo/routeHeads.js.
       */}
       <PageMeta {...jobDetailHead(job)} />
 
@@ -184,7 +190,9 @@ export default function JobDetailPage() {
                     {facts.map((fact) => (
                       <div key={fact.label}>
                         <dt className={`t-label ${styles.factTerm}`}>{fact.label}</dt>
-                        <dd className={`t-body ${styles.factValue}`}>{fact.value}</dd>
+                        <dd className={`t-body ${styles.factValue}`}>
+                          {fact.dateTime ? <time dateTime={fact.dateTime}>{fact.value}</time> : fact.value}
+                        </dd>
                       </div>
                     ))}
                   </dl>

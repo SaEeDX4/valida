@@ -53,7 +53,8 @@ export const JOB_ERROR_HEAD = Object.freeze({ title: 'Careers at Valida', robots
 
 /**
  * Job Detail for a public Job.
- *   OPEN    indexable, self-canonical, with JobPosting (Doc 16 sections 124-136).
+ *   OPEN    indexable, self-canonical; JobPosting when its inputs exist
+ *           (Doc 16 sections 124-136; withheld today, see src/seo/jobPosting.js).
  *   CLOSED  visible at its stable URL, "noindex, follow", no JobPosting
  *           (sections 121-123, 140).
  */

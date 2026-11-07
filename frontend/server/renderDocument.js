@@ -26,7 +26,8 @@ import { JOB_OUTCOME } from './jobsClient.js';
  *   route                          status  head
  *   / /about /careers /privacy     200     Document 06 title + description,
  *     /legal                               canonical, Open Graph
- *   /careers/:slug  OPEN           200     + JobPosting
+ *   /careers/:slug  OPEN           200     + JobPosting when its inputs exist
+ *                                           (withheld today: src/seo/jobPosting.js)
  *   /careers/:slug  CLOSED         200     "noindex, follow", no JobPosting
  *   /careers/:slug  unknown /      404     "Page Not Found | Valida",
  *     Draft / Archived / bad slug           "noindex, follow"

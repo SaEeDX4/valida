@@ -1,4 +1,11 @@
-import { formatCompensation, formatWeeklyHours, isJobOpen, toContentList } from '../features/jobs/utils/formatJob.js';
+import {
+  formatCompensation,
+  formatJobDate,
+  formatJobDeadline,
+  formatWeeklyHours,
+  isJobOpen,
+  toContentList,
+} from '../features/jobs/utils/formatJob.js';
 import { JOB_DETAIL } from '../pages/JobDetailPage.content.js';
 import { jobRoute } from '../routes/paths.js';
 import { SITE_NAME, absoluteUrl } from './siteConfig.js';
@@ -11,41 +18,63 @@ import { SITE_NAME, absoluteUrl } from './siteConfig.js';
  * C4): "all information in the markup must be visible on the job page", one
  * job per page, on the most detailed page, removed when the job closes.
  *
- * Every property below is derived from the same public Job DTO, and with the
- * same formatting helpers, that the Job Detail page renders — nothing is
- * looked up elsewhere, inferred, defaulted or invented. When a property cannot
- * be stated truthfully it is LEFT OUT; when the posting as a whole cannot be,
+ * Every property is derived from the same public Job DTO, and with the same
+ * formatting helpers, that the Job Detail page renders — nothing is looked up
+ * elsewhere, inferred, defaulted or invented. A property that cannot be
+ * stated truthfully is LEFT OUT; when the posting as a whole cannot be,
  * nothing is emitted and the reason is returned (`withheld`).
  *
- * Withheld (no JobPosting at all):
- *   NOT_OPEN               a retained CLOSED Job (Doc 16 sections 123, 140).
- *   NO_SITE                no canonical origin configured (absolute URLs needed).
- *   REGIONAL_PRESENTATION  the Job declares hiring markets: its visible location
- *                          and pay then depend on the visitor's region, so no
- *                          single markup can match what every visitor sees.
- *                          The public API sends none; only QA data does.
- *   NOT_FULLY_REMOTE       hybrid / on-site: Google needs a structured postal
- *                          address (jobLocation), and the public DTO carries the
- *                          location as display text only (Doc 09). Emitting a
- *                          guessed address is not allowed.
- *   NO_PUBLISHED_AT, NO_TITLE, NO_LOCATION, NO_DESCRIPTION
- *                          a required property would be missing.
- *
- * Left out when not stateable:
- *   validThrough    only from a real closesAt (Doc 16 sections 129-130).
- *   employmentType  only where Google has an unambiguous value (see below).
- *   baseSalary      only when the visible compensation is the Job's own.
+ * LOCATION (C4 correction). Google needs, for a fully remote job, where
+ * applicants may be (applicantLocationRequirements, at least one country) and,
+ * otherwise, a structured workplace address (jobLocation). The approved Job
+ * contract has neither:
+ *   - `location` is the PHYSICAL WORK LOCATION (Master Prompt section 6;
+ *     Doc 10 sections 24-28; Doc 09 section 63 exposes its display name). A
+ *     workplace — or its country code — does not say where applicants may
+ *     reside, so it is not used as an eligibility claim;
+ *   - no Job field, public DTO field or visible page element states applicant
+ *     eligibility;
+ *   - the public DTO carries the workplace as display text only, not an address.
+ * So today every Job is withheld for a location reason: NO_APPLICANT_ELIGIBILITY
+ * (fully remote) or NO_STRUCTURED_WORKPLACE (hybrid / on-site). The rest of
+ * the mapping (jobPostingProperties) is kept and tested, so an approved input
+ * adds only the location properties.
  */
 
+/**
+ * Why no JobPosting is emitted:
+ *   NOT_OPEN                  a retained CLOSED Job (Doc 16 sections 123, 140).
+ *   NO_SITE                   no canonical origin configured (absolute URLs needed).
+ *   REGIONAL_PRESENTATION     the Job declares hiring markets: its visible location
+ *                             and pay then depend on the visitor's region, so no
+ *                             single markup can match what every visitor sees.
+ *                             The public API sends none; only QA data does.
+ *   NO_TITLE, NO_PUBLISHED_AT, NO_DESCRIPTION
+ *                             a required property would be missing.
+ *   NO_APPLICANT_ELIGIBILITY  fully remote, and no approved, visible statement of
+ *                             where applicants may be exists (see above).
+ *   NO_STRUCTURED_WORKPLACE   hybrid / on-site, and the public DTO has no
+ *                             structured workplace address (see above).
+ */
 export const JOB_POSTING_WITHHELD = Object.freeze({
   NOT_OPEN: 'NOT_OPEN',
   NO_SITE: 'NO_SITE',
   REGIONAL_PRESENTATION: 'REGIONAL_PRESENTATION',
-  NOT_FULLY_REMOTE: 'NOT_FULLY_REMOTE',
-  NO_PUBLISHED_AT: 'NO_PUBLISHED_AT',
   NO_TITLE: 'NO_TITLE',
-  NO_LOCATION: 'NO_LOCATION',
+  NO_PUBLISHED_AT: 'NO_PUBLISHED_AT',
   NO_DESCRIPTION: 'NO_DESCRIPTION',
+  NO_APPLICANT_ELIGIBILITY: 'NO_APPLICANT_ELIGIBILITY',
+  NO_STRUCTURED_WORKPLACE: 'NO_STRUCTURED_WORKPLACE',
+});
+
+/** The exact input each location reason waits for (C4 handoff). */
+export const JOB_POSTING_MISSING_INPUT = Object.freeze({
+  NO_APPLICANT_ELIGIBILITY:
+    'An approved, explicit applicant-eligibility statement for the Job (where applicants may be located: at least one country, ' +
+    'optionally regions) — a Job contract field (Doc 10, and the public DTO, Doc 09) and its visible label and value on Job ' +
+    'Detail (Doc 06) — so that applicantLocationRequirements can match what the page states.',
+  NO_STRUCTURED_WORKPLACE:
+    'A structured workplace address in the public Job DTO (at least addressCountry; Doc 09 amendment) for jobLocation.',
 });
 
 /** The approved master logo (public/brand/README.md); 1254 x 1254, inside Google's 0.75-2.5 ratio. */
@@ -72,12 +101,6 @@ export const EMPLOYMENT_TYPE_MAP = Object.freeze({
 const SALARY_UNITS = new Set(['HOUR', 'MONTH', 'YEAR']);
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.trim().length > 0;
-
-function isoDate(value) {
-  if (typeof value !== 'string') return null;
-  const time = Date.parse(value);
-  return Number.isNaN(time) ? null : value;
-}
 
 /** HTML text escaping for the description markup (the only HTML Google reads: p, ul, li). */
 export function escapeHtmlText(value) {
@@ -126,38 +149,33 @@ function baseSalary(compensation) {
 }
 
 /**
- * Builds the JobPosting for a public Job DTO.
- * Returns { jsonLd, withheld }: exactly one of them is non-null.
+ * Every JobPosting property except the location ones, from the public DTO.
+ * Returns { properties, withheld }: exactly one is non-null.
+ *
+ * Dates use the predicates that decide the visible "Date Posted" and
+ * "Applications Close" rows (formatJob.js): datePosted exists exactly when the
+ * page shows Date Posted, validThrough exactly when it shows Applications Close
+ * — no closing date, no validThrough (Doc 16 sections 128-130). Both carry the
+ * instant as the API sent it (UTC); the page shows the same instant in UTC.
  */
-export function buildJobPosting(job, { siteOrigin } = {}) {
-  const withheld = (reason) => ({ jsonLd: null, withheld: reason });
-
-  if (!isJobOpen(job)) return withheld(JOB_POSTING_WITHHELD.NOT_OPEN);
-  if (!siteOrigin) return withheld(JOB_POSTING_WITHHELD.NO_SITE);
-  if (Array.isArray(job.hiringMarkets) && job.hiringMarkets.length > 0) {
-    return withheld(JOB_POSTING_WITHHELD.REGIONAL_PRESENTATION);
-  }
-  if (job.workArrangement !== 'FULLY_REMOTE') return withheld(JOB_POSTING_WITHHELD.NOT_FULLY_REMOTE);
-  if (!isNonEmptyString(job.title)) return withheld(JOB_POSTING_WITHHELD.NO_TITLE);
-  const datePosted = isoDate(job.publishedAt);
-  if (!datePosted) return withheld(JOB_POSTING_WITHHELD.NO_PUBLISHED_AT);
-  if (!isNonEmptyString(job.location)) return withheld(JOB_POSTING_WITHHELD.NO_LOCATION);
+export function jobPostingProperties(job, { siteOrigin } = {}) {
+  const withheld = (reason) => ({ properties: null, withheld: reason });
+  if (!isNonEmptyString(job?.title)) return withheld(JOB_POSTING_WITHHELD.NO_TITLE);
+  if (!formatJobDate(job.publishedAt)) return withheld(JOB_POSTING_WITHHELD.NO_PUBLISHED_AT);
   const description = jobPostingDescription(job);
   if (!description) return withheld(JOB_POSTING_WITHHELD.NO_DESCRIPTION);
 
-  const jsonLd = {
+  const properties = {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
     title: job.title,
     description,
-    datePosted,
+    datePosted: job.publishedAt,
   };
-  const validThrough = isoDate(job.closesAt);
-  if (validThrough) jsonLd.validThrough = validThrough;
+  if (formatJobDeadline(job.closesAt)) properties.validThrough = job.closesAt;
   const employmentType = EMPLOYMENT_TYPE_MAP[job.employmentType];
-  if (employmentType) jsonLd.employmentType = employmentType;
-
-  jsonLd.hiringOrganization = {
+  if (employmentType) properties.employmentType = employmentType;
+  properties.hiringOrganization = {
     '@type': 'Organization',
     // The name the page shows under the title. No sameAs: no official profile
     // is recorded as Valida-controlled (Doc 16 sections 145-146, SEO-037).
@@ -165,18 +183,10 @@ export function buildJobPosting(job, { siteOrigin } = {}) {
     url: absoluteUrl(siteOrigin, '/'),
     logo: absoluteUrl(siteOrigin, ORGANIZATION_LOGO_PATH),
   };
-
-  // Fully remote (Doc 16 sections 131-132). The eligible area is the location
-  // the page shows, as text: the public DTO exposes no country or region code,
-  // so none is asserted separately.
-  jsonLd.jobLocationType = 'TELECOMMUTE';
-  jsonLd.applicantLocationRequirements = { '@type': 'AdministrativeArea', name: job.location };
-
   const salary = baseSalary(job.compensation);
-  if (salary) jsonLd.baseSalary = salary;
+  if (salary) properties.baseSalary = salary;
   const hours = formatWeeklyHours(job.weeklyHours);
-  if (hours) jsonLd.workHours = hours;
-
+  if (hours) properties.workHours = hours;
   /*
    * directApply (Doc 16 section 136, SEO-033). Google defines direct apply by
    * the steps the candidate must take; Valida's flow is one "Apply for This
@@ -184,8 +194,31 @@ export function buildJobPosting(job, { siteOrigin } = {}) {
    * account, no login and no redirect to another site (C3 E2E, accepted at
    * f07ea35).
    */
-  jsonLd.directApply = true;
-  jsonLd.url = absoluteUrl(siteOrigin, jobRoute(job.slug));
+  properties.directApply = true;
+  properties.url = absoluteUrl(siteOrigin, jobRoute(job.slug));
+  return { properties, withheld: null };
+}
 
-  return { jsonLd, withheld: null };
+/**
+ * The JobPosting for a public Job DTO, or why there is none.
+ * Returns { jsonLd, withheld }: exactly one of them is non-null.
+ *
+ * With the approved contract as it stands, every open Job ends at a location
+ * reason (see the module comment): no JobPosting is emitted, and none is
+ * built from an inferred location.
+ */
+export function buildJobPosting(job, { siteOrigin } = {}) {
+  const withheld = (reason) => ({ jsonLd: null, withheld: reason });
+  if (!isJobOpen(job)) return withheld(JOB_POSTING_WITHHELD.NOT_OPEN);
+  if (!siteOrigin) return withheld(JOB_POSTING_WITHHELD.NO_SITE);
+  if (Array.isArray(job.hiringMarkets) && job.hiringMarkets.length > 0) {
+    return withheld(JOB_POSTING_WITHHELD.REGIONAL_PRESENTATION);
+  }
+  const mapped = jobPostingProperties(job, { siteOrigin });
+  if (mapped.withheld) return withheld(mapped.withheld);
+  return withheld(
+    job.workArrangement === 'FULLY_REMOTE'
+      ? JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY
+      : JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE,
+  );
 }

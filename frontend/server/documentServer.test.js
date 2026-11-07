@@ -162,16 +162,14 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
   });
 
-  it('an open Job: 200, its title, canonical and exactly one JobPosting', async () => {
+  it('an open Job: 200, its title and canonical, indexable — and NO JobPosting (no approved applicant-eligibility input)', async () => {
     const response = await get(indexed, '/careers/qa-open');
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(headOf(html)).toContain('<title>QA Synthetic Role qa-open | Careers at Valida</title>');
     expect(headOf(html)).toContain(`<link rel="canonical" href="${SITE}/careers/qa-open">`);
-    const postings = jsonLdOf(html);
-    expect(postings).toHaveLength(1);
-    expect(postings[0]).toMatchObject({ '@type': 'JobPosting', title: 'QA Synthetic Role qa-open', datePosted: '2026-11-02T10:00:00.000Z', employmentType: 'FULL_TIME', directApply: true });
-    expect(postings[0]).not.toHaveProperty('validThrough');
+    expect(headOf(html)).not.toContain('name="robots"');
+    expect(jsonLdOf(html)).toEqual([]);
   });
 
   it('a retained closed Job: 200, "noindex, follow" (meta and header), no JobPosting, no canonical', async () => {

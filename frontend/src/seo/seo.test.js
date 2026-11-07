@@ -1,9 +1,17 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { formatCompensation, formatWeeklyHours } from '../features/jobs/utils/formatJob.js';
+import { buildJobDateFacts, formatCompensation, formatJobDate, formatJobDeadline, formatWeeklyHours, parseJobInstant } from '../features/jobs/utils/formatJob.js';
+import { JOB_DETAIL } from '../pages/JobDetailPage.content.js';
 import { buildRobotsTxt, buildSitemapXml, SITEMAP_STATIC_PATHS } from './discovery.js';
 import { ROBOTS, describeHead, renderHeadTags, serializeJsonLd } from './head.js';
-import { EMPLOYMENT_TYPE_MAP, JOB_POSTING_WITHHELD, buildJobPosting, jobPostingDescription } from './jobPosting.js';
+import {
+  EMPLOYMENT_TYPE_MAP,
+  JOB_POSTING_MISSING_INPUT,
+  JOB_POSTING_WITHHELD,
+  buildJobPosting,
+  jobPostingDescription,
+  jobPostingProperties,
+} from './jobPosting.js';
 import { APPLY_PENDING_HEAD, NOT_FOUND_HEAD, STATIC_HEADS, applyHead, jobDetailHead } from './routeHeads.js';
 import { normalizeSiteUrl, resolveSeoConfig, seoBuildProblems } from './siteConfig.js';
 
@@ -130,22 +138,59 @@ describe('describeHead — one head for browser and server', () => {
     expect(head.openGraph).toEqual([]);
   });
 
-  it('an open Job Detail: canonical on the Job URL, JobPosting; Apply for the same Job: none', () => {
+  it('an open Job Detail: canonical on the Job URL, and NO JobPosting (no approved location input); Apply: none either', () => {
     const detail = describeHead(jobDetailHead(qaJob()), INDEXED);
     expect(detail.canonical).toBe(`${SITE}/careers/qa-c4-synthetic-analyst`);
-    expect(detail.jsonLd['@type']).toBe('JobPosting');
+    expect(detail.robots).toBeNull();
+    expect(detail.jsonLd).toBeNull();
     const apply = describeHead(applyHead(qaJob()), INDEXED);
     expect(apply.title).toBe('Apply for QA Synthetic Security Analyst (C4) | Valida');
     expect(apply.jsonLd).toBeNull();
   });
 });
 
-describe('JobPosting (Doc 16 sections 124-141, SEO-025…033)', () => {
-  it('maps the visible Job exactly: title, dates, type, organisation, remote area, salary, hours, direct apply', () => {
+describe('JobPosting: location (C4 correction — Doc 16 sections 131-132, SEO-030)', () => {
+  it('a fully remote open Job is WITHHELD: job.location is the workplace, not where applicants may be', () => {
+    expect(buildJobPosting(qaJob(), { siteOrigin: SITE })).toEqual({ jsonLd: null, withheld: JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY });
+    // Not even a country code would change that: no Job field states applicant eligibility.
+    expect(buildJobPosting(qaJob({ countryCode: 'CA', regionCode: 'BC' }), { siteOrigin: SITE }).withheld).toBe(JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY);
+    expect(JOB_POSTING_MISSING_INPUT.NO_APPLICANT_ELIGIBILITY).toMatch(/applicant-eligibility statement/);
+  });
+
+  it('hybrid and on-site open Jobs are WITHHELD: the public DTO has no structured workplace address', () => {
+    for (const workArrangement of ['HYBRID', 'ON_SITE']) {
+      expect(buildJobPosting(qaJob({ workArrangement }), { siteOrigin: SITE }).withheld, workArrangement).toBe(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
+    }
+  });
+
+  it('no location property is ever produced from the workplace text', () => {
+    const { properties } = jobPostingProperties(qaJob(), { siteOrigin: SITE });
+    for (const key of ['jobLocationType', 'applicantLocationRequirements', 'jobLocation']) expect(properties).not.toHaveProperty(key);
+    expect(JSON.stringify(properties)).not.toContain('QA Region, Canada');
+  });
+
+  it.each([
+    ['CLOSED', { applicationStatus: 'CLOSED', applicationForm: null }, JOB_POSTING_WITHHELD.NOT_OPEN],
+    ['regional markets', { hiringMarkets: [{ marketId: 'CA', countries: ['CA'] }] }, JOB_POSTING_WITHHELD.REGIONAL_PRESENTATION],
+    ['no publishedAt', { publishedAt: null }, JOB_POSTING_WITHHELD.NO_PUBLISHED_AT],
+    ['unparseable publishedAt', { publishedAt: 'soon' }, JOB_POSTING_WITHHELD.NO_PUBLISHED_AT],
+    ['zoneless publishedAt', { publishedAt: '2026-11-01T09:30:00' }, JOB_POSTING_WITHHELD.NO_PUBLISHED_AT],
+    ['no content', { description: '', responsibilities: [], requirements: [] }, JOB_POSTING_WITHHELD.NO_DESCRIPTION],
+  ])('withheld for its own reason first: %s', (_label, overrides, reason) => {
+    expect(buildJobPosting(qaJob(overrides), { siteOrigin: SITE })).toEqual({ jsonLd: null, withheld: reason });
+  });
+
+  it('withheld without a canonical origin', () => {
+    expect(buildJobPosting(qaJob(), {})).toEqual({ jsonLd: null, withheld: JOB_POSTING_WITHHELD.NO_SITE });
+  });
+});
+
+describe('JobPosting: the other properties (kept for when the location input is approved)', () => {
+  it('map the visible Job exactly: title, dates, type, organisation, salary, hours, direct apply', () => {
     const job = qaJob();
-    const { jsonLd, withheld } = buildJobPosting(job, { siteOrigin: SITE });
+    const { properties, withheld } = jobPostingProperties(job, { siteOrigin: SITE });
     expect(withheld).toBeNull();
-    expect(jsonLd).toEqual({
+    expect(properties).toEqual({
       '@context': 'https://schema.org',
       '@type': 'JobPosting',
       title: job.title,
@@ -159,14 +204,11 @@ describe('JobPosting (Doc 16 sections 124-141, SEO-025…033)', () => {
         url: `${SITE}/`,
         logo: `${SITE}/brand/valida-logo-approved-dark-1254.png`,
       },
-      jobLocationType: 'TELECOMMUTE',
-      applicantLocationRequirements: { '@type': 'AdministrativeArea', name: 'QA Region, Canada' },
       baseSalary: { '@type': 'MonetaryAmount', currency: 'CAD', value: { '@type': 'QuantitativeValue', value: 35, unitText: 'HOUR' } },
       workHours: formatWeeklyHours(job.weeklyHours),
       directApply: true,
       url: `${SITE}/careers/qa-c4-synthetic-analyst`,
     });
-    // The salary is the one the page shows (formatCompensation is the page's helper).
     expect(formatCompensation(job.compensation)).toBe('CAD 35.00 gross per hour');
   });
 
@@ -178,42 +220,75 @@ describe('JobPosting (Doc 16 sections 124-141, SEO-025…033)', () => {
         '<p>Requirements</p><ul><li>QA requirement one.</li></ul>' +
         '<p>Preferred Qualifications</p><ul><li>QA preferred.</li></ul>',
     );
-    // An empty section is absent here exactly as it is absent on the page.
     expect(jobPostingDescription(qaJob())).not.toContain('Preferred Qualifications');
-  });
-
-  it('no closesAt: no validThrough is invented (SEO-029)', () => {
-    const { jsonLd } = buildJobPosting(qaJob({ closesAt: null }), { siteOrigin: SITE });
-    expect(jsonLd).not.toHaveProperty('validThrough');
-  });
-
-  it.each([
-    ['CLOSED', { applicationStatus: 'CLOSED', applicationForm: null }, JOB_POSTING_WITHHELD.NOT_OPEN],
-    ['hybrid', { workArrangement: 'HYBRID' }, JOB_POSTING_WITHHELD.NOT_FULLY_REMOTE],
-    ['on site', { workArrangement: 'ON_SITE' }, JOB_POSTING_WITHHELD.NOT_FULLY_REMOTE],
-    ['regional markets', { hiringMarkets: [{ marketId: 'CA', countries: ['CA'] }] }, JOB_POSTING_WITHHELD.REGIONAL_PRESENTATION],
-    ['no publishedAt', { publishedAt: null }, JOB_POSTING_WITHHELD.NO_PUBLISHED_AT],
-    ['unparseable publishedAt', { publishedAt: 'soon' }, JOB_POSTING_WITHHELD.NO_PUBLISHED_AT],
-    ['no location', { location: null }, JOB_POSTING_WITHHELD.NO_LOCATION],
-    ['no content', { description: '', responsibilities: [], requirements: [] }, JOB_POSTING_WITHHELD.NO_DESCRIPTION],
-  ])('withheld entirely: %s', (_label, overrides, reason) => {
-    expect(buildJobPosting(qaJob(overrides), { siteOrigin: SITE })).toEqual({ jsonLd: null, withheld: reason });
-  });
-
-  it('withheld without a canonical origin', () => {
-    expect(buildJobPosting(qaJob(), {})).toEqual({ jsonLd: null, withheld: JOB_POSTING_WITHHELD.NO_SITE });
   });
 
   it('employmentType only where Google has an unambiguous value; FIXED_TERM and CONTRACT are left out (SEO-032)', () => {
     expect(EMPLOYMENT_TYPE_MAP).toEqual({ FULL_TIME: 'FULL_TIME', PART_TIME: 'PART_TIME', TEMPORARY: 'TEMPORARY', INTERNSHIP: 'INTERN', OTHER: 'OTHER' });
     for (const type of ['FIXED_TERM', 'CONTRACT', null]) {
-      expect(buildJobPosting(qaJob({ employmentType: type }), { siteOrigin: SITE }).jsonLd).not.toHaveProperty('employmentType');
+      expect(jobPostingProperties(qaJob({ employmentType: type }), { siteOrigin: SITE }).properties).not.toHaveProperty('employmentType');
     }
   });
 
   it('no baseSalary when the page shows no compensation; MONTH and YEAR map to Google units', () => {
-    expect(buildJobPosting(qaJob({ compensation: null }), { siteOrigin: SITE }).jsonLd).not.toHaveProperty('baseSalary');
-    expect(buildJobPosting(qaJob({ compensation: { currency: 'CAD', amount: 5000, unit: 'MONTH', gross: true } }), { siteOrigin: SITE }).jsonLd.baseSalary.value.unitText).toBe('MONTH');
+    expect(jobPostingProperties(qaJob({ compensation: null }), { siteOrigin: SITE }).properties).not.toHaveProperty('baseSalary');
+    expect(jobPostingProperties(qaJob({ compensation: { currency: 'CAD', amount: 5000, unit: 'MONTH', gross: true } }), { siteOrigin: SITE }).properties.baseSalary.value.unitText).toBe('MONTH');
+  });
+});
+
+describe('Visible dates and structured data (owner decision OD-2026-11-07-01)', () => {
+  const WITH_DEADLINE = qaJob({ publishedAt: '2026-11-01T09:30:00.000Z', closesAt: '2027-03-31T23:59:59.000Z' });
+  const WITHOUT_DEADLINE = qaJob({ publishedAt: '2026-11-01T09:30:00.000Z', closesAt: null });
+
+  it('the approved labels', () => {
+    expect([JOB_DETAIL.labels.datePosted, JOB_DETAIL.labels.applicationsClose]).toEqual(['Date Posted', 'Applications Close']);
+  });
+
+  it('a Job WITH a deadline: both rows; datePosted and validThrough carry the same instants', () => {
+    expect(buildJobDateFacts(WITH_DEADLINE, JOB_DETAIL.labels)).toEqual([
+      { label: 'Date Posted', value: '1 November 2026', dateTime: '2026-11-01T09:30:00.000Z' },
+      { label: 'Applications Close', value: '31 March 2027, 23:59 UTC', dateTime: '2027-03-31T23:59:59.000Z' },
+    ]);
+    const { properties } = jobPostingProperties(WITH_DEADLINE, { siteOrigin: SITE });
+    expect([properties.datePosted, properties.validThrough]).toEqual(['2026-11-01T09:30:00.000Z', '2027-03-31T23:59:59.000Z']);
+  });
+
+  it('a Job WITHOUT a deadline: no Applications Close row and no validThrough — nothing invented (SEO-029)', () => {
+    const facts = buildJobDateFacts(WITHOUT_DEADLINE, JOB_DETAIL.labels);
+    expect(facts.map((fact) => fact.label)).toEqual(['Date Posted']);
+    expect(jobPostingProperties(WITHOUT_DEADLINE, { siteOrigin: SITE }).properties).not.toHaveProperty('validThrough');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['not a date', 'soon'],
+    ['no zone (would be read in local time)', '2027-03-31T23:59:59'],
+    ['date only', '2027-03-31'],
+    ['impossible day', '2027-02-30T10:00:00.000Z'],
+    ['impossible month', '2027-13-01T10:00:00.000Z'],
+    ['impossible hour', '2027-03-31T24:00:00.000Z'],
+    ['not a string', 1806537599000],
+  ])('an invalid closesAt (%s): no row, no validThrough', (_label, closesAt) => {
+    const job = qaJob({ closesAt });
+    expect(buildJobDateFacts(job, JOB_DETAIL.labels).map((fact) => fact.label)).toEqual(['Date Posted']);
+    expect(jobPostingProperties(job, { siteOrigin: SITE }).properties).not.toHaveProperty('validThrough');
+  });
+
+  it('dates are shown in UTC whatever the reader\'s timezone, so page and markup always agree', () => {
+    const original = process.env.TZ;
+    const results = [];
+    try {
+      for (const tz of ['UTC', 'America/Vancouver', 'Pacific/Kiritimati', 'Pacific/Pago_Pago']) {
+        process.env.TZ = tz;
+        results.push([formatJobDate('2026-11-01T02:00:00.000Z'), formatJobDeadline('2027-03-31T23:59:59.000Z'), formatJobDeadline('2027-01-01T07:00:00+08:00')]);
+      }
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+    // 02:00 UTC is still 31 October in Vancouver: the page says 1 November, the UTC date of the instant.
+    for (const row of results) expect(row).toEqual(['1 November 2026', '31 March 2027, 23:59 UTC', '31 December 2026, 23:00 UTC']);
+    expect(parseJobInstant('2027-03-31T23:59:59.000Z').toISOString()).toBe('2027-03-31T23:59:59.000Z');
   });
 });
 
@@ -225,8 +300,11 @@ describe('JSON-LD in HTML (Doc 16 section 255)', () => {
     expect(JSON.parse(text)).toEqual(value);
   });
 
-  it('renderHeadTags writes escaped attributes and one JobPosting script', () => {
-    const head = describeHead(jobDetailHead(qaJob({ title: 'QA "quoted" <role>' })), INDEXED);
+  it('renderHeadTags writes escaped attributes and, when a head has one, one JobPosting script', () => {
+    const described = describeHead(jobDetailHead(qaJob({ title: 'QA "quoted" <role>' })), INDEXED);
+    expect(renderHeadTags(described)).not.toContain('application/ld+json');
+    // The serializer path itself, with a posting supplied directly (none is emitted from real data today).
+    const head = { ...described, jsonLd: jobPostingProperties(qaJob({ title: 'QA "quoted" <role>' }), { siteOrigin: SITE }).properties };
     const html = renderHeadTags(head);
     expect(html).toContain('content="QA &quot;quoted&quot; &lt;role&gt; | Careers at Valida"');
     expect(html.match(/<script type="application\/ld\+json" data-valida-structured-data="JobPosting">/g)).toHaveLength(1);

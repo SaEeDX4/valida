@@ -20,7 +20,9 @@ import { HEAD_SELECTORS, describeHead, serializeJsonLd } from '../../seo/head.js
  *   canonical (link rel="canonical")      indexable pages, canonical origin set;
  *   Open Graph (og:type, og:site_name,    the same pages;
  *     og:title, og:description, og:url)
- *   JobPosting JSON-LD                    an open Job Detail page only.
+ *   JobPosting JSON-LD                    an open Job Detail page only, and only
+ *                                         when its inputs exist (src/seo/jobPosting.js;
+ *                                         currently always withheld).
  * A non-indexed (review) build gives every page "noindex, nofollow" and none
  * of the canonical, Open Graph or JobPosting tags (Doc 16 section 82).
  *

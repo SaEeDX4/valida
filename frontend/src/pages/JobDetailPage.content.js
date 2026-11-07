@@ -7,6 +7,9 @@ export const JOB_DETAIL = {
     requirements: 'Requirements',
     preferredQualifications: 'Preferred Qualifications',
     employmentDetails: 'Employment Details',
+    // C4 — owner decision OD-2026-11-07-01 (an addition to Doc 06 section 97):
+    datePosted: 'Date Posted',
+    applicationsClose: 'Applications Close',
   }, // s99
   primaryCta: 'Apply for This Role', // s100
   finalCta: {

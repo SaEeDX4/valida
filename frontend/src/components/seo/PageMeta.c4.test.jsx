@@ -100,35 +100,38 @@ describe('C4 — production build: canonical and Open Graph on indexable pages (
 });
 
 describe('C4 — Job lifecycle in the browser (Doc 16 sections 121-141)', () => {
-  it('open Job: one JobPosting that matches the visible vacancy; canonical on the Job URL', async () => {
+  it('open Job WITH a deadline: Date Posted and Applications Close shown in UTC; indexable and canonical; no JobPosting', async () => {
     production();
-    const job = testJob({ closesAt: '2026-12-31T23:59:59.000Z' });
+    const job = testJob({ publishedAt: '2026-11-01T02:00:00.000Z', closesAt: '2027-03-31T23:59:59.000Z' });
     installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
     renderRoute(`/careers/${job.slug}`);
     await screen.findByRole('heading', { level: 1, name: job.title });
-    await waitFor(() => expect(jsonLd()).toHaveLength(1));
+    await waitFor(() => expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]));
 
-    const [posting] = jsonLd();
     const facts = visibleFacts();
-    expect(posting.title).toBe(screen.getByRole('heading', { level: 1 }).textContent);
-    expect(posting.applicantLocationRequirements.name).toBe(facts.Location);
-    expect(posting.jobLocationType).toBe('TELECOMMUTE');
+    // Owner decision OD-2026-11-07-01. 02:00 UTC is 31 October in Vancouver; the page shows the UTC date.
+    expect(facts['Date Posted']).toBe('1 November 2026');
+    expect(facts['Applications Close']).toBe('31 March 2027, 23:59 UTC');
+    const times = [...document.querySelectorAll('dd time')].map((time) => time.getAttribute('dateTime'));
+    expect(times).toEqual([job.publishedAt, job.closesAt]);
+    expect(facts.Location).toBe(job.location);
     expect(facts['Work Arrangement']).toBe('Fully remote');
-    expect(posting.workHours).toBe(facts['Weekly Hours']);
-    expect(facts['Employment Type']).toBe('Part time');
-    expect(posting.employmentType).toBe('PART_TIME');
-    expect(facts.Compensation).toBe('CAD 35.00 gross per hour');
-    expect(posting.baseSalary).toEqual({ '@type': 'MonetaryAmount', currency: 'CAD', value: { '@type': 'QuantitativeValue', value: 35, unitText: 'HOUR' } });
-    // The real dates of the record (Doc 16 sections 128-129). They are NOT shown on the page:
-    // Document 06 has no approved label for them — an owner decision recorded in the C4 handoff.
-    expect(posting.datePosted).toBe(job.publishedAt);
-    expect(posting.validThrough).toBe(job.closesAt);
-    expect(posting.hiringOrganization.name).toBe('Valida');
-    expect(screen.getByText('Valida', { selector: 'p' })).toBeTruthy();
-
-    expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]);
+    // C4 correction: job.location is the workplace, not where applicants may be — no JobPosting is emitted.
+    expect(jsonLd()).toEqual([]);
     expect(robots()).toEqual([]);
     expect(screen.getAllByRole('link', { name: 'Apply for This Role' }).length).toBeGreaterThan(0);
+  });
+
+  it('open Job WITHOUT a deadline: Date Posted only — the whole Applications Close row is absent', async () => {
+    production();
+    const job = testJob({ publishedAt: '2026-09-10T18:00:00.000Z', closesAt: null });
+    installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
+    renderRoute(`/careers/${job.slug}`);
+    await screen.findByRole('heading', { level: 1, name: job.title });
+    const facts = visibleFacts();
+    expect(facts['Date Posted']).toBe('10 September 2026');
+    expect(Object.keys(facts)).not.toContain('Applications Close');
+    expect(screen.queryByText('Applications Close')).toBeNull();
   });
 
   it('retained closed Job: visible closed state, no Apply action, "noindex, follow", no JobPosting, no canonical (SEO-024, 025)', async () => {
@@ -142,6 +145,9 @@ describe('C4 — Job lifecycle in the browser (Doc 16 sections 121-141)', () => 
     expect(jsonLd()).toEqual([]);
     expect(canonical()).toEqual([]);
     expect(openGraph()).toEqual([]);
+    // The accepted closed page is unchanged: no date rows, so no closing date can contradict the closed state.
+    expect(Object.keys(visibleFacts())).not.toContain('Date Posted');
+    expect(screen.queryByText('Applications Close')).toBeNull();
   });
 
   it('unknown / Draft / Archived Job (404): the neutral unavailable state, "noindex, follow", no JobPosting', async () => {
@@ -175,15 +181,18 @@ describe('C4 — Job lifecycle in the browser (Doc 16 sections 121-141)', () => 
     expect(openGraph()).toEqual([]);
   });
 
-  it('client navigation away from an open Job removes its JobPosting (the Careers breadcrumb)', async () => {
+  it('client navigation Job -> Careers moves the canonical; a stale JobPosting script is removed by the mounted route', async () => {
     production();
     const job = testJob();
+    // A JobPosting left in the head by an earlier build or route must never survive (Doc 16 section 125).
+    document.head.insertAdjacentHTML('beforeend', '<script type="application/ld+json" data-valida-structured-data="JobPosting">{"@type":"JobPosting"}</script>');
     installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
     const user = userEvent.setup();
 
     renderRoute(`/careers/${job.slug}`);
     await screen.findByRole('heading', { level: 1, name: job.title });
-    await waitFor(() => expect(jsonLd()).toHaveLength(1));
+    await waitFor(() => expect(jsonLd()).toEqual([]));
+    expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]);
 
     await user.click(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('link', { name: 'Careers' }));
     await screen.findByRole('heading', { level: 1, name: /Work on technology/ });
@@ -192,13 +201,13 @@ describe('C4 — Job lifecycle in the browser (Doc 16 sections 121-141)', () => 
     expect(robots()).toEqual([]);
   });
 
-  it('Job Detail -> Apply by the Apply action: JobPosting and canonical removed, "noindex, follow" set', async () => {
+  it('Job Detail -> Apply by the Apply action: canonical removed, "noindex, follow" set, no JobPosting', async () => {
     production();
     const job = testJob();
     installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
     const user = userEvent.setup();
     renderRoute(`/careers/${job.slug}`);
-    await waitFor(() => expect(jsonLd()).toHaveLength(1));
+    await waitFor(() => expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]));
     await user.click(screen.getAllByRole('link', { name: 'Apply for This Role' })[0]);
     await waitFor(() => expect(document.title).toBe(`Apply for ${job.title} | Valida`));
     expect(jsonLd()).toEqual([]);
@@ -215,16 +224,16 @@ describe('C4 — the browser adopts the head the server already wrote', () => {
     const serverHead = describeHead(jobDetailHead(job), resolveSeoConfig({ siteUrl: SITE, allowIndexing: 'true' }));
     document.title = serverHead.title;
     document.head.insertAdjacentHTML('beforeend', renderHeadTags(serverHead));
-    expect(jsonLd()).toHaveLength(1);
+    expect(serverHead.jsonLd).toBeNull();
+    expect(canonical()).toHaveLength(1);
 
     installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
     renderRoute(`/careers/${job.slug}`);
     await screen.findByRole('heading', { level: 1, name: job.title });
-    await waitFor(() => expect(jsonLd()).toHaveLength(1));
-    expect(q('meta[name="description"]')).toHaveLength(1);
+    await waitFor(() => expect(q('meta[name="description"]')).toHaveLength(1));
     expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]);
     expect(openGraph()).toHaveLength(5);
     expect(new Set(openGraph().map(([property]) => property)).size).toBe(5);
-    expect(jsonLd()[0]).toEqual(serverHead.jsonLd);
+    expect(jsonLd()).toEqual([]);
   });
 });

@@ -15,12 +15,14 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/valida-app-icon-180.png" />
     <meta name="theme-color" content="#05070a" />
     <!--
-      Per-route titles are set by the shared PageMeta helper using canonical
-      Document 06 copy. Descriptions, canonical URLs and Open Graph tags are
-      page-content concerns owned by A4 and need the production domain, which
-      is still AWAITING INPUT (Document 14).
+      Per-route metadata (title, description, robots, canonical, Open Graph,
+      JobPosting) is described once, in src/seo/head.js. The document server
+      (frontend/server/) writes it into this file's head for the initial HTML,
+      in place of the title below and the valida:head marker; in the browser
+      the shared PageMeta helper keeps it in step with the mounted route.
     -->
     <title>Valida</title>
+    <!--valida:head-->
   </head>
   <body>
     <div id="root"></div>

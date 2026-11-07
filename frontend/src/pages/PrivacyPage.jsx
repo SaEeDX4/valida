@@ -6,8 +6,8 @@ import Prose, {
   ProseParagraph,
 } from '../components/content/Prose/Prose.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
+import { STATIC_HEADS } from '../seo/routeHeads.js';
 import {
-  PRIVACY_META,
   PRIVACY_HEADING,
   PRIVACY_INTRO,
   PRIVACY_SECTIONS,
@@ -30,7 +30,7 @@ import styles from './LegalDocument.module.css';
 export default function PrivacyPage() {
   return (
     <>
-      <PageMeta title={PRIVACY_META.title} description={PRIVACY_META.description} />
+      <PageMeta {...STATIC_HEADS.PRIVACY} />
       <Section spacing="lg">
         <Container width="standard">
           <Prose>

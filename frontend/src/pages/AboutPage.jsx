@@ -3,9 +3,9 @@ import Container from '../components/layout/Container/Container.jsx';
 import Section, { SectionEyebrow, SectionHeader } from '../components/layout/Section/Section.jsx';
 import Button from '../components/ui/Button/Button.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
+import { STATIC_HEADS } from '../seo/routeHeads.js';
 import { ROUTES } from '../routes/paths.js';
 import {
-  ABOUT_META,
   ABOUT_HERO,
   ABOUT_SECTIONS,
   ABOUT_PRINCIPLES,
@@ -35,7 +35,7 @@ import styles from './AboutPage.module.css';
 export default function AboutPage() {
   return (
     <>
-      <PageMeta title={ABOUT_META.title} description={ABOUT_META.description} />
+      <PageMeta {...STATIC_HEADS.ABOUT} />
 
       {/* 1 — PAGE HERO */}
       <section className={styles.hero} aria-labelledby="about-hero-heading">

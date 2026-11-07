@@ -1,3 +1,5 @@
+import { resolveSeoConfig } from '../seo/siteConfig.js';
+
 /**
  * Browser-safe frontend configuration.
  *
@@ -25,14 +27,32 @@ export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '')
   .replace(/\/api\/v\d+$/, '');
 
 /**
- * Public site origin. RESERVED — currently unused.
- *
- * Intended for canonical URLs and Open Graph metadata in Release C, once the
- * production hostname exists. Release A deliberately emits no canonical URL:
- * without a real host, any value would point crawlers at a domain that does
- * not resolve. No production hostname is fabricated here.
+ * Public site origin as configured (trailing slashes removed). Kept for
+ * reference; the SEO code reads it through getSeoConfig() below, which also
+ * validates it.
  */
 export const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL ?? '').replace(/\/+$/, '');
+
+/**
+ * SEO configuration of this build (C4): the canonical origin and whether the
+ * build may be indexed. See src/seo/siteConfig.js.
+ *
+ *   VITE_PUBLIC_SITE_URL  the ONE canonical https:// origin (Doc 14 section 23).
+ *                         Without a valid value no canonical URL, og:url or
+ *                         JobPosting is emitted — nothing is fabricated.
+ *   VITE_ALLOW_INDEXING   'true' only for the production build. Unset or
+ *                         'false' (the default) is a review build: every page is
+ *                         "noindex, nofollow" (Doc 16 section 82, SEO-020).
+ *
+ * Read on each call, not captured at import: Vite replaces these expressions
+ * with literals in a build, and tests can change them with vi.stubEnv.
+ */
+export function getSeoConfig() {
+  return resolveSeoConfig({
+    siteUrl: import.meta.env.VITE_PUBLIC_SITE_URL,
+    allowIndexing: import.meta.env.VITE_ALLOW_INDEXING,
+  });
+}
 
 /**
  * Controlled development fixtures (A5 QA only).

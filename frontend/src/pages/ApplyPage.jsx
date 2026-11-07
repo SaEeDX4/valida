@@ -27,11 +27,11 @@ import resolveJobMarketPresentation, {
 } from '../features/jobs/utils/resolveJobMarketPresentation.js';
 import useActiveRegion from '../features/jobs/hooks/useActiveRegion.js';
 import { ROUTES, jobRoute } from '../routes/paths.js';
-import { APPLY, applyTitle, applyHeading, backToRoleLabel, successBody } from './ApplyPage.content.js';
+import { APPLY, applyHeading, backToRoleLabel, successBody } from './ApplyPage.content.js';
 import { JOB_DETAIL } from './JobDetailPage.content.js';
-
-/** Apply is never indexable, in any state (Doc 16 policy). */
-const APPLY_ROBOTS = 'noindex, follow';
+// Apply is never indexable, in any state, and never carries JobPosting
+// (Doc 16 sections 79 and 125): both heads are "noindex, follow".
+import { APPLY_PENDING_HEAD, applyHead } from '../seo/routeHeads.js';
 import styles from './ApplyPage.module.css';
 
 /**
@@ -208,7 +208,7 @@ function ApplyFlow({ jobSlug }) {
           and an in-app navigation would keep the previous route's metadata
           until the Job resolved.
         */}
-        <PageMeta title="Apply | Valida" robots={APPLY_ROBOTS} />
+        <PageMeta {...APPLY_PENDING_HEAD} />
         <Section spacing="lg">
           <Container width="standard">
             <StatusMessage visible={false}>{APPLY.loadingStatus}</StatusMessage>
@@ -236,7 +236,7 @@ function ApplyFlow({ jobSlug }) {
   if (jobNotFound) {
     return (
       <>
-        <PageMeta title="Apply | Valida" robots={APPLY_ROBOTS} />
+        <PageMeta {...APPLY_PENDING_HEAD} />
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-unavailable">
@@ -257,7 +257,7 @@ function ApplyFlow({ jobSlug }) {
   if (jobStatus === RESOURCE_STATUS.ERROR || !job) {
     return (
       <>
-        <PageMeta title="Apply | Valida" robots={APPLY_ROBOTS} />
+        <PageMeta {...APPLY_PENDING_HEAD} />
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-job-error">
@@ -282,7 +282,7 @@ function ApplyFlow({ jobSlug }) {
   if (submission.status === SUBMIT_STATUS.SUCCESS) {
     return (
       <>
-        <PageMeta title={applyTitle(job.title)} robots={APPLY_ROBOTS} />
+        <PageMeta {...applyHead(job)} />
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-success">
@@ -315,7 +315,7 @@ function ApplyFlow({ jobSlug }) {
   if (submission.status === SUBMIT_STATUS.JOB_UNAVAILABLE) {
     return (
       <>
-        <PageMeta title={applyTitle(job.title)} robots={APPLY_ROBOTS} />
+        <PageMeta {...applyHead(job)} />
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-unavailable">
@@ -335,7 +335,7 @@ function ApplyFlow({ jobSlug }) {
   if (submission.status === SUBMIT_STATUS.JOB_CLOSED) {
     return (
       <>
-        <PageMeta title={applyTitle(job.title)} robots={APPLY_ROBOTS} />
+        <PageMeta {...applyHead(job)} />
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-closed-during">
@@ -355,7 +355,7 @@ function ApplyFlow({ jobSlug }) {
   if (!isJobOpen(job) || !applicationForm) {
     return (
       <>
-        <PageMeta title={applyTitle(job.title)} robots={APPLY_ROBOTS} />
+        <PageMeta {...applyHead(job)} />
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-not-accepting">
@@ -402,11 +402,8 @@ function ApplyFlow({ jobSlug }) {
 
   return (
     <>
-      <PageMeta
-        title={applyTitle(job.title)}
-        /* An application form has no search value and must not be indexed. */
-        robots={APPLY_ROBOTS}
-      />
+      {/* An application form has no search value and must not be indexed. */}
+      <PageMeta {...applyHead(job)} />
       <div className={styles.page}>
         <Container width="standard">
           <p className={styles.backRow}>

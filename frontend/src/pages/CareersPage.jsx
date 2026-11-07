@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState/EmptyState.jsx';
 import ErrorState from '../components/ui/ErrorState/ErrorState.jsx';
 import StatusMessage from '../components/ui/StatusMessage/StatusMessage.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
+import { STATIC_HEADS } from '../seo/routeHeads.js';
 import JobRow from '../features/jobs/components/JobRow.jsx';
 import RegionSelector from '../features/jobs/components/RegionSelector.jsx';
 import useActiveRegion from '../features/jobs/hooks/useActiveRegion.js';
@@ -16,7 +17,7 @@ import { getJobsService } from '../features/jobs/api/jobsService.js';
 import useAsyncResource, { RESOURCE_STATUS } from '../features/jobs/hooks/useAsyncResource.js';
 import { ROUTES, jobRoute } from '../routes/paths.js';
 import {
-  CAREERS_META, CAREERS_HERO, WORK_CONTEXT, OPEN_ROLES, RECRUITMENT_PROCESS, PRIVACY_NOTE,
+  CAREERS_HERO, WORK_CONTEXT, OPEN_ROLES, RECRUITMENT_PROCESS, PRIVACY_NOTE,
 } from './CareersPage.content.js';
 import styles from './CareersPage.module.css';
 
@@ -48,7 +49,7 @@ export default function CareersPage() {
 
   return (
     <>
-      <PageMeta title={CAREERS_META.title} description={CAREERS_META.description} />
+      <PageMeta {...STATIC_HEADS.CAREERS} />
 
       <section className={styles.hero} aria-labelledby="careers-hero-heading">
         <Container width="wide">

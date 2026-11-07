@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
-
-/** Every route renders exactly one PageMeta, so this selector is unambiguous. */
-const DESCRIPTION_SELECTOR = 'meta[name="description"]';
-const ROBOTS_SELECTOR = 'meta[name="robots"]';
+import { getSeoConfig } from '../../config/env.js';
+import { HEAD_SELECTORS, describeHead, serializeJsonLd } from '../../seo/head.js';
 
 /**
  * Sets per-route document metadata.
@@ -14,84 +12,122 @@ const ROBOTS_SELECTOR = 'meta[name="robots"]';
  * Centralised on purpose (Doc 08 section 126): pages never touch document.head
  * directly, so head handling has exactly one owner.
  *
+ * C4 — what the head holds is decided by describeHead() (src/seo/head.js), the
+ * SAME function the document server uses for the initial HTML
+ * (frontend/server/). So a page loaded directly, refreshed or reached by
+ * client navigation settles on identical metadata:
+ *   title, description, robots           as before (A4-A6, C2);
+ *   canonical (link rel="canonical")      indexable pages, canonical origin set;
+ *   Open Graph (og:type, og:site_name,    the same pages;
+ *     og:title, og:description, og:url)
+ *   JobPosting JSON-LD                    an open Job Detail page only.
+ * A non-indexed (review) build gives every page "noindex, nofollow" and none
+ * of the canonical, Open Graph or JobPosting tags (Doc 16 section 82).
+ *
  * OWNERSHIP MODEL
- * The route that is currently mounted owns the description. The effect below
- * therefore RECONCILES rather than only appending: given a description it
- * creates or reuses a single tag, and given none it removes any tag left by a
- * previous route.
+ * The route that is currently mounted owns every one of these tags. Each
+ * effect below RECONCILES rather than only appending: given a value it creates
+ * or reuses a single tag — including one the server already put in the
+ * initial HTML — and given none it removes any tag left by a previous route.
+ * So navigating away from an open Job removes its JobPosting (Doc 16 section
+ * 125: JobPosting only on the individual Job Detail page).
  *
  * This is deliberately not done in an unmount cleanup. During an SPA
  * transition the incoming page can mount before the outgoing one finishes
  * cleaning up, so a cleanup-based removal would depend on effect ordering and
- * could delete the incoming page's description. Reconciling from the mounted
- * route removes that timing dependency entirely: whichever route is on screen
- * is the one that decides.
- *
- * Without this, navigating from a page that has a description (Home) to one
- * that does not (404, or the Careers placeholder) left the previous page's
- * description attached to the new page.
- *
- * DELIBERATELY NOT IMPLEMENTED IN RELEASE A
- * Canonical URL, og:url and og:image need the production hostname and an
- * approved social asset. Neither exists yet (Document 14 — AWAITING INPUT), so
- * fabricating a domain here would publish a URL that does not resolve. A6
- * reviewed this and kept them out; its metadata suite asserts that no
- * canonical link or og:url is emitted. They belong to Release C, once the host
- * is chosen — the component's signature can take them without restructuring.
+ * could delete the incoming page's tags. Reconciling from the mounted route
+ * removes that timing dependency entirely: whichever route is on screen is the
+ * one that decides.
  */
-export default function PageMeta({ title, description, robots }) {
-  useEffect(() => {
-    if (title) document.title = title;
-  }, [title]);
+export default function PageMeta({ title, description, robots, path, jobPosting }) {
+  const head = describeHead({ title, description, robots, path, jobPosting }, getSeoConfig());
+  const openGraphKey = JSON.stringify(head.openGraph);
+  const jsonLdText = head.jsonLd ? serializeJsonLd(head.jsonLd) : null;
 
   useEffect(() => {
-    const existing = [...document.querySelectorAll(DESCRIPTION_SELECTOR)];
+    if (head.title) document.title = head.title;
+  }, [head.title]);
 
-    if (!description) {
-      // This route publishes no description, so no description may remain.
-      existing.forEach((tag) => tag.remove());
-      return;
-    }
-
-    // Collapse any duplicates to a single authoritative tag before writing.
-    existing.slice(1).forEach((tag) => tag.remove());
-
-    let tag = existing[0];
-    if (!tag) {
-      tag = document.createElement('meta');
-      tag.setAttribute('name', 'description');
-      document.head.appendChild(tag);
-    }
-    tag.setAttribute('content', description);
-  }, [description]);
+  useEffect(() => {
+    reconcileSingle(HEAD_SELECTORS.description, head.description, () => createMeta('name', 'description'), (tag, value) =>
+      tag.setAttribute('content', value),
+    );
+  }, [head.description]);
 
   /*
    * Robots directive, owned by the mounted route exactly like the description.
    *
-   * A5 needs "noindex, follow" for Apply — an application form has no search
-   * value and must not be indexed — and for a retained closed role, which stays
-   * reachable at its stable URL but is no longer an opportunity. Routes that
-   * pass nothing must have any previous directive removed, or a stale noindex
-   * would silently suppress an indexable page.
-   *
-   * This is the narrow extension A5 requires for state correctness. Full
-   * production SEO infrastructure remains Release C4.
+   * "noindex, follow" for Apply, a retained closed role, 404 and error states;
+   * none for an indexable page — routes that pass nothing must have any
+   * previous directive removed, or a stale noindex would silently suppress an
+   * indexable page. In a review build: "noindex, nofollow" everywhere.
    */
   useEffect(() => {
-    const existing = [...document.querySelectorAll(ROBOTS_SELECTOR)];
-    if (!robots) {
-      existing.forEach((tag) => tag.remove());
-      return;
+    reconcileSingle(HEAD_SELECTORS.robots, head.robots, () => createMeta('name', 'robots'), (tag, value) =>
+      tag.setAttribute('content', value),
+    );
+  }, [head.robots]);
+
+  useEffect(() => {
+    reconcileSingle(HEAD_SELECTORS.canonical, head.canonical, () => {
+      const link = document.createElement('link');
+      link.setAttribute('rel', 'canonical');
+      return link;
+    }, (tag, value) => tag.setAttribute('href', value));
+  }, [head.canonical]);
+
+  useEffect(() => {
+    const wanted = new Map(JSON.parse(openGraphKey));
+    const kept = new Set();
+    for (const tag of [...document.querySelectorAll(HEAD_SELECTORS.openGraph)]) {
+      const property = tag.getAttribute('property');
+      if (!wanted.has(property) || kept.has(property)) {
+        tag.remove();
+        continue;
+      }
+      kept.add(property);
+      tag.setAttribute('content', wanted.get(property));
     }
-    existing.slice(1).forEach((tag) => tag.remove());
-    let tag = existing[0];
-    if (!tag) {
-      tag = document.createElement('meta');
-      tag.setAttribute('name', 'robots');
+    for (const [property, content] of wanted) {
+      if (kept.has(property)) continue;
+      const tag = createMeta('property', property);
+      tag.setAttribute('content', content);
       document.head.appendChild(tag);
     }
-    tag.setAttribute('content', robots);
-  }, [robots]);
+  }, [openGraphKey]);
+
+  useEffect(() => {
+    reconcileSingle(HEAD_SELECTORS.jsonLd, jsonLdText, () => {
+      const script = document.createElement('script');
+      script.setAttribute('type', 'application/ld+json');
+      script.setAttribute('data-valida-structured-data', 'JobPosting');
+      return script;
+    }, (tag, value) => {
+      if (tag.textContent !== value) tag.textContent = value;
+    });
+  }, [jsonLdText]);
 
   return null;
+}
+
+/** One tag per selector: removed when there is no value, otherwise collapsed to one and updated. */
+function reconcileSingle(selector, value, create, update) {
+  const existing = [...document.querySelectorAll(selector)];
+  if (!value) {
+    existing.forEach((tag) => tag.remove());
+    return;
+  }
+  existing.slice(1).forEach((tag) => tag.remove());
+  let tag = existing[0];
+  if (!tag) {
+    tag = create();
+    document.head.appendChild(tag);
+  }
+  update(tag, value);
+}
+
+function createMeta(attribute, name) {
+  const tag = document.createElement('meta');
+  tag.setAttribute(attribute, name);
+  return tag;
 }

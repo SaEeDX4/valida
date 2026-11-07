@@ -17,7 +17,8 @@ import resolveJobMarketPresentation, {
 import RegionSelector from '../features/jobs/components/RegionSelector.jsx';
 import useActiveRegion from '../features/jobs/hooks/useActiveRegion.js';
 import { ROUTES, applyRoute } from '../routes/paths.js';
-import { JOB_DETAIL, jobDetailTitle, jobDetailDescription } from './JobDetailPage.content.js';
+import { JOB_DETAIL } from './JobDetailPage.content.js';
+import { JOB_ERROR_HEAD, JOB_LOADING_HEAD, NOT_FOUND_HEAD, jobDetailHead } from '../seo/routeHeads.js';
 import styles from './JobDetailPage.module.css';
 
 /**
@@ -67,7 +68,7 @@ export default function JobDetailPage() {
   if (status === RESOURCE_STATUS.LOADING) {
     return (
       <>
-        <PageMeta title="Careers at Valida" />
+        <PageMeta {...JOB_LOADING_HEAD} />
         <Section spacing="lg">
           <Container width="wide">
             <StatusMessage visible={false}>{JOB_DETAIL.loadingStatus}</StatusMessage>
@@ -87,7 +88,7 @@ export default function JobDetailPage() {
   if (status === RESOURCE_STATUS.ERROR && (error?.status === 404 || error?.code === 'JOB_NOT_FOUND')) {
     return (
       <>
-        <PageMeta title="Page Not Found | Valida" robots="noindex, follow" />
+        <PageMeta {...NOT_FOUND_HEAD} />
         <Section spacing="lg">
           <Container width="wide">
             <div className={styles.stateBlock} data-testid="job-unavailable">
@@ -111,7 +112,7 @@ export default function JobDetailPage() {
   if (status === RESOURCE_STATUS.ERROR || !job) {
     return (
       <>
-        <PageMeta title="Careers at Valida" robots="noindex, follow" />
+        <PageMeta {...JOB_ERROR_HEAD} />
         <Section spacing="lg">
           <Container width="wide">
             <div className={styles.stateBlock} data-testid="job-error">
@@ -148,13 +149,12 @@ export default function JobDetailPage() {
 
   return (
     <>
-      <PageMeta
-        title={jobDetailTitle(job.title)}
-        description={jobDetailDescription(job.title)}
-        // A retained closed role stays reachable at its stable URL but should
-        // not be indexed as an opportunity (Doc 16 policy).
-        robots={closed ? 'noindex, follow' : undefined}
-      />
+      {/*
+        Open: indexable, self-canonical, with JobPosting built from this same
+        DTO. Closed: still reachable at its stable URL, "noindex, follow", no
+        JobPosting (Doc 16 sections 121-125, 140). See src/seo/routeHeads.js.
+      */}
+      <PageMeta {...jobDetailHead(job)} />
 
       <Container width="wide">{breadcrumbs(job.title)}</Container>
 

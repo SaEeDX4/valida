@@ -22,9 +22,15 @@ export function setReducedMotion(matches) {
   });
 }
 
-setReducedMotion(false);
-
-afterEach(() => {
-  cleanup();
+/*
+ * C4: the server and pure-SEO suites run in the node environment, where there
+ * is no window and nothing to render or clean up.
+ */
+if (typeof window !== 'undefined') {
   setReducedMotion(false);
-});
+
+  afterEach(() => {
+    cleanup();
+    setReducedMotion(false);
+  });
+}

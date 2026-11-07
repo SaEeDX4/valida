@@ -4,6 +4,7 @@ import Section, { SectionEyebrow } from '../components/layout/Section/Section.js
 import Button from '../components/ui/Button/Button.jsx';
 import SecurityField from '../components/graphics/SecurityField/SecurityField.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
+import { NOT_FOUND_HEAD } from '../seo/routeHeads.js';
 import { ROUTES } from '../routes/paths.js';
 import styles from './NotFoundPage.module.css';
 
@@ -41,7 +42,7 @@ export default function NotFoundPage() {
         This matches the Job Detail unavailable state, which already carried
         the same directive — the application-level 404 did not.
       */}
-      <PageMeta title="Page Not Found | Valida" robots="noindex, follow" />
+      <PageMeta {...NOT_FOUND_HEAD} />
       <Section spacing="lg">
         <Container width="standard">
           <div className={styles.layout}>

@@ -6,8 +6,8 @@ import Prose, {
   ProseFacts,
 } from '../components/content/Prose/Prose.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
+import { STATIC_HEADS } from '../seo/routeHeads.js';
 import {
-  LEGAL_META,
   LEGAL_HEADING,
   COMPANY_FACTS,
   LEGAL_SECTIONS,
@@ -32,7 +32,7 @@ import styles from './LegalDocument.module.css';
 export default function LegalPage() {
   return (
     <>
-      <PageMeta title={LEGAL_META.title} description={LEGAL_META.description} />
+      <PageMeta {...STATIC_HEADS.LEGAL} />
       <Section spacing="lg">
         <Container width="standard">
           <Prose>

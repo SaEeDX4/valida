@@ -4,9 +4,9 @@ import Section, { SectionEyebrow, SectionHeader } from '../components/layout/Sec
 import Button from '../components/ui/Button/Button.jsx';
 import SecurityField from '../components/graphics/SecurityField/SecurityField.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
+import { STATIC_HEADS } from '../seo/routeHeads.js';
 import { ROUTES } from '../routes/paths.js';
 import {
-  HOME_META,
   HERO,
   POSITIONING,
   CAPABILITIES,
@@ -40,7 +40,7 @@ import styles from './HomePage.module.css';
 export default function HomePage() {
   return (
     <>
-      <PageMeta title={HOME_META.title} description={HOME_META.description} />
+      <PageMeta {...STATIC_HEADS.HOME} />
 
       {/* 1 — HERO */}
       <section className={styles.hero} aria-labelledby="home-hero-heading">

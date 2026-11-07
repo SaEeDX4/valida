@@ -502,6 +502,14 @@ Bodies are **never** logged — a resume, a name and an email pass through them.
 Query strings are stripped, so an accidental `?email=…` cannot reach a log
 file. Authorization, cookie and API-key headers are redacted defensively.
 
+A path that **no route matched** is not logged raw (C3). Anyone can put
+anything in a URL, including a private storage key. Such a request gets the
+path's shape instead: the API's route words are kept, and every other segment
+becomes `{segment}`, for example `/api/v1/jobs/{segment}/applications`. This
+covers every 404, and every request answered before routing (a rate limit,
+CORS or body parsing). `req.routeMatched` says which form a line holds. A path
+that a route matched is logged as before.
+
 Error text is never logged either. `message`, `stack` and `cause` carry
 connection strings, credentials, filesystem paths and request-body fragments,
 and `name`/`code` are ordinary writable properties that a library could set to

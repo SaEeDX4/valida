@@ -13,15 +13,15 @@ One repository. One React frontend. One Express backend. One MongoDB database
 | Item      | Status                                                               |
 | --------- | -------------------------------------------------------------------- |
 | Release   | C — Production Public Launch (Release A approved; Release B complete: B1–B5 approved and merged, B6 and B7 owner-accepted) |
-| Milestone | C3 — Real Apply Integration: **submitted for review, not accepted** (branch `c3-work`, local only) |
-| Frontend  | Release A public frontend, connected to the real backend: Careers (`/careers`) reads `GET /api/v1/jobs` (C1), Job Detail (`/careers/<slug>`) reads `GET /api/v1/jobs/<slug>` (C2), and Apply (`/careers/<slug>/apply`) submits to `POST /api/v1/jobs/<slug>/applications` (C3, under review). |
+| Milestone | C4 — SEO / Privacy / Legal Production Integration: **implemented locally and submitted for review, not accepted** (branch `c4-work`, local only). C3 is owner-accepted at `f07ea35`. |
+| Frontend  | Release A public frontend, connected to the real backend: Careers (`/careers`) reads `GET /api/v1/jobs` (C1), Job Detail (`/careers/<slug>`) reads `GET /api/v1/jobs/<slug>` (C2), and Apply (`/careers/<slug>/apply`) submits to `POST /api/v1/jobs/<slug>/applications` (C3). C4, under review, adds the SEO layer: canonical URLs, Open Graph, JobPosting, a sitemap and robots.txt, a review-build `noindex, nofollow` default, and a reference document server that sends each public route with its real HTTP status and its metadata in the initial HTML ([`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md)). |
 | Backend   | Release B: the Express foundation, MongoDB models and indexes, the public Jobs API and Job provisioning, private resume storage and validation, the Apply endpoint, notifications with the SMTP adapter for the selected provider (Bluehost Professional Email / Titan), and the B7 security, failure and QA gate with recipient suppression. Production candidate acknowledgements stay **refused at start-up** (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`). Live Titan evidence is in [`docs/qa/B6_EVIDENCE_ADDENDUM.md`](docs/qa/B6_EVIDENCE_ADDENDUM.md). The owner decided on 2026-10-25 to keep Titan and make a monthly offline email backup ([`docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md`](docs/review/OWNER_DECISION_2026-10-25_EMAIL_BACKUP.md)); the backup is proposed, not yet set up. Automated messages have no Sent copy; a copy design is proposed ([`docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md`](docs/architecture/AUTOMATED_MESSAGE_COPY_DESIGN.md), not implemented). See [`backend/README.md`](backend/README.md). |
 | Database  | MongoDB (B2). The real initial role is provisioned only as a DRAFT — its content is AWAITING INPUT. |
 
 Four states are kept apart below, and one does not imply another:
 
 - **Accepted** — the owner's acceptance of the milestone at the named commit.
-- **Branch-published** — the milestone branch is on GitHub (`SaEeDX4/valida`). Remote branch heads were last observed on **2026-11-06, 23:06–23:08 UTC** (read-only).
+- **Branch-published** — the milestone branch is on GitHub (`SaEeDX4/valida`). Remote branch heads were last observed on **2026-11-07 at 05:59 UTC** (read-only): `main` `ec15048`, `b7-work` `eabd604`, and no `c1-work`, `c2-work`, `c3-work` or `c4-work`.
 - **Merged** — contained in `main`. `main` is at `ec15048` (B5).
 - **Deployed** — running in production. Nothing is deployed; deployment is C6.
 
@@ -34,15 +34,17 @@ Four states are kept apart below, and one does not imply another:
 | B4 — Private resume storage & validation | **Approved and merged** (final-r3; Windows Node 24: 1504 offline tests passed + 5 skipped, B4 acceptance 580 passed + 5 skipped, 89 real-MongoDB tests; audit: 0 vulnerabilities) | yes — `b4-work` | yes | no |
 | B5 — Application submission workflow | **Approved and merged** (final-r2; Windows Node 24.21.0: 1743 offline tests passed + 5 skipped, B5 acceptance 232/232, 110 real-MongoDB tests; audit: 0 vulnerabilities) | yes (`b5-work` = `main`) | yes — `ec15048` | no |
 | B6 — Notification integration | **Owner-accepted** — B6 r12, OD-2026-11-04-01, at `6173eea` ([`docs/review/B6_ACCEPTANCE_ADDENDUM_2026-11-04.md`](docs/review/B6_ACCEPTANCE_ADDENDUM_2026-11-04.md), with its four accepted NOT TESTED limitations) | yes — `b6-work` at `2b00a62` (the acceptance addendum on top of `6173eea`) | no | no |
-| B7 — Backend security, failure & QA gate | **Owner-accepted** — at `eabd604`, the `b7-work` head that C1 was built on (the owner's C3 instruction preserves "accepted B7"; the suppression design was approved in [OD-2026-11-04-02](docs/review/OWNER_DECISION_2026-11-04-02_B7_SUPPRESSION_APPROVAL.md); no separate acceptance record is in this repository) | yes — `b7-work` at `eabd604` | no | no |
+| B7 — Backend security, failure & QA gate | **Owner-accepted** at `eabd604`, the `b7-work` head that C1 was built on (stated explicitly in the owner's C4 instruction: "B7 — accepted and published: eabd604"; the suppression design was approved in [OD-2026-11-04-02](docs/review/OWNER_DECISION_2026-11-04-02_B7_SUPPRESSION_APPROVAL.md)) | yes — `b7-work` at `eabd604` | no | no |
 | C1 — Frontend ↔ Jobs API integration | **Owner-accepted** at `24b92a7` (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) | no — `c1-work` is local only | no | no |
 | C2 — Real Job Detail | **Owner-accepted** at `46818bb`, including the focus correction (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) | no — `c2-work` is local only | no | no |
-| C3 — Real Apply Integration | **Submitted for review — not accepted** (the critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md)) | no — `c3-work` is local only | no | no |
+| C3 — Real Apply Integration | **Owner-accepted** at `f07ea35` (r3; recorded in the owner's C4 instruction, with the accepted bundle's SHA-256 `0b7293bd…369b`). The critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md) | no — `c3-work` is local only. A publication-readiness audit of `eabd604..f07ea35` (18 commits) and a branch-creation plan are prepared for the owner; nothing has been pushed | no | no |
+| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted** (local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md)) | no — `c4-work` is local only | no | no |
 | Phase 1 | **Not verified** — only after Release C (C7) | — | — | — |
 
 The C1, C2 and C3 commits descend from `eabd604`, so `c3-work` holds the
-whole accepted line B7 → C1 → C2 followed by C3. None of B6, B7, C1, C2 or C3
-is in `main`.
+whole accepted line B7 → C1 → C2 → C3. `c4-work` starts at the accepted C3
+commit `f07ea35` and adds the C4 commits on top. None of B6, B7, C1, C2, C3 or
+C4 is in `main`.
 
 ### Repository history and publication (standing requirement)
 
@@ -301,6 +303,7 @@ when you finish.
 | `npm run dev`        | Vite dev server on <http://localhost:5173>              |
 | `npm run build`      | Production build into `frontend/dist/`                  |
 | `npm run preview`    | Serve the built output on <http://localhost:4173>       |
+| `npm run serve:documents -- --api-origin http://127.0.0.1:4000` | Serve the built output with the C4 document behaviour (real statuses, metadata in the initial HTML, `/sitemap.xml`, `/robots.txt`) on <http://127.0.0.1:4173> |
 | `npm test`           | Run the Vitest suite once (components + axe + contrast) |
 | `npm run test:watch` | Run the suite in watch mode                             |
 | `npm run verify:budgets` | Measure `dist/` against the Doc 16 budgets, fixture isolation and third-party loading (run after `build`) |
@@ -318,7 +321,8 @@ when you finish.
 The frontend test stack (Vitest, React Testing Library, axe-core — Document 17)
 landed in A2. The backend's test, verification (`verify:b1`–`verify:b3`), index
 and Job provisioning commands are documented in
-[`backend/README.md`](backend/README.md). Playwright E2E arrives in Release C.
+[`backend/README.md`](backend/README.md). The browser E2E suites (C3 Apply,
+C4 SEO) are in [`e2e/README.md`](e2e/README.md).
 
 ---
 
@@ -332,7 +336,7 @@ Run every check. Each should complete without an error.
 cd frontend
 npm ci
 npm run verify:quality   # expect: ALL QUALITY BUDGET CHECKS PASSED,
-                         #         Test Files 38 passed, Tests 956 passed
+                         #         Test Files 41 passed, Tests 1057 passed
 ```
 
 `verify:budgets` measures the real production build. Legacy `.woff` font
@@ -433,17 +437,19 @@ and C.
 These are scheduled, not forgotten. Each is owned by a named milestone in
 `18_IMPLEMENTATION_ROADMAP.md`. (Release B is built: B1–B5 are approved and
 merged, and B6 and B7 are accepted and branch-published, not merged; see
-[`backend/README.md`](backend/README.md). C1 and C2 are accepted, and C3 is
-under review; see **Current state**.)
+[`backend/README.md`](backend/README.md). C1, C2 and C3 are accepted, and C4
+is under review; see **Current state**.)
 
 | Capability                                                                                                           | Milestone |
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
 | Monthly offline email backup (owner decision 2026-10-25; setup not yet verified); automated-message Sent-copy preservation (design proposed, not implemented); bounce processing beyond the manual procedure (the manual bounce procedures are approved: OD-2026-11-03-01) | Backup: owner's operational task; copy: gate G-COPY proposed for C6, awaiting the owner's decision; automated bounce processing: no decision (the manual procedure is approved) |
 | Production deployment, domain, HTTPS                                                                                 | C         |
-| Production SEO: canonical host, sitemap, robots.txt, JobPosting data (need the production domain and real Jobs)      | C         |
+| Production SEO on the real host: the canonical host (apex or www), HTTPS, compression, the chosen rendering mechanism, social previews, JobPosting validation with real Jobs (the mechanism itself is built in C4) | C6, D     |
 
 Awaiting input rather than scheduled: the production API origin, real approved
-Job content and per-market compensation, a corporate contact mechanism, a
+Job content and per-market compensation, a corporate contact mechanism (and a
+designated privacy contact), the canonical host (apex or www), an approved
+social card, approved Job Detail labels for the posting and closing dates, a
 smaller approved transparent logo export, the email-backup setup inputs (Outlook
 version, `shervin@` access, encryption, second device), the production private-storage provider (selected at
 deployment, C6) and a malware-scanning provider (needed before resume review,

@@ -126,3 +126,48 @@ Before C3 r2, the run directory was checked only lexically, and an existing one 
 All data is synthetic. Even so, treat the directory as **private review evidence**: never commit it, and delete it when it is no longer needed.
 
 The two per-run secrets, the SMTP test password and the suppression HMAC key, are generated in memory and passed through the environment. They are never written to disk.
+
+## C4 — SEO stack verification (`seo/c4-seo.e2e.js`)
+
+A second suite with its own configuration (`playwright.seo.config.js`), setup (`support/seoGlobalSetup.js`) and test directory (`seo/`). It never runs as part of `npm run test:e2e`, and the C3 cases never run inside it. It reuses the run-directory, process and loopback helpers above unchanged.
+
+**The stack:**
+- the **C4 document server**, `frontend/server/serve.mjs`, serving two production builds of the same commit:
+  - **indexed**: `VITE_ALLOW_INDEXING=true`, `VITE_PUBLIC_SITE_URL=https://cybervalida.com` — the intended domain, used as a **test value**;
+  - **review**: no SEO variables;
+- the real backend, with no mail provider and acknowledgements off;
+- a disposable MongoDB;
+- the synthetic C4 Jobs in `fixtures/seo-jobs/`, provisioned through the backend CLI.
+
+Everything listens on 127.0.0.1, and the setup checks each listening address. Ports: 4110 for the backend, 4193 for the indexed build, 4194 for the review build. They can be changed with `E2E_SEO_BACKEND_PORT`, `E2E_SEO_INDEXED_PORT` and `E2E_SEO_REVIEW_PORT`. Case C4-11 also uses 4195.
+
+| Case | What is observed |
+| --- | --- |
+| C4-01 | The initial HTML of every public route: status, title, description, robots, canonical, Open Graph, JobPosting, `X-Robots-Tag`, and the 301 redirects |
+| C4-02 | `/sitemap.xml` and `/robots.txt` against the live open Jobs; every asset the page loads is reachable and not disallowed |
+| C4-03 | Open Job, direct load. The JobPosting in the initial HTML is the one the browser settles on. It matches the visible facts and the API's dates |
+| C4-04 | Refresh: the same status and metadata |
+| C4-05 | Client navigation Home → Careers → Job → Careers → Back → Apply. The JobPosting exists only on the Job |
+| C4-06 | Retained closed Job: closed state, no Apply action, `noindex, follow`, no JobPosting |
+| C4-07 | Unknown route, unknown, Draft and Archived Job: a real 404 with the branded page (Doc 17 §214) |
+| C4-08 | Open hybrid Job: indexable and canonical, with the JobPosting withheld |
+| C4-09 | The backend CLI closes, then archives, a Job. Status, robots, JobPosting and sitemap change at once |
+| C4-10 | Review build: `noindex, nofollow` everywhere; no canonical, Open Graph, JobPosting or sitemap |
+| C4-11 | Jobs API unreachable (simulated): Job routes and the sitemap answer 503, never 404 |
+
+Run (PowerShell), after the one-time setup above:
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_seo"
+npm run test:e2e:seo
+Remove-Item Env:MONGODB_TEST_URI
+```
+
+**Output.** The run directory holds:
+- `output/cases/C4-*.json`;
+- `output/screenshots/`;
+- `logs/`: the set-up steps, both builds, the backend and both document servers;
+- `dist/` and `dist-review/`.
+
+**Not proven here.** The production host: HTTPS, the apex/www redirect, compression, the CDN, real crawlers and social previews, Search Console, and the Rich Results Test. These are C6 (see `docs/seo/C4_SEO_IMPLEMENTATION.md` §6).

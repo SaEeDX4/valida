@@ -35,7 +35,7 @@ const DURING = () => run().jobs['qa-e2e-close-during'];
 const DURING_CLOSED = () => run().jobs['qa-e2e-close-during.closed'];
 const APPLY_PATH = /\/api\/v1\/jobs\/[^/]+\/applications$/;
 const ALLOWED_FIELDS = ['fullName', 'email', 'phone', 'message', 'screeningAnswers', 'resume'];
-const seen = { candidates: [], keys: [], probePaths: [] };
+const seen = { candidates: [], keys: [], probes: [] };
 
 /**
  * Every Apply POST the page makes: headers, status, body, failure.
@@ -214,12 +214,15 @@ test('C3-01 QA-P1-E2E-001..004 — Home → Careers → Job → Apply → resume
   expect(isInside(realpathSync.native(REPO_ROOT), realpathSync.native(run().storageRoot))).toBe(false);
   const publicAttempts = [];
   for (const url of [`${FRONTEND_ORIGIN}/${application.resume.storageKey}`, `${BACKEND_ORIGIN}/${application.resume.storageKey}`, `${BACKEND_ORIGIN}/api/v1/${application.resume.storageKey}`]) {
-    seen.probePaths.push(new URL(url).pathname); // this suite's own probe: the backend access-logs its path (C3-09)
     const attempt = await fetch(url);
     const bytes = Buffer.from(await attempt.arrayBuffer());
     publicAttempts.push({ url: url.replace(application.resume.storageKey, '<storageKey>'), status: attempt.status, contentType: attempt.headers.get('content-type'), servedTheResume: bytes.equals(resumeBytes), startsWithPdfMagic: bytes.subarray(0, 4).toString('latin1') === '%PDF' });
+    // The backend's own answer carries its request id; C3-09 finds this probe's access-log line by it.
+    if (url.startsWith(BACKEND_ORIGIN)) seen.probes.push({ target: url.replace(application.resume.storageKey, '<storageKey>').replace(BACKEND_ORIGIN, ''), requestId: attempt.headers.get('x-request-id'), status: attempt.status });
   }
   expect(publicAttempts.every((attempt) => !attempt.servedTheResume && !attempt.startsWithPdfMagic)).toBe(true);
+  // Both backend probes refused: no public route serves a resume (Doc 09 section 204).
+  expect(seen.probes.map((probe) => probe.status)).toEqual([404, 404]);
 
   // ---- notification attempt and result, independently of the UI (Doc 17 section 207)
   const mail = await eventually(() => {
@@ -655,51 +658,63 @@ test('C3-08 B7 — the refusal is recorded as a suppression; the next acknowledg
 
 // =============================================================================
 test('C3-09 Doc 09 section 205, Doc 17 section 406 — the backend log holds no candidate data, key, storage key or secret', async () => {
-  // The backend access-logs every request path. C3-01 deliberately requested /<storageKey> and
-  // /api/v1/<storageKey> (both 404) to prove there is no public route, so exactly those access-log lines
-  // carry a key — put there by this suite, not by the application. They are excluded by path, and counted.
-  const lines = backendLog().split('\n');
-  const isProbe = (line) => {
-    try {
-      return seen.probePaths.includes(JSON.parse(line).req?.path);
-    } catch {
-      return false;
-    }
-  };
-  const probeLines = lines.filter(isProbe);
-  const log = lines.filter((line) => !isProbe(line)).join('\n');
+  // EVERY line of the backend log is scanned, the access-log lines of C3-01's two public-access probes
+  // included (C3 r2, GPT finding 3). Those probes requested /<storageKey> and /api/v1/<storageKey>; no route
+  // matched, so the access log records only the shape of each path, never the key.
+  const log = backendLog();
+  const lines = log.split('\n').filter(Boolean);
   const applications = [];
   for (const person of seen.candidates) applications.push(...(await applicationsFor(person.email)));
+  const storageKeys = applications.map((application) => application.resume.storageKey);
   const forbidden = [
     ...new Set([
       ...seen.candidates.flatMap((person) => [person.email, person.fullName, person.phone, person.message.split('\n')[0]]),
       ...seen.keys,
       ...seen.keys.map((key) => hashIdempotencyKey(key)),
-      ...applications.map((application) => application.resume.storageKey),
+      ...storageKeys,
+      // Each key's random segments too, so a key split across a path or re-encoded is still caught.
+      ...storageKeys.flatMap((key) => key.split('/').filter((segment) => /^[0-9a-f]{16,}$/i.test(segment))),
       ...applications.map((application) => application.resume.originalFilename),
       process.env.E2E_SMTP_PASSWORD,
       process.env.E2E_SUPPRESSION_HMAC_KEY,
       process.env.MONGODB_TEST_URI,
     ]),
   ].filter(Boolean);
+  const linesWithAValue = lines.filter((line) => forbidden.some((value) => line.includes(value)));
   const found = forbidden.filter((value) => log.includes(value));
+
+  // The probes' own lines: found by the request id each probe's response carried, one line each.
+  const accessLines = backendEvents((entry) => entry.req && entry.res);
+  const probeLines = seen.probes.map((probe) => {
+    const matching = accessLines.filter((entry) => entry.req.id === probe.requestId);
+    return { target: probe.target, requestId: probe.requestId, lines: matching.length, req: matching[0]?.req, statusCode: matching[0]?.res?.statusCode };
+  });
   const events = backendEvents((entry) => typeof entry.event === 'string');
   const counts = events.reduce((total, entry) => ({ ...total, [entry.event]: (total[entry.event] ?? 0) + 1 }), {});
 
   record('C3-09-log-privacy', {
-    observation: 'REAL (the whole backend log of this run)',
+    observation: 'REAL (every line of the backend log of this run, probe lines included)',
     requirement: 'Doc 09 sections 149-150, 205; Doc 13 sections 118-119, 281; Doc 17 section 406',
     logBytes: Buffer.byteLength(log),
-    excludedProbeLines: { count: probeLines.length, statuses: probeLines.map((line) => JSON.parse(line).res?.statusCode), reason: "this suite's own public-access probes of C3-01 (paths containing a storage key, answered 404)" },
+    linesScanned: lines.length,
+    linesExcluded: 0,
+    probeLines,
     valuesChecked: forbidden.length,
+    storageKeysChecked: storageKeys.length,
     valuesFound: found.length,
+    linesWithAValue: linesWithAValue.length,
     eventCounts: counts,
     applicationsReviewed: applications.length,
     candidates: seen.candidates.length,
     idempotencyKeys: seen.keys.length,
   });
   expect(found).toEqual([]);
-  // Exactly the two backend probes (the third C3-01 probe went to the preview server), both refused.
-  expect(probeLines.map((line) => JSON.parse(line).res?.statusCode)).toEqual([404, 404]);
+  expect(linesWithAValue).toEqual([]);
+  // Exactly the two backend probes (the third C3-01 probe went to the preview server): one line each,
+  // refused (404), no route matched, and only the path's shape recorded.
+  expect(probeLines.map(({ target, lines: count, statusCode, req }) => ({ target, count, statusCode, path: req?.path, routeMatched: req?.routeMatched }))).toEqual([
+    { target: '/<storageKey>', count: 1, statusCode: 404, path: '/{segment}/{segment}/{segment}', routeMatched: false },
+    { target: '/api/v1/<storageKey>', count: 1, statusCode: 404, path: '/api/v1/{segment}/{segment}/{segment}', routeMatched: false },
+  ]);
   expect(statSync(run().dirs.logs).isDirectory()).toBe(true);
 });

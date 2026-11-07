@@ -43,7 +43,14 @@ Acknowledgements are switched on **only inside this local run**:
 | C3-06 Apply open → the Job closes in the backend → submit → controlled rejection | 96, 208 | REAL (the Job is closed by the provisioning CLI) |
 | C3-07 Acknowledgement refused by the mail server: the Application stays accepted | 110 | REAL (the test server refuses one synthetic recipient) |
 | C3-08 That refusal recorded as a suppression; the next acknowledgement is suppressed with no SMTP | B7 gate | REAL (operator step by the suppression CLI) |
-| C3-09 The backend log holds no candidate data, key, storage key or secret | 406 | REAL |
+| C3-09 The backend log holds no candidate data, key, storage key or secret. Every line is scanned, including the two public-access probes; their lines are found by request id: 404, no route matched, path shape only | 406 | REAL |
+
+**C3-09, before and after C3 r2.**
+
+- **Before.** The backend access log wrote every request path raw. C3-01's probes of `/<storageKey>` and `/api/v1/<storageKey>` therefore put two storage keys into it. C3-09 excluded those two lines by path.
+- **After.** A path that no route matched is logged only by its shape (`backend/src/middleware/requestLogger.js`). C3-09 now scans every line for every forbidden value, with no exclusion. It also checks the two probe lines: one each, 404, `routeMatched: false`, and only the path's shape.
+
+The earlier run evidence is kept unchanged in the review package.
 
 ## Run it (Windows, PowerShell)
 

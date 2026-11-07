@@ -27,6 +27,8 @@ never evidence that the feature works.
 | [`seo/C4_SEO_IMPLEMENTATION.md`](seo/C4_SEO_IMPLEMENTATION.md) | How the public routes reach crawlers: configuration, statuses, heads, JobPosting mapping, sitemap and robots; what is deferred to the production host (C6); open owner decisions | C4 |
 | [`privacy/C4_PRIVACY_LEGAL_CHECK.md`](privacy/C4_PRIVACY_LEGAL_CHECK.md) | The Privacy Notice and Legal page compared with the implemented system, claim by claim (Doc 18 §166); open items for the publication gates | C4 |
 | [`review/OWNER_RECORD_2026-11-07_C3_ACCEPTANCE.md`](review/OWNER_RECORD_2026-11-07_C3_ACCEPTANCE.md) | The owner's acceptance of C3 at `f07ea35`, with the four states kept separate | C4 |
+| [`review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md`](review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md) | The authorised push of `f07ea35` to `refs/heads/c3-work`: pre-flight, push, post-flight, fresh-fetch verification | C4 |
+| [`review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md`](review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md) | OD-2026-11-07-01: the Job Detail labels "Date Posted" and "Applications Close", and how they are shown | C4 |
 
 The canonical documents 00-18 are maintained outside the repository. Copying
 them in is a documentation decision for Saeed, not an implementation

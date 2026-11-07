@@ -21,7 +21,7 @@ One repository. One React frontend. One Express backend. One MongoDB database
 Four states are kept apart below, and one does not imply another:
 
 - **Accepted** — the owner's acceptance of the milestone at the named commit.
-- **Branch-published** — the milestone branch is on GitHub (`SaEeDX4/valida`). Remote branch heads were last observed on **2026-11-07 at 05:59 UTC** (read-only): `main` `ec15048`, `b7-work` `eabd604`, and no `c1-work`, `c2-work`, `c3-work` or `c4-work`.
+- **Branch-published** — the milestone branch is on GitHub (`SaEeDX4/valida`). Remote branch heads were last observed on **2026-11-07 at 09:11 UTC** (read-only): `main` `ec15048`, `b7-work` `eabd604`, `c3-work` `f07ea35`, and no `c1-work`, `c2-work` or `c4-work`.
 - **Merged** — contained in `main`. `main` is at `ec15048` (B5).
 - **Deployed** — running in production. Nothing is deployed; deployment is C6.
 
@@ -35,14 +35,14 @@ Four states are kept apart below, and one does not imply another:
 | B5 — Application submission workflow | **Approved and merged** (final-r2; Windows Node 24.21.0: 1743 offline tests passed + 5 skipped, B5 acceptance 232/232, 110 real-MongoDB tests; audit: 0 vulnerabilities) | yes (`b5-work` = `main`) | yes — `ec15048` | no |
 | B6 — Notification integration | **Owner-accepted** — B6 r12, OD-2026-11-04-01, at `6173eea` ([`docs/review/B6_ACCEPTANCE_ADDENDUM_2026-11-04.md`](docs/review/B6_ACCEPTANCE_ADDENDUM_2026-11-04.md), with its four accepted NOT TESTED limitations) | yes — `b6-work` at `2b00a62` (the acceptance addendum on top of `6173eea`) | no | no |
 | B7 — Backend security, failure & QA gate | **Owner-accepted** at `eabd604`, the `b7-work` head that C1 was built on (stated explicitly in the owner's C4 instruction: "B7 — accepted and published: eabd604"; the suppression design was approved in [OD-2026-11-04-02](docs/review/OWNER_DECISION_2026-11-04-02_B7_SUPPRESSION_APPROVAL.md)) | yes — `b7-work` at `eabd604` | no | no |
-| C1 — Frontend ↔ Jobs API integration | **Owner-accepted** at `24b92a7` (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) | no — `c1-work` is local only | no | no |
-| C2 — Real Job Detail | **Owner-accepted** at `46818bb`, including the focus correction (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) | no — `c2-work` is local only | no | no |
-| C3 — Real Apply Integration | **Owner-accepted** at `f07ea35` (r3; recorded in the owner's C4 instruction, with the accepted bundle's SHA-256 `0b7293bd…369b`). The critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md) | no — `c3-work` is local only. A publication-readiness audit of `eabd604..f07ea35` (18 commits) and a branch-creation plan are prepared for the owner; nothing has been pushed | no | no |
-| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted** (local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md)) | no — `c4-work` is local only | no | no |
+| C1 — Frontend ↔ Jobs API integration | **Owner-accepted** at `24b92a7` (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) | yes — inside `c3-work` (no separate `c1-work` branch) | no | no |
+| C2 — Real Job Detail | **Owner-accepted** at `46818bb`, including the focus correction (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) | yes — inside `c3-work` (no separate `c2-work` branch) | no | no |
+| C3 — Real Apply Integration | **Owner-accepted** at `f07ea35` (r3; recorded in the owner's C4 instruction, with the accepted bundle's SHA-256 `0b7293bd…369b`). The critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md) | **yes — `c3-work` at `f07ea35`**, pushed 2026-11-07 08:19 UTC on the owner's authorisation and verified by a fresh fetch ([`docs/review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md`](docs/review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md)) | no | no |
+| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted**, with the review corrections: origin-safe redirects, the approved date labels ([OD-2026-11-07-01](docs/review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md)), and no inferred applicant eligibility. Local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md) | no — `c4-work` is local only | no | no |
 | Phase 1 | **Not verified** — only after Release C (C7) | — | — | — |
 
-The C1, C2 and C3 commits descend from `eabd604`, so `c3-work` holds the
-whole accepted line B7 → C1 → C2 → C3. `c4-work` starts at the accepted C3
+The C1, C2 and C3 commits descend from `eabd604`, so `c3-work` (published at
+`f07ea35`) holds the whole accepted line B7 → C1 → C2 → C3. `c4-work` starts at the accepted C3
 commit `f07ea35` and adds the C4 commits on top. None of B6, B7, C1, C2, C3 or
 C4 is in `main`.
 
@@ -336,7 +336,7 @@ Run every check. Each should complete without an error.
 cd frontend
 npm ci
 npm run verify:quality   # expect: ALL QUALITY BUDGET CHECKS PASSED,
-                         #         Test Files 41 passed, Tests 1057 passed
+                         #         Test Files 41 passed, Tests 1078 passed
 ```
 
 `verify:budgets` measures the real production build. Legacy `.woff` font
@@ -449,7 +449,7 @@ is under review; see **Current state**.)
 Awaiting input rather than scheduled: the production API origin, real approved
 Job content and per-market compensation, a corporate contact mechanism (and a
 designated privacy contact), the canonical host (apex or www), an approved
-social card, approved Job Detail labels for the posting and closing dates, a
+social card, an approved applicant-eligibility statement per Job (for JobPosting), a
 smaller approved transparent logo export, the email-backup setup inputs (Outlook
 version, `shervin@` access, encryption, second device), the production private-storage provider (selected at
 deployment, C6) and a malware-scanning provider (needed before resume review,

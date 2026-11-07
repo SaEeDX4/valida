@@ -143,15 +143,15 @@ Everything listens on 127.0.0.1, and the setup checks each listening address. Po
 
 | Case | What is observed |
 | --- | --- |
-| C4-01 | The initial HTML of every public route: status, title, description, robots, canonical, Open Graph, JobPosting, `X-Robots-Tag`, and the 301 redirects |
+| C4-01 | The initial HTML of every public route: status, title, description, robots, canonical, Open Graph, JobPosting, `X-Robots-Tag`, and the 301 redirects. The raw targets `/\outside.example/A` and `/\/outside.example/A`, sent byte for byte, get the 404 page and no Location; the positive control `/About?region=CA&utm_source=qa` gets a 301 on the same origin, keeping its query |
 | C4-02 | `/sitemap.xml` and `/robots.txt` against the live open Jobs; every asset the page loads is reachable and not disallowed |
-| C4-03 | Open Job, direct load. The JobPosting in the initial HTML is the one the browser settles on. It matches the visible facts and the API's dates |
+| C4-03 | Two open Jobs, direct load, in a browser set to America/Vancouver. The initial HTML equals the settled head. Date Posted and Applications Close equal the API's instants in UTC, and the Job without a deadline has no Applications Close row. No JobPosting: it is withheld without an approved applicant-eligibility input |
 | C4-04 | Refresh: the same status and metadata |
-| C4-05 | Client navigation Home → Careers → Job → Careers → Back → Apply. The JobPosting exists only on the Job |
+| C4-05 | Client navigation Home → Careers → Job → Careers → Back → Apply. The canonical follows each route; no step carries a JobPosting; Apply is noindex |
 | C4-06 | Retained closed Job: closed state, no Apply action, `noindex, follow`, no JobPosting |
 | C4-07 | Unknown route, unknown, Draft and Archived Job: a real 404 with the branded page (Doc 17 §214) |
 | C4-08 | Open hybrid Job: indexable and canonical, with the JobPosting withheld |
-| C4-09 | The backend CLI closes, then archives, a Job. Status, robots, JobPosting and sitemap change at once |
+| C4-09 | The backend CLI closes, then archives, a Job. Status, robots, canonical, the visible deadline and the sitemap change at once |
 | C4-10 | Review build: `noindex, nofollow` everywhere; no canonical, Open Graph, JobPosting or sitemap |
 | C4-11 | Jobs API unreachable (simulated): Job routes and the sitemap answer 503, never 404 |
 

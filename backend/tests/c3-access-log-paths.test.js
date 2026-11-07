@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { buildConnectedApp, capturingLogger, testConfig } from './helpers.js';
+import { applyRequest, createApplyEnvironment, qaJob } from './fixtures/applyHarness.js';
 
 /**
  * C3 correction (GPT finding 3) — the access log never records a raw path that
@@ -123,9 +124,79 @@ describe('access log: matched routes are unchanged (C3)', () => {
     expect(lineFor(log, list.headers['x-request-id']).req).toEqual({ id: list.headers['x-request-id'], method: 'GET', path: '/api/v1/jobs', routeMatched: true });
     // The list route refuses an unknown query parameter (422): matched, so the path is kept — the query never is.
     expect(lineFor(log, refused.headers['x-request-id'])).toMatchObject({ req: { path: '/api/v1/jobs', routeMatched: true }, res: { statusCode: 422 } });
-    // Matched by GET /jobs/:jobSlug; the Job does not exist, so the route answers 404 — the path is still the route's.
-    expect(lineFor(log, detail.headers['x-request-id'])).toMatchObject({ req: { path: '/api/v1/jobs/qa-unknown-role', routeMatched: true }, res: { statusCode: 404 } });
+    // Matched by GET /jobs/:jobSlug; the Job does not exist, so the route answers 404. The line holds the route's
+    // TEMPLATE, not the value in it (C3 r3).
+    expect(lineFor(log, detail.headers['x-request-id'])).toMatchObject({ req: { path: '/api/v1/jobs/:jobSlug', routeMatched: true }, res: { statusCode: 404 } });
+    expect(log.output()).not.toContain('qa-unknown-role');
     expect(lineFor(log, health.headers['x-request-id']).req).toMatchObject({ path: '/api/v1/health', routeMatched: true });
     expect(log.output()).not.toContain(QUERY_MARKER);
+  });
+});
+
+/*
+ * C3 r3 — a value in a ROUTE PARAMETER is never written either.
+ *
+ * Express sets req.route as soon as a route PATTERN matches, before the
+ * controller validates :jobSlug. So `GET /api/v1/jobs/<anything>` counts as
+ * matched whatever <anything> is — an e-mail address, a storage key segment —
+ * and r2 logged that path raw. A matched route is now logged by its TEMPLATE
+ * (`/api/v1/jobs/:jobSlug`, `/api/v1/jobs/:jobSlug/applications`), which tells
+ * Job Detail from Apply and holds no request value.
+ */
+const MARKER_STEM = 'qa-c3-route-marker';
+const EMAIL_MARKER = `${MARKER_STEM}@example.test`;
+const PARAMETER_VALUES = [
+  ['an e-mail address', EMAIL_MARKER],
+  ['the same, percent-encoded', encodeURIComponent(EMAIL_MARKER)],
+  ['a well-formed but unknown slug', `${MARKER_STEM}-example-test`],
+];
+/** Every form of the marker contains the stem: one check covers raw, encoded and decoded. */
+const expectNoMarker = (output) => expect(output).not.toContain(MARKER_STEM);
+
+describe('access log: a route parameter is logged as its template, never its value (C3 r3)', () => {
+  it('Job Detail: GET /api/v1/jobs/<value> -> 404, each line /api/v1/jobs/:jobSlug with id, method and status', async () => {
+    const { app, log } = appWithLog();
+    for (const [label, value] of PARAMETER_VALUES) {
+      const response = await request(app).get(`/api/v1/jobs/${value}`);
+      expect(response.status, label).toBe(404);
+      const entry = lineFor(log, response.headers['x-request-id']);
+      expect(entry.req, label).toEqual({ id: response.headers['x-request-id'], method: 'GET', path: '/api/v1/jobs/:jobSlug', routeMatched: true });
+      expect(entry.res, label).toEqual({ statusCode: 404 });
+    }
+    expectNoMarker(log.output());
+  });
+
+  it('Apply: POST /api/v1/jobs/<value>/applications, refused (no key, unknown Job, Apply rate limit) -> each line /api/v1/jobs/:jobSlug/applications', async () => {
+    const env = await createApplyEnvironment({ configOverrides: { applicationRateLimit: Object.freeze({ windowMs: 900_000, max: 4 }) } });
+    try {
+      const refused = [];
+      refused.push(['no Idempotency-Key', await applyRequest(env.app, { slug: EMAIL_MARKER, key: null }), 400]);
+      for (const [label, value] of PARAMETER_VALUES) refused.push([label, await applyRequest(env.app, { slug: value }), 404]);
+      // The fifth request within the window: the Apply route's own limiter (inside the route) answers 429.
+      refused.push(['the Apply rate limit', await applyRequest(env.app, { slug: EMAIL_MARKER }), 429]);
+      for (const [label, response, status] of refused) {
+        expect(response.status, label).toBe(status);
+        const entry = lineFor(env.log, response.headers['x-request-id']);
+        expect(entry.req, label).toEqual({ id: response.headers['x-request-id'], method: 'POST', path: '/api/v1/jobs/:jobSlug/applications', routeMatched: true });
+        expect(entry.res.statusCode, label).toBe(status);
+      }
+      expectNoMarker(env.log.output());
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  it('a successful Apply is logged by its template too, and Job Detail stays distinguishable from Apply', async () => {
+    const env = await createApplyEnvironment({ jobs: [qaJob()] });
+    try {
+      const accepted = await applyRequest(env.app);
+      const detail = await request(env.app).get(`/api/v1/jobs/${EMAIL_MARKER}`);
+      expect([accepted.status, detail.status]).toEqual([201, 404]);
+      expect(lineFor(env.log, accepted.headers['x-request-id'])).toMatchObject({ req: { method: 'POST', path: '/api/v1/jobs/:jobSlug/applications', routeMatched: true }, res: { statusCode: 201 } });
+      expect(lineFor(env.log, detail.headers['x-request-id'])).toMatchObject({ req: { method: 'GET', path: '/api/v1/jobs/:jobSlug', routeMatched: true }, res: { statusCode: 404 } });
+      expectNoMarker(env.log.output());
+    } finally {
+      await env.cleanup();
+    }
   });
 });

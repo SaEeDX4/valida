@@ -507,8 +507,15 @@ anything in a URL, including a private storage key. Such a request gets the
 path's shape instead: the API's route words are kept, and every other segment
 becomes `{segment}`, for example `/api/v1/jobs/{segment}/applications`. This
 covers every 404, and every request answered before routing (a rate limit,
-CORS or body parsing). `req.routeMatched` says which form a line holds. A path
-that a route matched is logged as before.
+CORS or body parsing). `req.routeMatched` says which form a line holds.
+
+A path that a route **did** match is logged as that route's **template**, never
+with the values in it (C3 r3). For example, `/api/v1/jobs/:jobSlug` is Job
+Detail and `/api/v1/jobs/:jobSlug/applications` is Apply. Express counts a
+route as matched as soon as its pattern fits, before the controller checks
+`:jobSlug`, so the slug position can hold any text, an e-mail address
+included. Static routes such as `/api/v1/jobs` and `/api/v1/health` read the
+same either way.
 
 Error text is never logged either. `message`, `stack` and `cause` carry
 connection strings, credentials, filesystem paths and request-body fragments,

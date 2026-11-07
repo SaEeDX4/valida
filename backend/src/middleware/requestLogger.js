@@ -20,8 +20,16 @@ import { safeErrorSummary } from '../lib/safeError.js';
  * limit, CORS, body parsing), the log gets the path's SHAPE: the API's own
  * route words are kept and every other segment becomes `{segment}`, e.g.
  * `/api/v1/jobs/{segment}/applications`. `routeMatched` says which form a line
- * holds. A path a route did match is logged exactly as before; its parameters
- * are values that route accepts, such as a public Job slug.
+ * holds.
+ *
+ * C3 r3: a path a route DID match is logged as that route's TEMPLATE, never
+ * with the values in it. Express sets req.route as soon as a route PATTERN
+ * matches — before the controller validates :jobSlug — so
+ * `GET /api/v1/jobs/<anything>` is "matched" whatever <anything> is: an e-mail
+ * address, a storage key segment. The line gets `/api/v1/jobs/:jobSlug` or
+ * `/api/v1/jobs/:jobSlug/applications` instead: Job Detail and Apply stay
+ * distinguishable, and no request value is written. Static routes
+ * (`/api/v1/jobs`, `/api/v1/health`) read the same either way.
  */
 
 /**
@@ -49,8 +57,46 @@ export function unmatchedPathShape(path) {
   return (leading === null ? '' : '/') + shown.join('/');
 }
 
+/** Where the matched route's template is kept on the request (see recordRouteTemplate). */
+const ROUTE_TEMPLATE = Symbol('valida.accessLog.routeTemplate');
+
+/**
+ * The template of a matched route: the router's mount path (`req.baseUrl` when
+ * the route matched), written as its shape so that only route words survive,
+ * followed by the route's own PATTERN from the code, e.g. `/:jobSlug`. Neither
+ * part holds a request value. Undefined when the pattern is not a plain path
+ * string (an array or a regular expression): the caller then logs the shape.
+ */
+export function routeTemplate(baseUrl, route) {
+  const pattern = route?.path;
+  if (typeof pattern !== 'string' || !pattern.startsWith('/')) return undefined;
+  const base = baseUrl ? unmatchedPathShape(baseUrl) : '';
+  const prefix = base === '/' ? '' : base;
+  if (pattern === '/') return prefix || '/';
+  return `${prefix}${pattern}`;
+}
+
+/**
+ * Records the template at the moment Express assigns req.route — the only time
+ * `req.baseUrl` is the matching router's mount path; by the time the response
+ * finishes, the routers have restored it. The accessor stores and returns
+ * exactly the value Express assigns, so routing behaves as before.
+ */
+function recordRouteTemplate(req) {
+  let route;
+  Object.defineProperty(req, 'route', {
+    configurable: true,
+    enumerable: true,
+    get: () => route,
+    set(value) {
+      route = value;
+      req[ROUTE_TEMPLATE] = value ? routeTemplate(req.baseUrl, value) : undefined;
+    },
+  });
+}
+
 export function requestLogger(logger) {
-  return pinoHttp({
+  const logRequest = pinoHttp({
     logger,
     // The id is already generated and validated upstream.
     genReqId: (req) => req.id,
@@ -75,10 +121,13 @@ export function requestLogger(logger) {
     serializers: {
       req(req) {
         const path = typeof req.url === 'string' ? req.url.split('?')[0] : req.url;
-        // Express sets req.route on the raw request when a route handles it. The
-        // line is written when the response finishes, so routing is over by then.
-        const routeMatched = Boolean((req.raw ?? req).route);
-        return { id: req.id, method: req.method, path: routeMatched ? path : unmatchedPathShape(path), routeMatched };
+        // Express sets req.route on the raw request when a route pattern matches.
+        // The line is written when the response finishes, so routing is over by
+        // then. A matched route without a usable template falls back to the shape.
+        const raw = req.raw ?? req;
+        const routeMatched = Boolean(raw.route);
+        const logged = routeMatched ? (raw[ROUTE_TEMPLATE] ?? unmatchedPathShape(path)) : unmatchedPathShape(path);
+        return { id: req.id, method: req.method, path: logged, routeMatched };
       },
       res(res) {
         return { statusCode: res.statusCode };
@@ -92,4 +141,11 @@ export function requestLogger(logger) {
       err: safeErrorSummary,
     },
   });
+
+  function requestLogging(req, res, next) {
+    recordRouteTemplate(req);
+    logRequest(req, res, next);
+  }
+  requestLogging.logger = logRequest.logger;
+  return requestLogging;
 }

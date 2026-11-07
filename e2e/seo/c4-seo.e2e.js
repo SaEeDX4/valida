@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { BACKEND_DIR, FRONTEND_DIR } from '../support/paths.js';
@@ -87,6 +88,23 @@ async function fetchDocument(origin, pathname, init = {}) {
   return { status: response.status, headers, body };
 }
 
+/** A request whose target is sent exactly as written. */
+function rawRequest(origin, target) {
+  const { hostname, port } = new URL(origin);
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ hostname, port, path: target, method: 'GET' }, (res) => {
+      res.resume();
+      res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location ?? null }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Independent of the code under test: the instant's UTC date as "1 November 2026", and the deadline to the minute. */
+const utcDate = (iso) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+const utcDeadline = (iso) => `${utcDate(iso)}, ${new Date(iso).toISOString().slice(11, 16)} UTC`;
+
 async function apiJob(slug) {
   const response = await fetch(`${SEO_BACKEND_ORIGIN}/api/v1/jobs/${slug}`);
   return { status: response.status, body: await response.json() };
@@ -117,7 +135,7 @@ const STATIC = [
 
 // ================================================================= cases ==
 
-test('C4-01 initial HTML: status, title, robots, canonical, Open Graph and JobPosting of every public route', async () => {
+test('C4-01 initial HTML: status, title, robots, canonical, Open Graph and JobPosting of every public route; redirects stay on this origin', async () => {
   const routes = [
     ...STATIC.map(([pathname]) => ['static', pathname]),
     ['open remote Job', `/careers/${job('qa-c4-open-remote').slug}`],
@@ -158,10 +176,10 @@ test('C4-01 initial HTML: status, title, robots, canonical, Open Graph and JobPo
   expect(remote.head.title).toBe(`${job('qa-c4-open-remote').title} | Careers at Valida`);
   expect(remote.head.robots).toEqual([]);
   expect(remote.head.canonical).toEqual([`${SITE}/careers/qa-c4-open-remote`]);
-  expect(remote.head.jsonLd).toHaveLength(1);
-  expect(remote.head.jsonLd[0]['@type']).toBe('JobPosting');
+  // C4 correction: job.location is the workplace, not where applicants may be — JobPosting withheld (NO_APPLICANT_ELIGIBILITY).
+  expect(remote.head.jsonLd).toEqual([]);
 
-  // Hybrid: indexable, but no JobPosting — the public DTO has no structured address (withheld NOT_FULLY_REMOTE).
+  // Hybrid: indexable, no JobPosting — the public DTO has no structured workplace address (NO_STRUCTURED_WORKPLACE).
   const hybrid = at('open hybrid Job');
   expect([hybrid.status, hybrid.head.robots, hybrid.head.jsonLd]).toEqual([200, [], []]);
   expect(hybrid.head.canonical).toEqual([`${SITE}/careers/qa-c4-open-hybrid`]);
@@ -194,7 +212,22 @@ test('C4-01 initial HTML: status, title, robots, canonical, Open Graph and JobPo
     expect([response.status, response.headers.location], from).toEqual([301, to]);
   }
 
-  record('C4-01-initial-html', { observation: 'REAL (local document server, test canonical origin)', origin: SEO_INDEXED_ORIGIN, routes: observed, redirects });
+  // C4 review finding: raw targets, sent byte for byte (fetch would rewrite "\" first). A Location must
+  // always resolve to this origin; the backslash forms get the 404 page and no Location at all.
+  const rawRedirects = [];
+  for (const [target, expected] of [
+    ['/\\outside.example/A', { status: 404, location: null }],
+    ['/\\/outside.example/A', { status: 404, location: null }],
+    ['/About?region=CA&utm_source=qa', { status: 301, location: '/about?region=CA&utm_source=qa' }],
+  ]) {
+    const response = await rawRequest(SEO_INDEXED_ORIGIN, target);
+    const resolvedOrigin = response.location ? new URL(response.location, SEO_INDEXED_ORIGIN).origin : null;
+    rawRedirects.push({ requestTarget: target, status: response.status, location: response.location, resolvedOrigin, resolvedOnCanonicalSite: response.location ? new URL(response.location, SITE).href : null });
+    expect({ status: response.status, location: response.location }, target).toEqual(expected);
+    if (resolvedOrigin) expect(resolvedOrigin, target).toBe(SEO_INDEXED_ORIGIN);
+  }
+
+  record('C4-01-initial-html', { observation: 'REAL (local document server, test canonical origin)', origin: SEO_INDEXED_ORIGIN, routes: observed, redirects, rawRedirects });
 });
 
 test('C4-02 sitemap.xml and robots.txt from the live open Jobs', async () => {
@@ -231,50 +264,60 @@ test('C4-02 sitemap.xml and robots.txt from the live open Jobs', async () => {
   record('C4-02-sitemap-robots', { observation: 'REAL', sitemap, robots: robots.body, assetStatus });
 });
 
-test('C4-03 open Job, direct load: the JobPosting in the initial HTML is the one the page settles on, and it matches the visible vacancy', async ({ page }) => {
-  const slug = job('qa-c4-open-remote').slug;
-  const initial = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, `/careers/${slug}`)).body);
-  const response = await page.goto(`/careers/${slug}`);
-  expect(response.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(job('qa-c4-open-remote').title);
-  await expect(page.getByText('Employment Details')).toBeVisible();
-  const settled = await browserHead(page);
-  const facts = await visibleFacts(page);
-  const dto = await apiJob(slug);
+test('C4-03 open Jobs, direct load: initial HTML = settled head; visible dates match the record, with and without a deadline; no JobPosting', async ({ browser }) => {
+  // The reader is in Vancouver; the page must still show the instants in UTC, as the record and any markup state them.
+  const context = await browser.newContext({ baseURL: SEO_INDEXED_ORIGIN, timezoneId: 'America/Vancouver', viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  const cases = {};
+  try {
+    for (const [name, label] of [['qa-c4-open-remote', 'with a deadline'], ['qa-c4-open-hybrid', 'without a deadline']]) {
+      const slug = job(name).slug;
+      const initial = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, `/careers/${slug}`)).body);
+      const response = await page.goto(`/careers/${slug}`);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(job(name).title);
+      await expect(page.getByText('Employment Details')).toBeVisible();
+      await expect(page.getByText('Date Posted', { exact: true })).toBeVisible();
+      const settled = await browserHead(page);
+      const facts = await visibleFacts(page);
+      const times = await page.$$eval('dd time', (nodes) => nodes.map((node) => node.getAttribute('datetime')));
+      const dto = (await apiJob(slug)).body.data;
+      const browserZone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-  expect(settled).toEqual({ ...initial, marker: undefined, title: initial.title });
-  const [posting] = settled.jsonLd;
-  expect(settled.jsonLd).toHaveLength(1);
-  expect(posting.title).toBe(await page.getByRole('heading', { level: 1 }).textContent());
-  expect(posting.applicantLocationRequirements).toEqual({ '@type': 'AdministrativeArea', name: facts.Location });
-  expect(facts['Work Arrangement']).toBe('Fully remote');
-  expect(posting.jobLocationType).toBe('TELECOMMUTE');
-  expect(posting.workHours).toBe(facts['Weekly Hours']);
-  expect([facts['Employment Type'], posting.employmentType]).toEqual(['Part time', 'PART_TIME']);
-  expect(facts.Compensation).toBe('CAD 35.00 gross per hour');
-  expect(posting.baseSalary).toEqual({ '@type': 'MonetaryAmount', currency: 'CAD', value: { '@type': 'QuantitativeValue', value: 35, unitText: 'HOUR' } });
-  // Dates: the real record's, from the public API (Doc 16 sections 128-130).
-  expect(posting.datePosted).toBe(dto.body.data.publishedAt);
-  expect(posting.validThrough).toBe(dto.body.data.closesAt);
-  expect(posting.validThrough).toBe('2027-03-31T23:59:59.000Z');
-  // The description sections are the page's sections.
-  for (const text of [dto.body.data.description, ...dto.body.data.responsibilities, ...dto.body.data.requirements, ...dto.body.data.preferredQualifications]) {
-    await expect(page.getByText(text, { exact: true })).toBeVisible();
-    expect(posting.description).toContain(text);
+      expect(response.status()).toBe(200);
+      expect(settled).toEqual({ ...initial, marker: undefined });
+      expect(settled.jsonLd).toEqual([]);
+      expect(settled.robots).toEqual([]);
+      expect(settled.canonical).toEqual([`${SITE}/careers/${slug}`]);
+      expect(facts['Date Posted']).toBe(utcDate(dto.publishedAt));
+      if (dto.closesAt) {
+        expect(facts['Applications Close']).toBe(utcDeadline(dto.closesAt));
+        expect(times).toEqual([dto.publishedAt, dto.closesAt]);
+      } else {
+        expect(Object.keys(facts)).not.toContain('Applications Close');
+        await expect(page.getByText('Applications Close')).toHaveCount(0);
+        expect(times).toEqual([dto.publishedAt]);
+      }
+      cases[label] = {
+        slug,
+        status: response.status(),
+        browserTimeZone: browserZone,
+        apiDates: { publishedAt: dto.publishedAt, closesAt: dto.closesAt },
+        visibleFacts: facts,
+        timeElements: times,
+        initialHtmlHead: initial,
+        browserHead: settled,
+        jobPosting: 'withheld',
+        withheldReason: dto.workArrangement === 'FULLY_REMOTE' ? 'NO_APPLICANT_ELIGIBILITY' : 'NO_STRUCTURED_WORKPLACE',
+        screenshot: await shot(page, `C4-03-open-job-${label.replace(/ /g, '-')}`),
+      };
+    }
+  } finally {
+    await context.close();
   }
-  const datesVisible = await page.evaluate((iso) => document.body.innerText.includes(iso.slice(0, 10)), posting.datePosted);
-  const screenshot = await shot(page, 'C4-03-open-job-detail');
-  record('C4-03-open-job', {
-    observation: 'REAL',
-    status: response.status(),
-    initialHtmlHead: initial,
-    browserHead: settled,
-    visibleFacts: facts,
-    apiDates: { publishedAt: dto.body.data.publishedAt, closesAt: dto.body.data.closesAt },
-    datesShownOnPage: datesVisible,
-    note: 'datePosted / validThrough are the real record dates but are not shown on the page: Document 06 has no approved label for them (owner decision in the C4 handoff).',
-    screenshot,
-  });
+  expect(cases['with a deadline'].apiDates.closesAt).toBe('2027-03-31T23:59:59.000Z');
+  expect(cases['with a deadline'].visibleFacts['Applications Close']).toBe('31 March 2027, 23:59 UTC');
+  expect(cases['without a deadline'].apiDates.closesAt).toBeNull();
+  record('C4-03-open-job-dates', { observation: 'REAL (browser timezone America/Vancouver)', cases });
 });
 
 test('C4-04 refresh keeps the same status and metadata', async ({ page }) => {
@@ -298,7 +341,7 @@ test('C4-04 refresh keeps the same status and metadata', async ({ page }) => {
   record('C4-04-refresh', { observation: 'REAL', openJob: { status: reload.status(), before, after }, closedJob: { status: closedReload.status(), head: await browserHead(page) } });
 });
 
-test('C4-05 client navigation: JobPosting appears only on the open Job and is removed when leaving it', async ({ page }) => {
+test('C4-05 client navigation: the canonical follows the route; no JobPosting anywhere; Apply is noindex', async ({ page }) => {
   const remote = job('qa-c4-open-remote');
   const steps = [];
   const note = async (label) => steps.push({ label, url: new URL(page.url()).pathname, head: await browserHead(page) });
@@ -312,15 +355,15 @@ test('C4-05 client navigation: JobPosting appears only on the open Job and is re
   await note('Careers (client navigation)');
   await page.getByRole('link', { name: `View ${remote.title} role` }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(remote.title);
-  await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(1);
+  await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${remote.slug}`]);
   await note('Job Detail (client navigation)');
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Careers' }).click();
   await expect(page.getByRole('heading', { level: 1, name: /Work on technology/ })).toBeVisible();
-  await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(0);
+  await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers`]);
   await note('Careers again (breadcrumb)');
   await page.goBack();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(remote.title);
-  await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(1);
+  await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${remote.slug}`]);
   await note('Job Detail (browser Back)');
   await page.getByRole('link', { name: 'Apply for This Role' }).first().click();
   await expect(page).toHaveURL(new RegExp(`/careers/${remote.slug}/apply`));
@@ -334,7 +377,7 @@ test('C4-05 client navigation: JobPosting appears only on the open Job and is re
   expect(byLabel['Job Detail (client navigation)'].canonical).toEqual([`${SITE}/careers/${remote.slug}`]);
   expect(byLabel['Careers again (breadcrumb)'].jsonLd).toEqual([]);
   expect(byLabel['Careers again (breadcrumb)'].canonical).toEqual([`${SITE}/careers`]);
-  expect(byLabel['Job Detail (browser Back)'].jsonLd).toHaveLength(1);
+  for (const step of steps) expect(step.head.jsonLd, step.label).toEqual([]);
   expect(byLabel['Apply (client navigation)'].jsonLd).toEqual([]);
   expect(byLabel['Apply (client navigation)'].canonical).toEqual([]);
   expect(byLabel['Apply (client navigation)'].openGraph).toEqual([]);
@@ -385,7 +428,7 @@ test('C4-07 unknown route and unknown Job slug: real 404, the branded page, noin
   });
 });
 
-test('C4-08 open hybrid Job: indexable and canonical, JobPosting withheld (no structured address in the public DTO)', async ({ page }) => {
+test('C4-08 open hybrid Job: indexable and canonical, JobPosting withheld (no structured workplace address in the public DTO)', async ({ page }) => {
   const hybrid = job('qa-c4-open-hybrid');
   const response = await page.goto(`/careers/${hybrid.slug}`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(hybrid.title);
@@ -396,10 +439,10 @@ test('C4-08 open hybrid Job: indexable and canonical, JobPosting withheld (no st
   expect(head.canonical).toEqual([`${SITE}/careers/${hybrid.slug}`]);
   expect(head.jsonLd).toEqual([]);
   expect(facts['Work Arrangement']).toBe('Hybrid');
-  record('C4-08-hybrid-job', { observation: 'REAL', status: response.status(), head, visibleFacts: facts, withheld: 'NOT_FULLY_REMOTE' });
+  record('C4-08-hybrid-job', { observation: 'REAL', status: response.status(), head, visibleFacts: facts, withheld: 'NO_STRUCTURED_WORKPLACE' });
 });
 
-test('C4-09 closing, then archiving, a Job updates its status, robots, JobPosting and the sitemap at once (SEO-012, SEO-035)', async ({ page }) => {
+test('C4-09 closing, then archiving, a Job updates its status, robots, canonical, dates and the sitemap at once (SEO-012, SEO-035)', async ({ page }) => {
   const lifecycle = job('qa-c4-lifecycle');
   const url = `/careers/${lifecycle.slug}`;
   const loc = `${SITE}${url}`;
@@ -407,28 +450,36 @@ test('C4-09 closing, then archiving, a Job updates its status, robots, JobPostin
     const response = await fetchDocument(SEO_INDEXED_ORIGIN, url);
     const facts = headFacts(response.body);
     const sitemap = await sitemapLocs();
-    return { label, status: response.status, robots: facts.robots, jsonLd: facts.jsonLd.length, validThrough: facts.jsonLd[0]?.validThrough ?? null, employmentType: facts.jsonLd[0]?.employmentType ?? null, inSitemap: sitemap.locs.includes(loc) };
+    return { label, status: response.status, robots: facts.robots, canonical: facts.canonical, jsonLd: facts.jsonLd.length, inSitemap: sitemap.locs.includes(loc) };
   };
 
   const states = [await snapshot('PUBLISHED (open)')];
+  await page.goto(url);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(lifecycle.title);
+  const openFacts = await visibleFacts(page);
   const closeRun = await provision(path.join(path.dirname(lifecycle.file), 'qa-c4-lifecycle.closed.json'));
   states.push(await snapshot('CLOSED'));
   const browserResponse = await page.goto(url);
   await expect(page.getByTestId('job-closed-banner')).toBeVisible();
   const closedBrowser = await browserHead(page);
+  const closedFacts = await visibleFacts(page);
   const archiveRun = await provision(path.join(path.dirname(lifecycle.file), 'qa-c4-lifecycle.archived.json'));
   states.push(await snapshot('ARCHIVED'));
 
   expect([closeRun.exitCode, archiveRun.exitCode]).toEqual([0, 0]);
   expect(states).toEqual([
-    { label: 'PUBLISHED (open)', status: 200, robots: [], jsonLd: 1, validThrough: '2027-01-15T12:00:00.000Z', employmentType: 'TEMPORARY', inSitemap: true },
-    { label: 'CLOSED', status: 200, robots: ['noindex, follow'], jsonLd: 0, validThrough: null, employmentType: null, inSitemap: false },
-    { label: 'ARCHIVED', status: 404, robots: ['noindex, follow'], jsonLd: 0, validThrough: null, employmentType: null, inSitemap: false },
+    { label: 'PUBLISHED (open)', status: 200, robots: [], canonical: [loc], jsonLd: 0, inSitemap: true },
+    { label: 'CLOSED', status: 200, robots: ['noindex, follow'], canonical: [], jsonLd: 0, inSitemap: false },
+    { label: 'ARCHIVED', status: 404, robots: ['noindex, follow'], canonical: [], jsonLd: 0, inSitemap: false },
   ]);
+  // Open: the deadline is shown. Closed: the accepted closed page, without date rows.
+  expect(openFacts['Applications Close']).toBe('15 January 2027, 12:00 UTC');
+  expect(Object.keys(closedFacts)).not.toContain('Applications Close');
+  expect(Object.keys(closedFacts)).not.toContain('Date Posted');
   expect(browserResponse.status()).toBe(200);
   expect(closedBrowser.jsonLd).toEqual([]);
   expect(closedBrowser.robots).toEqual(['noindex, follow']);
-  record('C4-09-lifecycle', { observation: 'REAL (lifecycle changed through the backend provisioning CLI)', provisioning: [closeRun, archiveRun], states, closedBrowser });
+  record('C4-09-lifecycle', { observation: 'REAL (lifecycle changed through the backend provisioning CLI)', provisioning: [closeRun, archiveRun], states, openFacts, closedFacts, closedBrowser });
 });
 
 test('C4-10 review build: every response "noindex, nofollow", no canonical, Open Graph, JobPosting or sitemap (SEO-020)', async ({ browser }) => {

@@ -183,10 +183,10 @@ export async function createDocumentHandler({ distDir, config, jobs, log = () =>
         return;
       }
 
-      const redirect = canonicalRedirect(pathname);
-      if (redirect) {
+      const location = canonicalRedirect(pathname, search);
+      if (location) {
         routeKind = 'redirect';
-        send(res, method, 301, { location: `${redirect}${search}`, 'cache-control': 'no-cache' }, '');
+        send(res, method, 301, { location, 'cache-control': 'no-cache' }, '');
         return;
       }
 

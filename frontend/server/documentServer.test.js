@@ -133,7 +133,7 @@ function rawGet(base, rawPath) {
     const req = httpRequest({ hostname, port, path: rawPath, method: 'GET' }, (res) => {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
-      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
     });
     req.on('error', reject);
     req.end();
@@ -255,6 +255,52 @@ describe('URL conventions (Doc 04 sections 47-49)', () => {
     const response = await get(indexed, pathname);
     expect(response.status).toBe(301);
     expect(response.headers.get('location')).toBe(location);
+  });
+
+  /*
+   * C4 review finding (Astra): the raw target "/\outside.example/A" got a 301
+   * whose Location ("/\outside.example/a") a browser resolves to
+   * https://outside.example/a — "\" counts as "/" in WHATWG URL parsing. The
+   * requests below are sent byte for byte (rawGet): fetch() would rewrite
+   * the backslash before sending.
+   */
+  it.each([
+    ['the reported target', '/\\outside.example/A'],
+    ['with a trailing slash', '/\\outside.example/a/'],
+    ['two backslashes', '/\\\\outside.example/A'],
+    ['backslash then slash', '/\\/outside.example/A'],
+    ['slash then backslash after a segment', '/About/\\outside.example'],
+    ['a dot segment', '/About/../x'],
+  ])('raw %s (%s): never a redirect off this origin — no Location, the 404 page', async (_label, rawPath) => {
+    const response = await rawGet(indexed, rawPath);
+    expect(response.status).toBe(404);
+    expect(response.headers.location).toBeUndefined();
+    expect(response.body).toContain('<title>Page Not Found | Valida</title>');
+  });
+
+  it('positive control: an ordinary canonical redirect still works, keeps its query and stays on this origin', async () => {
+    for (const [rawPath, location] of [
+      ['/About?region=CA&utm_source=qa', '/about?region=CA&utm_source=qa'],
+      ['/careers/QA-Open/?region=CA', '/careers/qa-open?region=CA'],
+      ['/%5Coutside.example/A', '/%5coutside.example/a'],
+    ]) {
+      const response = await rawGet(indexed, rawPath);
+      expect([response.status, response.headers.location], rawPath).toEqual([301, location]);
+      expect(new URL(response.headers.location, indexed).origin, rawPath).toBe(new URL(indexed).origin);
+      expect(new URL(response.headers.location, SITE).origin, rawPath).toBe(SITE);
+    }
+  });
+
+  it('every Location the helper can return resolves to the same origin', () => {
+    const base = 'https://cybervalida.com';
+    for (const target of ['/A', '/a/', '//a', '///a/B', '/\\a', '/\\\\a', '/a\\b', '/%2F%2Fa/B', '/a/./B', '/a/../B', '/\ta', '/a b', '/é/A', '/a:b/C', '/@a/B']) {
+      const location = canonicalRedirect(target, '?q=1');
+      if (location === null) continue;
+      expect(location.startsWith('/') && !location.startsWith('//'), target).toBe(true);
+      expect(new URL(location, base).origin, target).toBe(base);
+    }
+    expect(canonicalRedirect('/\\outside.example/A')).toBeNull();
+    expect(canonicalRedirect('/About', '?x=1')).toBe('/about?x=1');
   });
 
   it('pure helpers', () => {

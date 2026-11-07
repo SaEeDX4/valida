@@ -54,16 +54,48 @@ export function checkTemplate(template) {
 }
 
 /**
+ * Characters a request path may contain for it to be redirected: RFC 3986
+ * path characters (unreserved, sub-delims, ":", "@", "/" and "%" escapes).
+ * Anything else — a backslash above all — is never echoed into a Location.
+ */
+const REDIRECTABLE_PATH = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@%/]*$/;
+const REDIRECT_CHECK_ORIGIN = 'http://redirect-check.invalid';
+
+/**
  * Doc 04 sections 47-49: canonical paths are lowercase, with no trailing slash
  * and no empty segment. A request for another spelling is redirected (301) to
- * the canonical path, keeping its query. Returns null when no redirect is needed.
+ * the canonical path, keeping its query.
+ *
+ * Returns the Location to send, or null when there is nothing to redirect —
+ * the request then gets its ordinary response (usually the 404 page).
+ *
+ * The Location is always a path on THIS origin. Browsers resolve a Location
+ * with the WHATWG URL rules, under which "\" counts as "/" for http(s): a raw
+ * target such as "/\outside.example/A" would otherwise become the
+ * scheme-relative "//outside.example/a", i.e. another site (C4 review
+ * finding). So:
+ *   1. only a path made of RFC 3986 path characters is ever redirected;
+ *   2. the result must start with exactly one "/";
+ *   3. resolving it must give this origin and exactly this path — which also
+ *      refuses dot segments the resolver would rewrite.
+ * A target failing any check is not redirected.
  */
-export function canonicalRedirect(pathname) {
+export function canonicalRedirect(pathname, search = '') {
+  if (typeof pathname !== 'string' || !REDIRECTABLE_PATH.test(pathname)) return null;
   let normalized = pathname.replace(/\/{2,}/g, '/');
   if (normalized.length > 1) normalized = normalized.replace(/\/+$/, '');
   normalized = normalized.toLowerCase();
-  if (!normalized.startsWith('/')) normalized = `/${normalized}`;
-  return normalized === pathname ? null : normalized;
+  if (normalized === pathname) return null;
+  if (!normalized.startsWith('/') || normalized.startsWith('//')) return null;
+  const location = `${normalized}${search}`;
+  let resolved;
+  try {
+    resolved = new URL(location, REDIRECT_CHECK_ORIGIN);
+  } catch {
+    return null;
+  }
+  if (resolved.origin !== REDIRECT_CHECK_ORIGIN || resolved.pathname !== normalized) return null;
+  return location;
 }
 
 /** Which public route a canonical path is. */

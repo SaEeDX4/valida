@@ -25,8 +25,9 @@ import { createJobsClient } from './jobsClient.js';
  * this process's environment: it is read from the build's valida-seo.json, so
  * the server renders exactly the configuration the bundle was built with.
  *
- * Prints one JSON line {"event":"listening",…} when ready, then one line per
- * request (method, status, route kind, duration — no path, query or header).
+ * Prints `READY {…}` (the address it actually listens on, and its
+ * configuration) when ready, then one JSON line per request (method, status,
+ * route kind, duration — no path, query or header).
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -70,9 +71,9 @@ const log = values.quiet ? () => {} : (entry) => process.stdout.write(`${JSON.st
 const server = await startDocumentServer({ distDir, config, jobs, host: values.host, port, log });
 const address = server.address();
 process.stdout.write(
-  `${JSON.stringify({
-    event: 'listening',
+  `READY ${JSON.stringify({
     address: address.address,
+    family: address.family,
     port: address.port,
     indexing: config.indexing,
     siteOrigin: config.siteOrigin,

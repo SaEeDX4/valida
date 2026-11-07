@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test:e2e": "playwright test",
+    "test:e2e:seo": "playwright test --config playwright.seo.config.js",
     "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {

@@ -6,9 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkTestDatabaseTarget } from '../../backend/scripts/test-database.mjs';
 import {
-  BACKEND_DIR, BACKEND_ORIGIN, FIXTURES_DIR, FRONTEND_DIR, FRONTEND_ORIGIN, FRONTEND_PORT, REPO_ROOT,
+  BACKEND_DIR, BACKEND_ORIGIN, BACKEND_PORT, FIXTURES_DIR, FRONTEND_DIR, FRONTEND_ORIGIN, FRONTEND_PORT, REPO_ROOT,
 } from './paths.js';
 import { RunDirectoryRefused, createRunSubdirectories, verifyRunDirectory } from './runDirectory.js';
+import { loopbackProblem, reachFromOtherInterfaces } from './loopback.js';
 import { baseEnvironment, runNode, startNode, stopChild, waitForHttp, waitForReadyLine } from './processes.js';
 import { IDENTITY, backendEnvironment } from './stackConfig.js';
 
@@ -26,7 +27,9 @@ import { IDENTITY, backendEnvironment } from './stackConfig.js';
  *   4. builds the frontend for production (vite build, NODE_ENV unset) with
  *      VITE_API_BASE_URL pointing at the backend, into the run's NEW, empty
  *      dist/ (never emptied: nothing else is ever in it);
- *   5. starts the backend (node src/server.js) and `vite preview`.
+ *   5. starts the backend bound to 127.0.0.1 (support/backendLauncher.mjs)
+ *      and checks the address its socket actually listens on, then starts
+ *      `vite preview`.
  *
  * Before step 1, the run directory is verified again (support/runDirectory.js):
  * the configuration created it, new, outside the repository by its canonical
@@ -129,9 +132,21 @@ export default async function globalSetup() {
     if (build.code !== 0) throw new Error('E2E setup: the production build failed; see logs/build.log');
 
     // 5. ------------------------------------------------- backend, preview --
-    const backend = startNode(['src/server.js'], { cwd: BACKEND_DIR, env, logFile: path.join(dirs.logs, 'backend.log') });
+    // The real backend (startServer), bound to 127.0.0.1 with its existing listenHost option (C3, GPT finding 2).
+    const launcher = fileURLToPath(new URL('./backendLauncher.mjs', import.meta.url));
+    const backend = startNode([launcher], { cwd: BACKEND_DIR, env, logFile: path.join(dirs.logs, 'backend.log') });
     children.push(backend);
+    const listening = await waitForReadyLine(backend, { label: 'backend', timeoutMs: 60_000 });
+    // What the socket ACTUALLY listens on, reported by the server itself. Nothing proceeds otherwise.
+    const problem = loopbackProblem(listening, BACKEND_PORT);
+    if (problem) throw new Error(`E2E refused: ${problem}.`);
+    const external = await reachFromOtherInterfaces(BACKEND_PORT);
+    if (external.some((attempt) => attempt.result === 'connected')) {
+      throw new Error(`E2E refused: the backend port answers on a non-loopback address (${JSON.stringify(external)}).`);
+    }
     await waitForHttp(`${BACKEND_ORIGIN}/api/v1/health`, { child: backend, label: 'backend' });
+    run.backendListening = { ...listening, otherInterfaces: external };
+    writeFileSync(path.join(runDir, 'run.json'), JSON.stringify(run, null, 2));
 
     const preview = startNode([vite, 'preview', '--outDir', dirs.dist, '--port', String(FRONTEND_PORT), '--strictPort', '--host', '127.0.0.1'], {
       cwd: FRONTEND_DIR,

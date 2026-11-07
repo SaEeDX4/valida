@@ -3,7 +3,7 @@
 This suite covers Doc 17 sections 197–213 and Doc 18 section 161. It runs a real browser against:
 
 - the **production build** of the frontend, served by `vite preview`;
-- the **real Express backend**, started with `node backend/src/server.js`;
+- the **real Express backend**, started by the backend's own `startServer()` and bound to 127.0.0.1 (`support/backendLauncher.mjs`);
 - a **disposable MongoDB** database;
 - **private local storage**;
 - a **local SMTP test server**.
@@ -19,6 +19,13 @@ It starts and stops all of these itself. It changes nothing in `frontend/` or `b
 | The backend's **real SMTP adapter** completed TLS (chain and host name verified against a local test CA), logged in, and submitted each message, which the local test server accepted or refused | That any mail reached a real mailbox — nothing leaves the machine |
 | Idempotency under a double-click, a same-key race, a network failure and a lost response | Load, real devices, browsers other than Chromium |
 | Acknowledgements go through the existing B7 suppression gate, with a synthetic key | Production acknowledgements: these stay **refused at start-up** (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`); the suite runs with `APP_ENV=local` |
+
+**The backend listens on 127.0.0.1 only.** `node src/server.js` (`npm start`) listens on every interface, which is the production default and is unchanged. The suite instead starts the same server through `support/backendLauncher.mjs`, with startServer's existing `listenHost: '127.0.0.1'` option, the option the live smoke test uses. Before anything else runs, the setup does two checks, and it proceeds only if both pass:
+
+- The launcher reports the address its socket **actually** listens on, read from the server itself (`server.address()`). The setup requires exactly `127.0.0.1`, IPv4, on the expected port.
+- The setup tries the port on every non-loopback IPv4 address of the machine, and requires each attempt to be refused.
+
+Both results are in `run.json` (`backendListening`).
 
 Acknowledgements are switched on **only inside this local run**:
 - the synthetic suppression key is registered through the real `ops:notifications:suppression key-register` CLI;

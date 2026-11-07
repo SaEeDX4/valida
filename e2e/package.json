@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test:e2e": "playwright test",
-    "test:guards": "node --test guards/run-directory.test.js"
+    "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0"

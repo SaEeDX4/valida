@@ -444,12 +444,13 @@ is under review; see **Current state**.)
 | -------------------------------------------------------------------------------------------------------------------- | --------- |
 | Monthly offline email backup (owner decision 2026-10-25; setup not yet verified); automated-message Sent-copy preservation (design proposed, not implemented); bounce processing beyond the manual procedure (the manual bounce procedures are approved: OD-2026-11-03-01) | Backup: owner's operational task; copy: gate G-COPY proposed for C6, awaiting the owner's decision; automated bounce processing: no decision (the manual procedure is approved) |
 | Production deployment, domain, HTTPS                                                                                 | C         |
-| Production SEO on the real host: the canonical host (apex or www), HTTPS, compression, the chosen rendering mechanism, social previews, JobPosting validation with real Jobs (the mechanism itself is built in C4) | C6, D     |
+| Production SEO on the real host: the approved apex `https://cybervalida.com` and its www redirect (OD-2026-11-09-01), HTTPS, compression, the chosen rendering mechanism, real social previews, JobPosting validation with real Jobs (the mechanism itself is built in C4) | C6, D     |
 
 Awaiting input rather than scheduled: the production API origin, real approved
 Job content and per-market compensation, a corporate contact mechanism (and a
-designated privacy contact), the canonical host (apex or www), an approved
-social card, an approved applicant-eligibility statement per Job (for JobPosting), a
+designated privacy contact), the owner's final visual sign-off of the integrated
+social card, the eligible remote-work countries of each real vacancy (OPEN for
+the Cybersecurity Specialist Draft; never derived from its location), a
 smaller approved transparent logo export, the email-backup setup inputs (Outlook
 version, `shervin@` access, encryption, second device), the production private-storage provider (selected at
 deployment, C6) and a malware-scanning provider (needed before resume review,

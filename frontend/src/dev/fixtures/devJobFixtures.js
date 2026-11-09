@@ -75,7 +75,9 @@ const openJob = {
     },
     {
       marketId: 'EUROPE',
-      // Explicit allowlist. Being European does not make a country eligible.
+      // Explicit list of the countries whose view this market shapes. Being
+      // European does not place a country here, and being here makes no
+      // country eligible for work (presentation only).
       countries: ['DE', 'FR', 'NL', 'IE', 'LT'],
       claimPrefix: SYNTHETIC,
       // Synthetic EUR amount; deliberately NOT a conversion of the CAD figure.
@@ -84,7 +86,8 @@ const openJob = {
     {
       marketId: 'INTERNATIONAL',
       international: true,
-      // The eligibility itself is synthetic, so the location is marked. The
+      // This international view is synthetic presentation (it states no
+      // work-country eligibility), so its location label is marked. The
       // compensation stays the neutral canonical "Location-dependent", which
       // is not a claim and is therefore never marked.
       claimPrefix: SYNTHETIC,

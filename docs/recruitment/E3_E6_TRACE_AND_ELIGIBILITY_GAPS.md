@@ -148,8 +148,14 @@ Each amendment follows Doc 00 §5 and Doc 18 §364:
 
 Doc 12 §22's protected preview is Phase 3. Before E3, the owner could review the Draft's public presentation in the separate, noindexed Review environment (Doc 18 §177; Doc 16 §82). That is **PROPOSED** for C6. Today `plan` is the only preview.
 
-## 6. The interim guard applied in C4 (local, `c4-work`)
+## 6. The guard in C4 (local, `c4-work`)
 
-- **The Draft.** `backend/provisioning/jobs/cybersecurity-specialist.json` keeps its stored values. It declares `location` **AWAITING INPUT**, and its notes cite OD-2026-11-09-01. Publication is refused with `AWAITING_INPUT` even if every other field were filled (`backend/tests/jobs-provisioning.test.js`). It was not provisioned anywhere except the existing B3 real-database test, which loads it into a disposable `valida_test_*` database and asserts that it stays DRAFT and returns 404 publicly.
-- **The JobPosting.** It stays withheld for fully remote Jobs (`NO_APPLICANT_ELIGIBILITY`). The visible Job Detail and Apply are unchanged.
+**As applied under OD-2026-11-09-01 (`d69b5d3`), before the field existed:**
+- **The Draft.** `backend/provisioning/jobs/cybersecurity-specialist.json` kept its stored values, declared `location` **AWAITING INPUT**, and cited OD-2026-11-09-01. Publication was refused with `AWAITING_INPUT` even if every other field were filled.
+- **The JobPosting.** Withheld for every fully remote Job (`NO_APPLICANT_ELIGIBILITY`).
 - **The public API.** Unchanged.
+
+**Now, under OD-2026-11-09-02:**
+- **The Draft.** It stays DRAFT. Its `awaitingInput` lists `location` (the physical work location, whose stored "British Columbia, Canada" is the historical planning value) and `eligibleWorkCountries` (stored `[]`: **OPEN**). Either one alone refuses publication with `AWAITING_INPUT` (`backend/tests/jobs-provisioning.test.js`). The location is never read as the eligible work countries. It is provisioned only by the existing B3 real-database test, into a disposable `valida_test_*` database, which asserts that it stays DRAFT and returns 404 publicly. Publication remains subject to the Release E gates, including E6.
+- **The JobPosting.** Emitted only for an open, fully remote Job with an explicit list. A fully remote Job without one is still withheld (`NO_APPLICANT_ELIGIBILITY`).
+- **The public API.** One additive field on Job Detail only ([contract](ELIGIBLE_WORK_COUNTRIES_CONTRACT.md) §3). Careers and Apply are unchanged.

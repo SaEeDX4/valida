@@ -137,7 +137,8 @@ export function isUsableHiringMarket(market) {
   if (!Object.values(MARKET).includes(market.marketId)) return false;
 
   if (market.marketId === MARKET.INTERNATIONAL) {
-    // International eligibility is never inferred; it must be declared.
+    // The international view is never inferred; the Job must declare it.
+    // Presentation only: it states no work-country eligibility.
     return market.international === true;
   }
 

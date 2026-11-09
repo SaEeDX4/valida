@@ -12,9 +12,10 @@ import styles from './RegionSelector.module.css';
  * parameter or a browser locale preference — so claiming to know where the
  * visitor is would be untrue.
  *
- * It also never states or implies eligibility. Whether a Job can be filled in
- * the selected country is decided by the Job's own configuration and is shown
- * in the Employment Details, not here.
+ * It also never states or implies eligibility. The countries from which Valida
+ * has approved an employee to perform a remote role are the Job's own explicit
+ * list (OD-2026-11-09-02), shown in the Employment Details; this selector
+ * changes none of them.
  *
  * ACCESSIBILITY: a native <select> with a real <label>, so it is keyboard
  * operable and carries the shared focus ring with no custom dropdown. The flag

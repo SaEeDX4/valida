@@ -19,10 +19,12 @@ import { HEAD_SELECTORS, describeHead, serializeJsonLd } from '../../seo/head.js
  *   title, description, robots           as before (A4-A6, C2);
  *   canonical (link rel="canonical")      indexable pages, canonical origin set;
  *   Open Graph (og:type, og:site_name,    the same pages;
- *     og:title, og:description, og:url)
+ *     og:title, og:description, og:url,
+ *     og:image + width/height/alt)       the approved social card (OD-2026-11-09-02)
  *   JobPosting JSON-LD                    an open Job Detail page only, and only
- *                                         when its inputs exist (src/seo/jobPosting.js;
- *                                         currently always withheld).
+ *                                         when its inputs exist (src/seo/jobPosting.js:
+ *                                         a fully remote Job needs its explicit
+ *                                         eligible remote-work countries).
  * A non-indexed (review) build gives every page "noindex, nofollow" and none
  * of the canonical, Open Graph or JobPosting tags (Doc 16 section 82).
  *

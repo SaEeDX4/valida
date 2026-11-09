@@ -145,7 +145,7 @@ Everything listens on 127.0.0.1, and the setup checks each listening address. Po
 | --- | --- |
 | C4-01 | The initial HTML of every public route: status, title, description, robots, canonical, Open Graph, JobPosting, `X-Robots-Tag`, and the 301 redirects. The raw targets `/\outside.example/A` and `/\/outside.example/A`, sent byte for byte, get the 404 page and no Location; the positive control `/About?region=CA&utm_source=qa` gets a 301 on the same origin, keeping its query |
 | C4-02 | `/sitemap.xml` and `/robots.txt` against the live open Jobs; every asset the page loads is reachable and not disallowed |
-| C4-03 | Two open Jobs, direct load, in a browser set to America/Vancouver. The initial HTML equals the settled head. Date Posted and Applications Close equal the API's instants in UTC, and the Job without a deadline has no Applications Close row. No JobPosting: it is withheld without an approved applicant-eligibility input |
+| C4-03 | Two open Jobs, direct load, in a browser set to America/Vancouver. The initial HTML equals the settled head. Date Posted and Applications Close equal the API's instants in UTC, and the Job without a deadline has no Applications Close row. No JobPosting: the remote one lists no eligible remote-work countries, the hybrid one has no structured workplace |
 | C4-04 | Refresh: the same status and metadata |
 | C4-05 | Client navigation Home → Careers → Job → Careers → Back → Apply. The canonical follows each route; no step carries a JobPosting; Apply is noindex |
 | C4-06 | Retained closed Job: closed state, no Apply action, `noindex, follow`, no JobPosting |
@@ -154,6 +154,11 @@ Everything listens on 127.0.0.1, and the setup checks each listening address. Po
 | C4-09 | The backend CLI closes, then archives, a Job. Status, robots, canonical, the visible deadline and the sitemap change at once |
 | C4-10 | Review build: `noindex, nofollow` everywhere; no canonical, Open Graph, JobPosting or sitemap |
 | C4-11 | Jobs API unreachable (simulated): Job routes and the sitemap answer 503, never 404 |
+| C4-12 | **Social card** ([OD-2026-11-09-02](../docs/review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md)): `og:image` (absolute, on the approved origin), its width, height and the approved alt text on every indexable page in the initial HTML and after client navigation; none on noindex pages or in the review build. The image fetched from the build: 200, `image/png`, the approved SHA-256, 1200 × 630. One rendered sharing preview at ordinary size |
+| C4-13 | **Two explicit eligible countries** (synthetic NZ, DE): the stored codes, the API, the visible "Eligible Remote-Work Countries" row and the JobPosting (`TELECOMMUTE`, `applicantLocationRequirements`) agree, in the initial HTML and the rendered page; changing the regional selector changes none of them |
+| C4-14 | The otherwise identical Job **without** the key: readable, no row, no country named, no JobPosting, on direct load and after client navigation from the eligible Job (whose markup is removed on the way and back again on Back) |
+| C4-15 | A **legacy** record inserted without the field loads with no claim. Through the CLI: an unrelated update keeps the countries; an invalid code is refused and the stored record is unchanged; `[]` clears the row and the markup |
+| C4-16 | A **retained closed** Job with a list: closed state, no Apply action, no JobPosting, `noindex`, not in the sitemap |
 
 Run (PowerShell), after the one-time setup above:
 

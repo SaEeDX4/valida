@@ -41,9 +41,10 @@ const openJob = {
   weeklyHours: 30,
   compensation: { currency: 'CAD', amount: 35, unit: 'HOUR', gross: true },
   /*
-   * Declared hiring markets. Each market lists the countries it ACTUALLY
-   * supports and carries its own compensation — no value is converted from
-   * another market, and no country is eligible unless it appears here.
+   * Declared hiring markets (Release A regional PRESENTATION only). Each market
+   * lists the countries whose view it shapes and carries its own compensation —
+   * no value is converted from another market. Markets never establish
+   * eligibility (OD-2026-11-09-02): that is the Job's eligibleWorkCountries.
    *
    * Only the Canada figure is source-established. The US and Eurozone amounts
    * are synthetic, present solely to exercise the per-market interface, and are

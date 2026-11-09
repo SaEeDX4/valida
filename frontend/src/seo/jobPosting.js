@@ -1,11 +1,13 @@
 import {
   formatCompensation,
+  formatEnumLabel,
   formatJobDate,
   formatJobDeadline,
   formatWeeklyHours,
   isJobOpen,
   toContentList,
 } from '../features/jobs/utils/formatJob.js';
+import { eligibleWorkCountryNames } from '../features/jobs/utils/eligibleWorkCountries.js';
 import { JOB_DETAIL } from '../pages/JobDetailPage.content.js';
 import { jobRoute } from '../routes/paths.js';
 import { SITE_NAME, absoluteUrl } from './siteConfig.js';
@@ -24,21 +26,20 @@ import { SITE_NAME, absoluteUrl } from './siteConfig.js';
  * stated truthfully is LEFT OUT; when the posting as a whole cannot be,
  * nothing is emitted and the reason is returned (`withheld`).
  *
- * LOCATION (C4 correction). Google needs, for a fully remote job, where
- * applicants may be (applicantLocationRequirements, at least one country) and,
- * otherwise, a structured workplace address (jobLocation). The approved Job
- * contract has neither:
- *   - `location` is the PHYSICAL WORK LOCATION (Master Prompt section 6;
- *     Doc 10 sections 24-28; Doc 09 section 63 exposes its display name). A
- *     workplace — or its country code — does not say where applicants may
- *     reside, so it is not used as an eligibility claim;
- *   - no Job field, public DTO field or visible page element states applicant
- *     eligibility;
- *   - the public DTO carries the workplace as display text only, not an address.
- * So today every Job is withheld for a location reason: NO_APPLICANT_ELIGIBILITY
- * (fully remote) or NO_STRUCTURED_WORKPLACE (hybrid / on-site). The rest of
- * the mapping (jobPostingProperties) is kept and tested, so an approved input
- * adds only the location properties.
+ * LOCATION. Google needs, for a fully remote job, the countries from which
+ * the employee may work (applicantLocationRequirements, at least one country,
+ * with jobLocationType TELECOMMUTE) and, otherwise, a structured workplace
+ * address (jobLocation).
+ *   - Fully remote: the Job's explicit eligible remote-work countries
+ *     (OD-2026-11-09-02; eligibleWorkCountries.js) — the SAME names, in the
+ *     same order, as the visible "Eligible Remote-Work Countries" row. Without
+ *     an explicit list the whole JobPosting is withheld
+ *     (NO_APPLICANT_ELIGIBILITY). `location` (the physical job location), the
+ *     visitor's regional view, a hiring market, a publication country and the
+ *     occupational reference are never used to infer one.
+ *   - Hybrid / on-site: the public DTO carries the workplace as display text
+ *     only, not an address, so the JobPosting stays withheld
+ *     (NO_STRUCTURED_WORKPLACE).
  */
 
 /**
@@ -51,8 +52,8 @@ import { SITE_NAME, absoluteUrl } from './siteConfig.js';
  *                             The public API sends none; only QA data does.
  *   NO_TITLE, NO_PUBLISHED_AT, NO_DESCRIPTION
  *                             a required property would be missing.
- *   NO_APPLICANT_ELIGIBILITY  fully remote, and no approved, visible statement of
- *                             where applicants may be exists (see above).
+ *   NO_APPLICANT_ELIGIBILITY  fully remote, and the Job states no eligible
+ *                             remote-work countries (absent or empty list).
  *   NO_STRUCTURED_WORKPLACE   hybrid / on-site, and the public DTO has no
  *                             structured workplace address (see above).
  */
@@ -70,9 +71,8 @@ export const JOB_POSTING_WITHHELD = Object.freeze({
 /** The exact input each location reason waits for (C4 handoff). */
 export const JOB_POSTING_MISSING_INPUT = Object.freeze({
   NO_APPLICANT_ELIGIBILITY:
-    'An approved, explicit applicant-eligibility statement for the Job (where applicants may be located: at least one country, ' +
-    'optionally regions) — a Job contract field (Doc 10, and the public DTO, Doc 09) and its visible label and value on Job ' +
-    'Detail (Doc 06) — so that applicantLocationRequirements can match what the page states.',
+    'The Job\'s explicit eligible remote-work countries (eligibleWorkCountries, OD-2026-11-09-02): at least one ISO 3166-1 ' +
+    'alpha-2 code, approved for that vacancy and provisioned on the Job. Nothing else establishes them.',
   NO_STRUCTURED_WORKPLACE:
     'A structured workplace address in the public Job DTO (at least addressCountry; Doc 09 amendment) for jobLocation.',
 });
@@ -135,6 +135,22 @@ export function jobPostingDescription(job) {
     );
   }
   return parts.join('');
+}
+
+/**
+ * Google: for a TELECOMMUTE job "the job description must clearly state that
+ * the job is 100% remote". The page states it in Employment Details, so the
+ * description repeats exactly those two visible rows, with the page's labels.
+ */
+function remoteDescription(job, names) {
+  const items = [
+    // The Doc 06 section 97 label, as buildRegionalJobFacts renders it.
+    `Work Arrangement: ${formatEnumLabel(job.workArrangement)}`,
+    `${JOB_DETAIL.labels.eligibleWorkCountries}: ${names.join(', ')}`,
+  ];
+  return `<p>${escapeHtmlText(JOB_DETAIL.labels.employmentDetails)}</p><ul>${items
+    .map((item) => `<li>${escapeHtmlText(item)}</li>`)
+    .join('')}</ul>`;
 }
 
 /** baseSalary only when the page shows the Job's own compensation (same helper, same rule). */
@@ -203,9 +219,9 @@ export function jobPostingProperties(job, { siteOrigin } = {}) {
  * The JobPosting for a public Job DTO, or why there is none.
  * Returns { jsonLd, withheld }: exactly one of them is non-null.
  *
- * With the approved contract as it stands, every open Job ends at a location
- * reason (see the module comment): no JobPosting is emitted, and none is
- * built from an inferred location.
+ * Emitted only for an open, fully remote Job with an explicit list of eligible
+ * remote-work countries (see the module comment); every other open Job ends at
+ * a location reason, and nothing is built from an inferred location.
  */
 export function buildJobPosting(job, { siteOrigin } = {}) {
   const withheld = (reason) => ({ jsonLd: null, withheld: reason });
@@ -216,9 +232,19 @@ export function buildJobPosting(job, { siteOrigin } = {}) {
   }
   const mapped = jobPostingProperties(job, { siteOrigin });
   if (mapped.withheld) return withheld(mapped.withheld);
-  return withheld(
-    job.workArrangement === 'FULLY_REMOTE'
-      ? JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY
-      : JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE,
-  );
+  if (job.workArrangement !== 'FULLY_REMOTE') return withheld(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
+
+  const names = eligibleWorkCountryNames(job);
+  if (names.length === 0) return withheld(JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY);
+  const { url, ...rest } = mapped.properties;
+  return {
+    jsonLd: {
+      ...rest,
+      description: `${rest.description}${remoteDescription(job, names)}`,
+      jobLocationType: 'TELECOMMUTE',
+      applicantLocationRequirements: names.map((name) => ({ '@type': 'Country', name })),
+      url,
+    },
+    withheld: null,
+  };
 }

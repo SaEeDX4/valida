@@ -13,7 +13,17 @@ import {
   jobPostingProperties,
 } from './jobPosting.js';
 import { APPLY_PENDING_HEAD, NOT_FOUND_HEAD, STATIC_HEADS, applyHead, jobDetailHead } from './routeHeads.js';
+import { buildEligibleWorkCountriesFacts } from '../features/jobs/utils/eligibleWorkCountries.js';
+import { SELECTABLE_REGIONS } from '../features/jobs/markets.js';
 import { CANONICAL_ORIGIN, normalizeSiteUrl, resolveSeoConfig, seoBuildProblems } from './siteConfig.js';
+import { SOCIAL_CARD } from './socialCard.js';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/** OD-2026-11-09-02: the approved alternative text, exactly as the owner wrote it. */
+const APPROVED_CARD_ALT =
+  'Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering."';
 
 /**
  * C4 — the shared SEO core (src/seo), tested without a browser.
@@ -121,7 +131,7 @@ describe('approved canonical origin (OD-2026-11-09-01)', () => {
     const urls = [];
     for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
       const head = describeHead(input, INDEXED);
-      urls.push(head.canonical, ...head.openGraph.filter(([property]) => property === 'og:url').map(([, value]) => value));
+      urls.push(head.canonical, ...head.openGraph.filter(([property]) => property === 'og:url' || property === 'og:image').map(([, value]) => value));
     }
     const sitemap = buildSitemapXml({ siteOrigin: INDEXED.siteOrigin, openJobSlugs: ['qa-c4-synthetic-analyst'] }).xml;
     urls.push(...[...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]));
@@ -129,7 +139,7 @@ describe('approved canonical origin (OD-2026-11-09-01)', () => {
     const { properties } = jobPostingProperties(qaJob(), { siteOrigin: INDEXED.siteOrigin });
     urls.push(properties.url, properties.hiringOrganization.url, properties.hiringOrganization.logo);
 
-    expect(urls.length).toBeGreaterThanOrEqual(5 * 2 + 2 + 6 + 1 + 3);
+    expect(urls.length).toBeGreaterThanOrEqual(6 * 3 + 6 + 1 + 3);
     for (const url of urls) {
       expect(typeof url, String(url)).toBe('string');
       expect(new URL(url).origin, url).toBe(CANONICAL_ORIGIN);
@@ -141,7 +151,7 @@ describe('approved canonical origin (OD-2026-11-09-01)', () => {
     for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
       const head = describeHead(input, wrong);
       expect(head.canonical).toBeNull();
-      expect(head.openGraph.some(([property]) => property === 'og:url')).toBe(false);
+      expect(head.openGraph.some(([property]) => property === 'og:url' || property === 'og:image')).toBe(false);
       expect(JSON.stringify(head)).not.toContain('www.cybervalida.com');
     }
     expect(buildRobotsTxt({ indexing: true, siteOrigin: wrong.siteOrigin })).not.toMatch(/Sitemap:/);
@@ -204,16 +214,34 @@ describe('describeHead — one head for browser and server', () => {
         ['og:title', STATIC_HEADS.ABOUT.title],
         ['og:description', STATIC_HEADS.ABOUT.description],
         ['og:url', `${SITE}/about`],
+        ['og:image', `${SITE}/social/valida-social-card-1200x630.png`],
+        ['og:image:width', '1200'],
+        ['og:image:height', '630'],
+        ['og:image:alt', APPROVED_CARD_ALT],
       ],
       jsonLd: null,
     });
     expect(describeHead(STATIC_HEADS.HOME, INDEXED).canonical).toBe(`${SITE}/`);
   });
 
-  it('never emits og:image: no approved social card exists (Doc 16 section 95)', () => {
-    const properties = describeHead(STATIC_HEADS.HOME, INDEXED).openGraph.map(([property]) => property);
-    expect(properties).not.toContain('og:image');
-    expect(properties).not.toContain('og:image:alt');
+  it('every page with Open Graph carries the approved social card, absolute on the approved origin (OD-2026-11-09-02)', () => {
+    for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
+      const og = Object.fromEntries(describeHead(input, INDEXED).openGraph);
+      expect(og['og:image'], input.title).toBe(`${CANONICAL_ORIGIN}${SOCIAL_CARD.path}`);
+      expect([og['og:image:width'], og['og:image:height']], input.title).toEqual(['1200', '630']);
+      expect(og['og:image:alt'], input.title).toBe(APPROVED_CARD_ALT);
+    }
+    expect(SOCIAL_CARD.alt).toBe(APPROVED_CARD_ALT);
+  });
+
+  it('the card at the stable public path is the approved file: 1200 x 630 PNG, the approved SHA-256', () => {
+    const bytes = readFileSync(fileURLToPath(new URL(`../../public${SOCIAL_CARD.path}`, import.meta.url)));
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe('2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a');
+    expect(SOCIAL_CARD.sha256).toBe('2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a');
+    // PNG signature, then the IHDR chunk: width and height as big-endian 32-bit integers.
+    expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(bytes.subarray(12, 16).toString('ascii')).toBe('IHDR');
+    expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([SOCIAL_CARD.width, SOCIAL_CARD.height]);
   });
 
   it('a review build: every page "noindex, nofollow", and no canonical, Open Graph or JobPosting (SEO-020)', () => {
@@ -254,12 +282,62 @@ describe('describeHead — one head for browser and server', () => {
   });
 });
 
-describe('JobPosting: location (C4 correction — Doc 16 sections 131-132, SEO-030)', () => {
-  it('a fully remote open Job is WITHHELD: job.location is the workplace, not where applicants may be', () => {
+describe('JobPosting: location (Doc 16 sections 131-132, SEO-030; OD-2026-11-09-02)', () => {
+  it('a fully remote open Job without an explicit list is WITHHELD: location, a region or a country code establish nothing', () => {
     expect(buildJobPosting(qaJob(), { siteOrigin: SITE })).toEqual({ jsonLd: null, withheld: JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY });
-    // Not even a country code would change that: no Job field states applicant eligibility.
-    expect(buildJobPosting(qaJob({ countryCode: 'CA', regionCode: 'BC' }), { siteOrigin: SITE }).withheld).toBe(JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY);
-    expect(JOB_POSTING_MISSING_INPUT.NO_APPLICANT_ELIGIBILITY).toMatch(/applicant-eligibility statement/);
+    for (const extra of [{ countryCode: 'CA', regionCode: 'BC' }, { eligibleWorkCountries: [] }, { eligibleWorkCountries: undefined }]) {
+      expect(buildJobPosting(qaJob(extra), { siteOrigin: SITE }).withheld, JSON.stringify(extra)).toBe(JOB_POSTING_WITHHELD.NO_APPLICANT_ELIGIBILITY);
+    }
+    expect(JOB_POSTING_MISSING_INPUT.NO_APPLICANT_ELIGIBILITY).toMatch(/explicit eligible remote-work countries/);
+  });
+
+  it('an open, fully remote Job with an explicit list: TELECOMMUTE and exactly those countries, in order, as the visible row names them', () => {
+    const job = qaJob({ eligibleWorkCountries: ['NZ', 'DE'] });
+    const { jsonLd, withheld } = buildJobPosting(job, { siteOrigin: SITE });
+    expect(withheld).toBeNull();
+    expect(jsonLd.jobLocationType).toBe('TELECOMMUTE');
+    expect(jsonLd.applicantLocationRequirements).toEqual([
+      { '@type': 'Country', name: 'New Zealand' },
+      { '@type': 'Country', name: 'Germany' },
+    ]);
+    expect(jsonLd).not.toHaveProperty('jobLocation');
+    const row = buildEligibleWorkCountriesFacts(job, JOB_DETAIL.labels);
+    expect(row).toEqual([{ label: 'Eligible Remote-Work Countries', value: 'New Zealand, Germany' }]);
+    expect(jsonLd.applicantLocationRequirements.map((country) => country.name).join(', ')).toBe(row[0].value);
+    // Google: the description states the job is 100% remote — it repeats the two visible rows.
+    expect(jsonLd.description.endsWith(
+      '<p>Employment Details</p><ul><li>Work Arrangement: Fully remote</li><li>Eligible Remote-Work Countries: New Zealand, Germany</li></ul>',
+    )).toBe(true);
+    // The rest of the mapping is exactly jobPostingProperties().
+    const { properties } = jobPostingProperties(job, { siteOrigin: SITE });
+    expect({ ...jsonLd, description: properties.description, jobLocationType: undefined, applicantLocationRequirements: undefined }).toEqual({
+      ...properties, jobLocationType: undefined, applicantLocationRequirements: undefined,
+    });
+    expect(Object.keys(jsonLd).at(-1)).toBe('url');
+  });
+
+  it('eligibility is the Job\'s list only: not location, not a hiring market, not the selector', () => {
+    // A country code in location and a different selector-region country change nothing.
+    const job = qaJob({ eligibleWorkCountries: ['NZ'], location: 'QA Region, Canada', countryCode: 'CA' });
+    expect(buildJobPosting(job, { siteOrigin: SITE }).jsonLd.applicantLocationRequirements).toEqual([{ '@type': 'Country', name: 'New Zealand' }]);
+    expect(SELECTABLE_REGIONS).toHaveLength(21);
+    expect(SELECTABLE_REGIONS).not.toContain('NZ');
+    // A Job with regional hiring markets stays withheld even with a list (its location and pay depend on the view).
+    expect(buildJobPosting(qaJob({ eligibleWorkCountries: ['NZ'], hiringMarkets: [{ marketId: 'CANADA', countries: ['CA'] }] }), { siteOrigin: SITE }).withheld)
+      .toBe(JOB_POSTING_WITHHELD.REGIONAL_PRESENTATION);
+  });
+
+  it('a list on a hybrid or on-site Job is never shown or marked up', () => {
+    for (const workArrangement of ['HYBRID', 'ON_SITE']) {
+      const job = qaJob({ workArrangement, eligibleWorkCountries: ['NZ'] });
+      expect(buildJobPosting(job, { siteOrigin: SITE }).withheld, workArrangement).toBe(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
+      expect(buildEligibleWorkCountriesFacts(job, JOB_DETAIL.labels), workArrangement).toEqual([]);
+    }
+  });
+
+  it('a closed Job with a list: no JobPosting (Doc 16 sections 123, 140)', () => {
+    expect(buildJobPosting(qaJob({ eligibleWorkCountries: ['NZ'], applicationStatus: 'CLOSED', applicationForm: null }), { siteOrigin: SITE }).withheld)
+      .toBe(JOB_POSTING_WITHHELD.NOT_OPEN);
   });
 
   it('hybrid and on-site open Jobs are WITHHELD: the public DTO has no structured workplace address', () => {

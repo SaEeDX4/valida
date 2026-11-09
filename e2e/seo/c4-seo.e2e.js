@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
+import { checkTestDatabaseTarget } from '../../backend/scripts/test-database.mjs';
 import { BACKEND_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { baseEnvironment, runNode, startNode, stopChild, waitForReadyLine } from '../support/processes.js';
 import {
@@ -16,7 +19,8 @@ import {
  * Observation labels in the records:
  *   REAL       an actual HTTP response or browser state of this stack;
  *   SIMULATED  the API made unreachable on purpose (C4-11);
- *   LOCAL ONLY everything is on 127.0.0.1 with a TEST canonical origin. What
+ *   LOCAL ONLY everything is on 127.0.0.1, built for the approved canonical
+ *              origin (OD-2026-11-09-01) but not served on it. What
  *              only the production host can show (TLS, the apex/www redirect,
  *              CDN behaviour, real crawlers, Search Console, the Rich Results
  *              Test) is C6 and is not claimed here.
@@ -24,6 +28,14 @@ import {
 
 const SITE = SEO_SITE_URL;
 const run = () => readSeoRun();
+
+/** OD-2026-11-09-02 — the approved social card: its bytes, size and alternative text, as approved. */
+const CARD = Object.freeze({
+  path: '/social/valida-social-card-1200x630.png',
+  sha256: '2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a',
+  alt: 'Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering."',
+});
+const OG_PROPERTIES = ['og:type', 'og:site_name', 'og:title', 'og:description', 'og:url', 'og:image', 'og:image:width', 'og:image:height', 'og:image:alt'];
 const job = (name) => run().jobs[name];
 
 // ------------------------------------------------------------- evidence --
@@ -110,6 +122,29 @@ async function apiJob(slug) {
   return { status: response.status, body: await response.json() };
 }
 
+/**
+ * Direct, read-mostly access to the run's disposable database: what is STORED,
+ * independently of the API. Refuses unless MONGODB_TEST_URI is the run's
+ * disposable test database (the setup's own guard).
+ */
+async function withJobsCollection(action) {
+  const guard = checkTestDatabaseTarget({ env: process.env });
+  if (!guard.ok) throw new Error(`E2E refused: ${guard.reason}`);
+  const { MongoClient } = createRequire(path.join(BACKEND_DIR, 'package.json'))('mongodb');
+  const client = await MongoClient.connect(guard.uri, { serverSelectionTimeoutMS: 10_000 });
+  try {
+    return await action(client.db(guard.databaseName).collection('jobs'));
+  } finally {
+    await client.close();
+  }
+}
+const storedJob = (slug) => withJobsCollection((jobs) => jobs.findOne({ slug }, { projection: { _id: 0 } }));
+
+/** Independent of the code under test: English region names from the browser engine's own data (Intl). */
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const namesOf = (codes) => codes.map((code) => regionNames.of(code));
+const ELIGIBLE_LABEL = 'Eligible Remote-Work Countries';
+
 async function provision(file) {
   const result = await runNode(['scripts/provision-job.mjs', 'apply', '--file', file, '--confirm-lifecycle'], {
     cwd: BACKEND_DIR,
@@ -165,7 +200,7 @@ test('C4-01 initial HTML: status, title, robots, canonical, Open Graph and JobPo
     expect(entry.head.description).toHaveLength(1);
     expect(entry.head.robots).toEqual([]);
     expect(entry.head.canonical).toEqual([`${SITE}${pathname}`]);
-    expect(entry.head.openGraph.map(([property]) => property)).toEqual(['og:type', 'og:site_name', 'og:title', 'og:description', 'og:url']);
+    expect(entry.head.openGraph.map(([property]) => property)).toEqual(OG_PROPERTIES);
     expect(entry.head.jsonLd).toEqual([]);
     expect(entry.head.marker).toBe(false);
     expect(entry.headers['x-robots-tag']).toBeNull();
@@ -239,8 +274,15 @@ test('C4-02 sitemap.xml and robots.txt from the live open Jobs', async () => {
     // GET /api/v1/jobs order (the API's own), each open Job once.
     ...sitemap.locs.slice(5),
   ]);
-  expect([...sitemap.locs.slice(5)].sort()).toEqual([`${SITE}/careers/qa-c4-lifecycle`, `${SITE}/careers/qa-c4-open-hybrid`, `${SITE}/careers/qa-c4-open-remote`]);
-  for (const excluded of ['qa-c4-retained-closed', 'qa-c4-draft', 'qa-c4-archived', '/apply']) {
+  expect([...sitemap.locs.slice(5)].sort()).toEqual([
+    `${SITE}/careers/qa-c4-eligibility-updates`,
+    `${SITE}/careers/qa-c4-lifecycle`,
+    `${SITE}/careers/qa-c4-open-eligible`,
+    `${SITE}/careers/qa-c4-open-eligible-omitted`,
+    `${SITE}/careers/qa-c4-open-hybrid`,
+    `${SITE}/careers/qa-c4-open-remote`,
+  ]);
+  for (const excluded of ['qa-c4-retained-closed', 'qa-c4-closed-eligible', 'qa-c4-draft', 'qa-c4-archived', '/apply']) {
     expect(sitemap.locs.some((loc) => loc.includes(excluded)), excluded).toBe(false);
   }
   expect(sitemap.lastmod).toBe(false);
@@ -531,4 +573,328 @@ test('C4-11 Jobs API unreachable: Job routes and the sitemap answer 503, never 4
   } finally {
     await stopChild(child);
   }
+});
+
+// ===================================================== OD-2026-11-09-02 ==
+
+test('C4-12 social card: og:image, its size and alt in the initial HTML and after client navigation; the local asset is the approved file', async ({ page, browser }) => {
+  const expected = [['og:image', `${SITE}${CARD.path}`], ['og:image:width', '1200'], ['og:image:height', '630'], ['og:image:alt', CARD.alt]];
+  const cardTags = (openGraph) => openGraph.filter(([property]) => property.startsWith('og:image'));
+
+  const initial = {};
+  for (const pathname of ['/', '/about', '/careers', '/privacy', '/legal', `/careers/${job('qa-c4-open-eligible').slug}`]) {
+    const head = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, pathname)).body);
+    initial[pathname] = cardTags(head.openGraph);
+    expect(initial[pathname], pathname).toEqual(expected);
+  }
+  const without = {};
+  for (const pathname of [`/careers/${job('qa-c4-retained-closed').slug}`, `/careers/${job('qa-c4-open-remote').slug}/apply`, '/qa-c4-no-such-page']) {
+    without[pathname] = cardTags(headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, pathname)).body).openGraph);
+    expect(without[pathname], pathname).toEqual([]);
+  }
+  const reviewHome = await fetchDocument(SEO_REVIEW_ORIGIN, '/');
+  expect(cardTags(headFacts(reviewHome.body).openGraph)).toEqual([]);
+  expect(reviewHome.body).not.toContain(CARD.path);
+
+  // Client navigation: every indexable page the browser settles on carries the same card tags.
+  const steps = [];
+  const note = async (label) => steps.push({ label, url: new URL(page.url()).pathname, card: cardTags((await browserHead(page)).openGraph) });
+  const eligible = job('qa-c4-open-eligible');
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await note('Home (direct)');
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Careers', exact: true }).first().click();
+  await expect(page.getByRole('link', { name: `View ${eligible.title} role` })).toBeVisible();
+  await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers`]);
+  await note('Careers (client navigation)');
+  await page.getByRole('link', { name: `View ${eligible.title} role` }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(eligible.title);
+  await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${eligible.slug}`]);
+  await note('Job Detail (client navigation)');
+  await page.getByRole('link', { name: 'Apply for This Role' }).first().click();
+  await expect.poll(async () => (await browserHead(page)).robots).toEqual(['noindex, follow']);
+  await note('Apply (client navigation)');
+  for (const step of steps) expect(step.card, step.label).toEqual(step.label.startsWith('Apply') ? [] : expected);
+
+  // The asset itself, from the local production build.
+  const imageUrl = new URL(expected[0][1]);
+  expect(imageUrl.origin).toBe('https://cybervalida.com');
+  const asset = await fetch(`${SEO_INDEXED_ORIGIN}${imageUrl.pathname}`);
+  const bytes = Buffer.from(await asset.arrayBuffer());
+  const assetFacts = {
+    url: `${SEO_INDEXED_ORIGIN}${imageUrl.pathname}`,
+    status: asset.status,
+    contentType: asset.headers.get('content-type'),
+    cacheControl: asset.headers.get('cache-control'),
+    bytes: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    pngSize: [bytes.readUInt32BE(16), bytes.readUInt32BE(20)],
+  };
+  expect([assetFacts.status, assetFacts.contentType, assetFacts.sha256]).toEqual([200, 'image/png', CARD.sha256]);
+  expect(assetFacts.pngSize).toEqual([1200, 630]);
+  const robots = await fetchDocument(SEO_INDEXED_ORIGIN, '/robots.txt');
+  expect(robots.body.split('\n').filter((line) => line.startsWith('Disallow:')).some((line) => imageUrl.pathname.startsWith(line.slice(9).trim()))).toBe(false);
+
+  // One rendered sharing preview at an ordinary size, built from the page's own Open Graph tags and the served image.
+  const og = Object.fromEntries(headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, '/')).body).openGraph);
+  const context = await browser.newContext({ viewport: { width: 560, height: 470 }, deviceScaleFactor: 1 });
+  const preview = await context.newPage();
+  const esc = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  await preview.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>
+    body { margin: 0; padding: 20px 30px; background: #f3f4f6; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .note { font-size: 11px; color: #4b5563; margin: 0 0 10px; }
+    .card { width: 500px; border: 1px solid #d1d5db; border-radius: 10px; overflow: hidden; background: #fff; }
+    .card img { display: block; width: 500px; height: 262px; }
+    .meta { padding: 10px 12px 12px; }
+    .domain { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .02em; }
+    .title { font-size: 16px; font-weight: 600; color: #111827; margin: 4px 0 2px; }
+    .desc { font-size: 13px; color: #4b5563; line-height: 1.35; }
+  </style></head><body>
+    <p class="note">Generic link preview, local rendering at ordinary size (image 500 × 262 CSS px, 1×). Not a social platform's own rendering.</p>
+    <div class="card" id="card"><img id="image" src="${esc(`${SEO_INDEXED_ORIGIN}${new URL(og['og:image']).pathname}`)}" alt="${esc(og['og:image:alt'])}">
+      <div class="meta"><div class="domain">${esc(new URL(og['og:url']).host)}</div><div class="title">${esc(og['og:title'])}</div><div class="desc">${esc(og['og:description'])}</div></div>
+    </div></body></html>`);
+  await preview.waitForFunction(() => { const image = document.getElementById('image'); return image.complete && image.naturalWidth === 1200; });
+  const previewFile = path.join(outputDir('screenshots'), 'C4-12-sharing-preview.png');
+  await preview.locator('body').screenshot({ path: previewFile });
+  await context.close();
+
+  record('C4-12-social-card', {
+    observation: 'REAL (local production build; image served by the document server)',
+    initialHtml: initial,
+    noCardOn: without,
+    reviewBuildHome: { cardTags: [], referencesCardPath: false },
+    clientNavigation: steps,
+    asset: assetFacts,
+    sharingPreview: { screenshot: 'screenshots/C4-12-sharing-preview.png', fromOpenGraph: { title: og['og:title'], description: og['og:description'], url: og['og:url'], image: og['og:image'], alt: og['og:image:alt'] } },
+  });
+});
+
+test('C4-13 open fully remote Job with two explicit countries: stored codes, API, visible names and structured data agree; the regional selector changes none of them', async ({ page }) => {
+  const eligible = job('qa-c4-open-eligible');
+  const url = `/careers/${eligible.slug}`;
+  const stored = await storedJob(eligible.slug);
+  const api = (await apiJob(eligible.slug)).body.data;
+  const initial = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, url)).body);
+
+  const response = await page.goto(url);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(eligible.title);
+  await expect(page.getByText(ELIGIBLE_LABEL, { exact: true })).toBeVisible();
+  const facts = await visibleFacts(page);
+  const settled = await browserHead(page);
+  const screenshot = await shot(page, 'C4-13-eligible-job');
+  await page.locator('aside[aria-labelledby="job-details-heading"]').screenshot({ path: path.join(outputDir('screenshots'), 'C4-13-employment-details.png') });
+
+  expect(response.status()).toBe(200);
+  expect(stored.eligibleWorkCountries).toEqual(['NZ', 'DE']);
+  expect(api.eligibleWorkCountries).toEqual(stored.eligibleWorkCountries);
+  expect(facts[ELIGIBLE_LABEL]).toBe(namesOf(api.eligibleWorkCountries).join(', '));
+  expect(initial.jsonLd).toHaveLength(1);
+  const [posting] = initial.jsonLd;
+  expect(posting).toMatchObject({
+    '@type': 'JobPosting',
+    title: eligible.title,
+    datePosted: api.publishedAt,
+    jobLocationType: 'TELECOMMUTE',
+    url: `${SITE}${url}`,
+  });
+  expect(posting.applicantLocationRequirements).toEqual(namesOf(api.eligibleWorkCountries).map((name) => ({ '@type': 'Country', name })));
+  expect(posting).not.toHaveProperty('validThrough'); // no closing date on this Job
+  expect(settled).toEqual({ ...initial, marker: undefined });
+
+  // The regional view changes presentation only.
+  const regional = [];
+  for (const region of ['DE', 'JP', 'CA', 'INTERNATIONAL']) {
+    await page.getByLabel('Change regional view').selectOption(region);
+    await expect(page).toHaveURL(new RegExp(`region=${region}`));
+    const regionFacts = await visibleFacts(page);
+    const regionHead = await browserHead(page);
+    regional.push({ region, eligibleRow: regionFacts[ELIGIBLE_LABEL], countries: regionHead.jsonLd[0]?.applicantLocationRequirements ?? null, canonical: regionHead.canonical });
+    expect(regionFacts[ELIGIBLE_LABEL], region).toBe(facts[ELIGIBLE_LABEL]);
+    expect(regionHead.jsonLd, region).toEqual(settled.jsonLd);
+    expect(regionHead.canonical, region).toEqual([`${SITE}${url}`]);
+  }
+  // A direct load with a region in the URL: the same initial markup.
+  const withRegion = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, `${url}?region=JP`)).body);
+  expect(withRegion.jsonLd).toEqual(initial.jsonLd);
+
+  record('C4-13-eligible-job', {
+    observation: 'REAL (provisioned through the backend CLI; stored values read from the disposable database)',
+    stored: { eligibleWorkCountries: stored.eligibleWorkCountries, workArrangement: stored.workArrangement, location: stored.location },
+    api: { eligibleWorkCountries: api.eligibleWorkCountries, workArrangement: api.workArrangement, location: api.location },
+    visibleRow: facts[ELIGIBLE_LABEL],
+    initialHtmlJsonLd: initial.jsonLd,
+    renderedJsonLd: settled.jsonLd,
+    regionalViews: regional,
+    directLoadWithRegionJsonLdEqual: true,
+    screenshot,
+    employmentDetailsScreenshot: 'screenshots/C4-13-employment-details.png',
+  });
+});
+
+test('C4-14 the otherwise identical Job without the key: readable, no country claim and no JobPosting, directly and after navigating from the eligible Job', async ({ page }) => {
+  const omitted = job('qa-c4-open-eligible-omitted');
+  const eligible = job('qa-c4-open-eligible');
+  const stored = await storedJob(omitted.slug);
+  const api = (await apiJob(omitted.slug)).body.data;
+  const initial = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, `/careers/${omitted.slug}`)).body);
+
+  const direct = await page.goto(`/careers/${omitted.slug}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(omitted.title);
+  const directFacts = await visibleFacts(page);
+  const directHead = await browserHead(page);
+  expect(direct.status()).toBe(200);
+  expect(stored.eligibleWorkCountries ?? []).toEqual([]);
+  expect(api.eligibleWorkCountries).toEqual([]);
+  expect(Object.keys(directFacts)).not.toContain(ELIGIBLE_LABEL);
+  await expect(page.getByText('New Zealand')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Apply for This Role' }).first()).toBeVisible();
+  expect(initial.jsonLd).toEqual([]);
+  expect(directHead.jsonLd).toEqual([]);
+  expect(initial.canonical).toEqual([`${SITE}/careers/${omitted.slug}`]);
+
+  // From the eligible Job (markup present) to the unlisted one by client navigation.
+  const steps = [];
+  const note = async (label) => steps.push({ label, url: new URL(page.url()).pathname, jsonLd: (await browserHead(page)).jsonLd.length, eligibleRow: (await visibleFacts(page))[ELIGIBLE_LABEL] ?? null });
+  await page.goto(`/careers/${eligible.slug}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(eligible.title);
+  await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(1);
+  await note('eligible Job (direct)');
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Careers' }).click();
+  await expect(page.getByRole('link', { name: `View ${omitted.title} role` })).toBeVisible();
+  await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(0);
+  steps.push({ label: 'Careers (breadcrumb)', url: new URL(page.url()).pathname, jsonLd: (await browserHead(page)).jsonLd.length });
+  await page.getByRole('link', { name: `View ${omitted.title} role` }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(omitted.title);
+  await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${omitted.slug}`]);
+  await note('unlisted Job (client navigation)');
+  await expect(page.getByText('New Zealand')).toHaveCount(0);
+  await page.goBack();
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(eligible.title);
+  await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(1);
+  await note('eligible Job (browser Back)');
+
+  expect(steps.map((step) => [step.label, step.jsonLd])).toEqual([
+    ['eligible Job (direct)', 1],
+    ['Careers (breadcrumb)', 0],
+    ['unlisted Job (client navigation)', 0],
+    ['eligible Job (browser Back)', 1],
+  ]);
+  expect(steps[2].eligibleRow).toBeNull();
+  record('C4-14-omitted-and-navigation', {
+    observation: 'REAL',
+    stored: { eligibleWorkCountries: stored.eligibleWorkCountries ?? null },
+    api: { eligibleWorkCountries: api.eligibleWorkCountries },
+    directLoad: { status: direct.status(), visibleFacts: directFacts, initialJsonLd: initial.jsonLd, renderedJsonLd: directHead.jsonLd },
+    navigation: steps,
+  });
+});
+
+test('C4-15 legacy record and provisioning updates: a legacy record loads; an unrelated update keeps the countries; an invalid update changes nothing; a deliberate clear removes the claim and the markup', async ({ page }) => {
+  // A Job stored before the field existed: copied from a stored synthetic Job, with the key removed.
+  const legacySlug = 'qa-c4-legacy-remote';
+  const template = await storedJob(job('qa-c4-open-eligible-omitted').slug);
+  const { eligibleWorkCountries: _dropped, ...legacy } = template;
+  await withJobsCollection((jobs) => jobs.insertOne({ ...legacy, slug: legacySlug, title: 'QA C4 Synthetic Legacy Remote Analyst' }));
+  const legacyStored = await storedJob(legacySlug);
+  expect('eligibleWorkCountries' in legacyStored).toBe(false);
+  const legacyApi = await apiJob(legacySlug);
+  const legacyInitial = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, `/careers/${legacySlug}`)).body);
+  await page.goto(`/careers/${legacySlug}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('QA C4 Synthetic Legacy Remote Analyst');
+  const legacyFacts = await visibleFacts(page);
+  const legacyHead = await browserHead(page);
+  expect(legacyApi.status).toBe(200);
+  expect(legacyApi.body.data.eligibleWorkCountries).toEqual([]);
+  expect(Object.keys(legacyFacts)).not.toContain(ELIGIBLE_LABEL);
+  expect([legacyInitial.jsonLd, legacyHead.jsonLd]).toEqual([[], []]);
+
+  const updates = job('qa-c4-eligibility-updates');
+  const dir = path.dirname(updates.file);
+  const url = `/careers/${updates.slug}`;
+  const snapshot = async (label) => {
+    const stored = await storedJob(updates.slug);
+    const api = (await apiJob(updates.slug)).body.data;
+    const initial = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, url)).body);
+    await page.goto(url);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(updates.title);
+    const facts = await visibleFacts(page);
+    const rendered = await browserHead(page);
+    return {
+      label,
+      stored: { eligibleWorkCountries: stored.eligibleWorkCountries, description: stored.description, updatedAt: stored.updatedAt.toISOString(), version: stored.__v },
+      apiCountries: api.eligibleWorkCountries,
+      visibleRow: facts[ELIGIBLE_LABEL] ?? null,
+      initialCountries: initial.jsonLd[0]?.applicantLocationRequirements?.map((country) => country.name) ?? null,
+      renderedCountries: rendered.jsonLd[0]?.applicantLocationRequirements?.map((country) => country.name) ?? null,
+      jsonLdCount: [initial.jsonLd.length, rendered.jsonLd.length],
+      raw: stored,
+    };
+  };
+
+  const start = await snapshot('provisioned with ["NZ", "DE"]');
+  const edit = await provision(path.join(dir, 'qa-c4-eligibility-updates.edit.json'));
+  const afterEdit = await snapshot('unrelated update (key omitted)');
+  const invalid = await provision(path.join(dir, 'qa-c4-eligibility-updates.invalid.json'));
+  const afterInvalid = await snapshot('invalid update (["NZ", "XX"])');
+  const cleared = await provision(path.join(dir, 'qa-c4-eligibility-updates.cleared.json'));
+  const afterClear = await snapshot('deliberate clear ([])');
+
+  const both = namesOf(['NZ', 'DE']);
+  expect([edit.exitCode, invalid.exitCode, cleared.exitCode]).toEqual([0, 1, 0]);
+  expect(start).toMatchObject({ apiCountries: ['NZ', 'DE'], visibleRow: both.join(', '), initialCountries: both, renderedCountries: both, jsonLdCount: [1, 1] });
+  expect(afterEdit.stored.eligibleWorkCountries).toEqual(['NZ', 'DE']);
+  expect(afterEdit.stored.description).not.toBe(start.stored.description);
+  expect(afterEdit).toMatchObject({ apiCountries: ['NZ', 'DE'], visibleRow: both.join(', '), initialCountries: both, renderedCountries: both });
+  expect(afterInvalid.raw).toEqual(afterEdit.raw); // durable state unchanged, updatedAt and version included
+  expect(afterClear.stored.eligibleWorkCountries).toEqual([]);
+  expect(afterClear).toMatchObject({ apiCountries: [], visibleRow: null, initialCountries: null, renderedCountries: null, jsonLdCount: [0, 0] });
+  await expect(page.getByText('New Zealand')).toHaveCount(0);
+
+  const strip = ({ raw, ...rest }) => rest;
+  record('C4-15-legacy-and-updates', {
+    observation: 'REAL (legacy record inserted directly into the disposable database; updates through the backend CLI)',
+    legacy: { stored: { hasEligibleWorkCountriesKey: false }, apiStatus: legacyApi.status, apiCountries: legacyApi.body.data.eligibleWorkCountries, visibleFacts: legacyFacts, initialJsonLd: legacyInitial.jsonLd, renderedJsonLd: legacyHead.jsonLd },
+    provisioning: [edit, invalid, cleared],
+    states: [start, afterEdit, afterInvalid, afterClear].map(strip),
+    invalidLeftRecordUnchanged: true,
+  });
+});
+
+test('C4-16 retained closed Job with a list: closed state, no Apply action, no active JobPosting, noindex, not in the sitemap', async ({ page }) => {
+  const closed = job('qa-c4-closed-eligible');
+  const url = `/careers/${closed.slug}`;
+  const doc = await fetchDocument(SEO_INDEXED_ORIGIN, url);
+  const initial = headFacts(doc.body);
+  const api = (await apiJob(closed.slug)).body.data;
+  const response = await page.goto(url);
+  await expect(page.getByTestId('job-closed-banner')).toHaveText('Applications Closed');
+  await expect(page.getByRole('link', { name: 'Apply for This Role' })).toHaveCount(0);
+  const facts = await visibleFacts(page);
+  const rendered = await browserHead(page);
+  const sitemap = await sitemapLocs();
+
+  expect([doc.status, response.status()]).toEqual([200, 200]);
+  expect(api).toMatchObject({ applicationStatus: 'CLOSED', applicationForm: null, eligibleWorkCountries: ['NZ'] });
+  expect(initial.robots).toEqual(['noindex, follow']);
+  expect(doc.headers['x-robots-tag']).toBe('noindex, follow');
+  expect([...initial.jsonLd, ...initial.canonical, ...initial.openGraph]).toEqual([]);
+  expect(rendered.robots).toEqual(['noindex, follow']);
+  expect([...rendered.jsonLd, ...rendered.canonical]).toEqual([]);
+  expect(sitemap.locs.some((loc) => loc.includes(closed.slug))).toBe(false);
+  // The retained page may still describe the vacancy, as it does its other facts.
+  expect(facts[ELIGIBLE_LABEL]).toBe(namesOf(['NZ']).join(', '));
+  expect(Object.keys(facts)).not.toContain('Date Posted');
+
+  record('C4-16-closed-eligible', {
+    observation: 'REAL',
+    status: response.status(),
+    api: { applicationStatus: api.applicationStatus, eligibleWorkCountries: api.eligibleWorkCountries },
+    initialHead: initial,
+    renderedHead: rendered,
+    visibleFacts: facts,
+    inSitemap: false,
+    screenshot: await shot(page, 'C4-16-closed-eligible'),
+  });
 });

@@ -1,5 +1,6 @@
 import { buildJobPosting, escapeHtmlText } from './jobPosting.js';
 import { SITE_NAME, absoluteUrl } from './siteConfig.js';
+import { SOCIAL_CARD } from './socialCard.js';
 
 /**
  * One description of a page's <head> metadata, shared by the browser
@@ -26,8 +27,10 @@ import { SITE_NAME, absoluteUrl } from './siteConfig.js';
  *   - Without a configured canonical origin there is no canonical, no og:url —
  *     and so no Open Graph set — and no JobPosting: none of them can be built
  *     without an absolute URL.
- *   - og:image / og:image:alt are NOT emitted: no approved social card exists
- *     (Doc 16 section 95; owner decision recorded in the C4 handoff).
+ *   - Every page with Open Graph also carries the approved default social
+ *     card (socialCard.js; OD-2026-11-09-02): og:image as an absolute URL on
+ *     the canonical origin, og:image:width, og:image:height and og:image:alt
+ *     (Doc 16 sections 94-97).
  */
 
 export const ROBOTS = Object.freeze({
@@ -52,6 +55,10 @@ export function describeHead({ title, description, robots, path, jobPosting } = 
         ['og:title', title],
         ...(cleanDescription ? [['og:description', cleanDescription]] : []),
         ['og:url', canonical],
+        ['og:image', absoluteUrl(siteOrigin, SOCIAL_CARD.path)],
+        ['og:image:width', String(SOCIAL_CARD.width)],
+        ['og:image:height', String(SOCIAL_CARD.height)],
+        ['og:image:alt', SOCIAL_CARD.alt],
       ].filter(([, content]) => typeof content === 'string' && content.length > 0)
     : [];
 

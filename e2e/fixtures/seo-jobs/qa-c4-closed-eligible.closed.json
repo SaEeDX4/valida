@@ -1,0 +1,54 @@
+{
+  "status": "CLOSED",
+  "awaitingInput": [],
+  "notes": [
+    "SYNTHETIC C4 SEO DATA - disposable test database only (Doc 17 sections 25-26). Not a real vacancy. The countries are test values (OD-2026-11-09-02), not an approved eligibility statement."
+  ],
+  "internalOccupationalReference": "NOC 99999 QA-INTERNAL-C4",
+  "location": {
+    "displayName": "QA C4 Region, Canada",
+    "countryCode": "CA",
+    "regionCode": "QC4",
+    "locality": null
+  },
+  "workArrangement": "FULLY_REMOTE",
+  "eligibleWorkCountries": [
+    "NZ"
+  ],
+  "employmentType": "PART_TIME",
+  "schedule": "QA TEST DATA: synthetic schedule",
+  "weeklyHours": 30,
+  "compensation": {
+    "currency": "CAD",
+    "amountMinor": 3500,
+    "unit": "HOUR",
+    "gross": true
+  },
+  "description": "QA TEST DATA (C4 SEO): QA C4 Synthetic Closed Eligible Analyst. Synthetic role used only to verify eligible remote-work countries against the real stack.",
+  "responsibilities": [
+    "QA TEST DATA (C4) responsibility one.",
+    "QA TEST DATA (C4) responsibility two."
+  ],
+  "requirements": [
+    "QA TEST DATA (C4) requirement one."
+  ],
+  "preferredQualifications": [
+    "QA TEST DATA (C4) preferred qualification."
+  ],
+  "closesAt": null,
+  "slug": "qa-c4-closed-eligible",
+  "title": "QA C4 Synthetic Closed Eligible Analyst",
+  "applicationConfig": {
+    "resumeRequired": true,
+    "phone": {
+      "enabled": false,
+      "required": false
+    },
+    "message": {
+      "enabled": false,
+      "required": false,
+      "maxLength": 5000
+    },
+    "screeningQuestions": []
+  }
+}

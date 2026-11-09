@@ -49,6 +49,10 @@ const JOBS = {
   'qa-open': job('qa-open'),
   'qa-closed': job('qa-closed', { applicationStatus: 'CLOSED', applicationForm: null }),
   'qa-malformed': job('qa-malformed', { applicationForm: null }), // OPEN without a form: the client calls it malformed
+  // OD-2026-11-09-02: an explicit list makes an otherwise qualifying remote Job carry a JobPosting.
+  'qa-eligible': job('qa-eligible', { eligibleWorkCountries: ['NZ', 'DE'] }),
+  'qa-eligible-closed': job('qa-eligible-closed', { eligibleWorkCountries: ['NZ'], applicationStatus: 'CLOSED', applicationForm: null }),
+  'qa-bad-eligibility': job('qa-bad-eligibility', { eligibleWorkCountries: ['nz'] }), // malformed contract
 };
 const OPEN_LIST = Array.from({ length: 53 }, (_, index) => `qa-list-${String(index).padStart(2, '0')}`);
 
@@ -156,13 +160,20 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     expect(headOf(html)).toContain(`<title>${title}</title>`);
     expect(headOf(html)).toContain(`<link rel="canonical" href="${href}">`);
     expect(headOf(html)).toContain(`<meta property="og:url" content="${href}">`);
+    // OD-2026-11-09-02: the approved social card, absolute on the approved origin, with its dimensions and alt text.
+    expect(headOf(html)).toContain(`<meta property="og:image" content="${SITE}/social/valida-social-card-1200x630.png">`);
+    expect(headOf(html)).toContain('<meta property="og:image:width" content="1200">');
+    expect(headOf(html)).toContain('<meta property="og:image:height" content="630">');
+    expect(headOf(html)).toContain(
+      '<meta property="og:image:alt" content="Valida logo with the headline &quot;Secure systems. Deliberate engineering.&quot; and the line &quot;Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering.&quot;">',
+    );
     expect(headOf(html)).not.toMatch(/name="robots"|valida:head|application\/ld\+json/);
     expect(response.headers.get('x-robots-tag')).toBeNull();
     expect(response.headers.get('cache-control')).toBe('no-cache');
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
   });
 
-  it('an open Job: 200, its title and canonical, indexable — and NO JobPosting (no approved applicant-eligibility input)', async () => {
+  it('an open Job: 200, its title and canonical, indexable — and NO JobPosting (no explicit eligible remote-work countries)', async () => {
     const response = await get(indexed, '/careers/qa-open');
     const html = await response.text();
     expect(response.status).toBe(200);
@@ -170,6 +181,29 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     expect(headOf(html)).toContain(`<link rel="canonical" href="${SITE}/careers/qa-open">`);
     expect(headOf(html)).not.toContain('name="robots"');
     expect(jsonLdOf(html)).toEqual([]);
+  });
+
+  it('OD-2026-11-09-02: an open fully remote Job with an explicit list: TELECOMMUTE JobPosting in the initial HTML, the same countries', async () => {
+    const response = await get(indexed, '/careers/qa-eligible');
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    const [posting] = jsonLdOf(html);
+    expect(posting).toMatchObject({
+      '@type': 'JobPosting',
+      jobLocationType: 'TELECOMMUTE',
+      applicantLocationRequirements: [{ '@type': 'Country', name: 'New Zealand' }, { '@type': 'Country', name: 'Germany' }],
+      url: `${SITE}/careers/qa-eligible`,
+    });
+    expect(jsonLdOf(html)).toHaveLength(1);
+  });
+
+  it('OD-2026-11-09-02: a closed Job with a list has no JobPosting; a malformed list is a 503, never a partial claim', async () => {
+    const closed = await get(indexed, '/careers/qa-eligible-closed');
+    expect(closed.status).toBe(200);
+    expect(jsonLdOf(await closed.text())).toEqual([]);
+    const malformed = await get(indexed, '/careers/qa-bad-eligibility');
+    expect(malformed.status).toBe(503);
+    expect(jsonLdOf(await malformed.text())).toEqual([]);
   });
 
   it('a retained closed Job: 200, "noindex, follow" (meta and header), no JobPosting, no canonical', async () => {

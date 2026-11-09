@@ -1,4 +1,5 @@
 import { isUsableHiringMarketList } from '../markets.js';
+import { isUsableEligibleWorkCountries } from '../utils/eligibleWorkCountries.js';
 import {
   isSupportedScreeningType,
   MAX_SCREENING_QUESTIONS,
@@ -234,6 +235,13 @@ export function isUsableJobDetail(job) {
    * all, or with an international fallback that was never actually declared.
    */
   if (!isUsableHiringMarketList(job.hiringMarkets)) return false;
+  /*
+   * OD-2026-11-09-02 — the eligible remote-work countries, when present, must
+   * be known ISO 3166-1 alpha-2 codes, each once. A malformed list is never
+   * shown in part: the response is malformed. Absent means none (a response
+   * from before the field existed).
+   */
+  if (!isUsableEligibleWorkCountries(job.eligibleWorkCountries)) return false;
   if (!PUBLIC_APPLICATION_STATUS.has(job.applicationStatus)) return false;
 
   if (job.applicationStatus === 'OPEN') return isUsableApplicationForm(job.applicationForm);

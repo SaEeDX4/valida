@@ -5,6 +5,7 @@ import { HOME_META } from '../../pages/HomePage.content.js';
 import { describeHead, renderHeadTags } from '../../seo/head.js';
 import { jobDetailHead } from '../../seo/routeHeads.js';
 import { resolveSeoConfig } from '../../seo/siteConfig.js';
+import { SOCIAL_CARD } from '../../seo/socialCard.js';
 import { httpError, installJobsService, networkError, renderRoute, resetServices, testJob } from '../../test/renderRoute.jsx';
 
 /**
@@ -75,7 +76,7 @@ describe('C4 — review build (the default): every page "noindex, nofollow" (Doc
 });
 
 describe('C4 — production build: canonical and Open Graph on indexable pages (Doc 16 sections 89-97)', () => {
-  it('Home: self-canonical on the root, the five Open Graph tags, no robots, no JobPosting', async () => {
+  it('Home: self-canonical on the root, the Open Graph tags with the approved social card, no robots, no JobPosting', async () => {
     production();
     renderRoute('/');
     await waitFor(() => expect(canonical()).toEqual([`${SITE}/`]));
@@ -86,6 +87,10 @@ describe('C4 — production build: canonical and Open Graph on indexable pages (
       ['og:title', HOME_META.title],
       ['og:description', HOME_META.description],
       ['og:url', `${SITE}/`],
+      ['og:image', `${SITE}/social/valida-social-card-1200x630.png`],
+      ['og:image:width', '1200'],
+      ['og:image:height', '630'],
+      ['og:image:alt', SOCIAL_CARD.alt],
     ]);
     expect(jsonLd()).toEqual([]);
   });
@@ -216,6 +221,85 @@ describe('C4 — Job lifecycle in the browser (Doc 16 sections 121-141)', () => 
   });
 });
 
+describe('C4 — eligible remote-work countries (OD-2026-11-09-02)', () => {
+  const eligible = (overrides = {}) =>
+    testJob({ title: 'QA Synthetic Eligible Analyst', slug: 'qa-synthetic-eligible-analyst', eligibleWorkCountries: ['NZ', 'DE'], ...overrides });
+
+  it('an open fully remote Job with an explicit list: the row, and a TELECOMMUTE JobPosting naming the same countries', async () => {
+    production();
+    const job = eligible();
+    installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
+    renderRoute(`/careers/${job.slug}`);
+    await screen.findByRole('heading', { level: 1, name: job.title });
+    expect(visibleFacts()['Eligible Remote-Work Countries']).toBe('New Zealand, Germany');
+    await waitFor(() => expect(jsonLd()).toHaveLength(1));
+    const [posting] = jsonLd();
+    expect(posting.jobLocationType).toBe('TELECOMMUTE');
+    expect(posting.applicantLocationRequirements.map((country) => country.name).join(', ')).toBe(visibleFacts()['Eligible Remote-Work Countries']);
+  });
+
+  it('changing the regional selector changes neither the row nor the markup', async () => {
+    production();
+    const job = eligible();
+    installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
+    const user = userEvent.setup();
+    renderRoute(`/careers/${job.slug}`);
+    await screen.findByRole('heading', { level: 1, name: job.title });
+    await waitFor(() => expect(jsonLd()).toHaveLength(1));
+    const before = { row: visibleFacts()['Eligible Remote-Work Countries'], markup: jsonLd()[0] };
+    for (const region of ['JP', 'CA', 'INTERNATIONAL']) {
+      await user.selectOptions(screen.getByLabelText('Change regional view'), region);
+      expect(visibleFacts()['Eligible Remote-Work Countries'], region).toBe(before.row);
+      expect(jsonLd()[0], region).toEqual(before.markup);
+    }
+  });
+
+  it('absent or empty list: no row, no country named anywhere, no JobPosting', async () => {
+    production();
+    for (const job of [testJob({ slug: 'qa-absent' }), eligible({ slug: 'qa-empty', eligibleWorkCountries: [] })]) {
+      clearHead();
+      installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
+      const view = renderRoute(`/careers/${job.slug}`);
+      await screen.findByRole('heading', { level: 1, name: job.title });
+      await waitFor(() => expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]));
+      expect(Object.keys(visibleFacts())).not.toContain('Eligible Remote-Work Countries');
+      // New Zealand is not a selector country, so it can appear only as an eligibility claim; Germany is a selector option.
+      expect(document.body.textContent).not.toMatch(/New Zealand/);
+      expect(Object.values(visibleFacts()).join(' ')).not.toMatch(/Germany|New Zealand/);
+      expect(jsonLd()).toEqual([]);
+      view.unmount();
+      resetServices();
+    }
+  });
+
+  it('navigating from the eligible Job to Careers removes its JobPosting', async () => {
+    production();
+    const job = eligible();
+    installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
+    const user = userEvent.setup();
+    renderRoute(`/careers/${job.slug}`);
+    await screen.findByRole('heading', { level: 1, name: job.title });
+    await waitFor(() => expect(jsonLd()).toHaveLength(1));
+    await user.click(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('link', { name: 'Careers' }));
+    await screen.findByRole('heading', { level: 1, name: /Work on technology/ });
+    await waitFor(() => expect(canonical()).toEqual([`${SITE}/careers`]));
+    expect(jsonLd()).toEqual([]);
+  });
+
+  it('a retained closed Job with a list: the row describes the vacancy, but no JobPosting, no Apply action, noindex', async () => {
+    production();
+    const job = eligible({ applicationStatus: 'CLOSED', applicationForm: null });
+    installJobsService(careersService({ getPublishedJobBySlug: async () => ({ job }) }));
+    renderRoute(`/careers/${job.slug}`);
+    await screen.findByTestId('job-closed-banner');
+    await waitFor(() => expect(robots()).toEqual(['noindex, follow']));
+    expect(visibleFacts()['Eligible Remote-Work Countries']).toBe('New Zealand, Germany');
+    expect(screen.queryAllByRole('link', { name: 'Apply for This Role' })).toHaveLength(0);
+    expect(jsonLd()).toEqual([]);
+    expect(canonical()).toEqual([]);
+  });
+});
+
 describe('C4 — the browser adopts the head the server already wrote', () => {
   it('server-rendered tags for an open Job are reused, never duplicated', async () => {
     production();
@@ -232,8 +316,8 @@ describe('C4 — the browser adopts the head the server already wrote', () => {
     await screen.findByRole('heading', { level: 1, name: job.title });
     await waitFor(() => expect(q('meta[name="description"]')).toHaveLength(1));
     expect(canonical()).toEqual([`${SITE}/careers/${job.slug}`]);
-    expect(openGraph()).toHaveLength(5);
-    expect(new Set(openGraph().map(([property]) => property)).size).toBe(5);
+    expect(openGraph()).toHaveLength(9);
+    expect(new Set(openGraph().map(([property]) => property)).size).toBe(9);
     expect(jsonLd()).toEqual([]);
   });
 });

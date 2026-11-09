@@ -22,7 +22,10 @@ import {
  *      backend's own CLI (fixtures/seo-jobs): an open remote Job, an open hybrid
  *      Job, a retained closed Job (published, then closed), a Draft, an
  *      Archived Job (created as Draft, then archived) and the "lifecycle" Job
- *      the cases close and archive during the run;
+ *      the cases close and archive during the run; and, for OD-2026-11-09-02,
+ *      an open remote Job with two explicit eligible countries, an otherwise
+ *      identical one without the key, one the cases update and clear, and a
+ *      retained closed Job with a list;
  *   3. builds the frontend twice into NEW, empty directories of the run:
  *      dist/ (indexed: VITE_ALLOW_INDEXING=true, VITE_PUBLIC_SITE_URL) and
  *      dist-review/ (no SEO variables). NODE_ENV and APP_ENV are not inherited;
@@ -45,6 +48,12 @@ const SETUP_STEPS = Object.freeze([
   ['qa-c4-archived.json', false],
   ['qa-c4-archived.archived.json', true],
   ['qa-c4-lifecycle.json', true],
+  // OD-2026-11-09-02 — eligible remote-work countries (synthetic test values).
+  ['qa-c4-open-eligible.json', true],
+  ['qa-c4-open-eligible-omitted.json', true],
+  ['qa-c4-eligibility-updates.json', true],
+  ['qa-c4-closed-eligible.json', true],
+  ['qa-c4-closed-eligible.closed.json', true],
 ]);
 
 export default async function seoGlobalSetup() {

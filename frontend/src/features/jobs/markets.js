@@ -1,17 +1,19 @@
 /**
  * Region and hiring-market model.
  *
- * TWO SEPARATE CONCEPTS — the whole point of this module.
+ * TWO SEPARATE PRESENTATION CONCEPTS — the whole point of this module.
  *
  *   1. Visitor regional view  — which country's presentation the visitor is
  *      looking at. A preference, chosen by URL or inferred from browser locale.
- *   2. Job supported hiring markets — where a Job may actually be filled. This
- *      comes from the Job's own configuration and nothing else.
+ *   2. Job hiring markets     — an optional, frontend-only presentation
+ *      configuration (Release A): which location label and pay a regional view
+ *      of the Job shows. The public API sends none for real Jobs.
  *
- * A visitor's region NEVER creates eligibility. Selecting "Brazil" does not make
- * a role available in Brazil; it only changes which view is requested. If the
- * Job does not list that country, the UI says so rather than rewriting the role
- * around the visitor.
+ * NEITHER IS ELIGIBILITY (OD-2026-11-09-02). The countries from which Valida
+ * has approved an employee to perform a remote role are the Job's own
+ * `eligibleWorkCountries` (utils/eligibleWorkCountries.js), and nothing here
+ * creates, widens or narrows them. Selecting "Brazil" does not make a role
+ * available in Brazil; it only changes which view is requested.
  *
  * No geolocation, no IP lookup, no country library, no FX. Browser locale is a
  * preference signal, never legal or geographic proof.

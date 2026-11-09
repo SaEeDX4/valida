@@ -12,7 +12,9 @@ import { formatEnumLabel, formatWeeklyHours, formatCompensation } from './format
  * three pages.
  *
  * TRUTH RULES ENCODED HERE
- * - A visitor region is matched against a Job's EXPLICIT country allowlist.
+ * - This is presentation only. Eligible remote-work countries are never read
+ *   or derived here (OD-2026-11-09-02; utils/eligibleWorkCountries.js).
+ * - A visitor region is matched against a Job's EXPLICIT market country list.
  *   Selecting a country never adds it to a Job.
  * - International applies only when the Job declares international: true.
  * - Compensation is read from the matched market's own configuration. It is

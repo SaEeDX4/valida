@@ -11,6 +11,7 @@ import PageMeta from '../components/seo/PageMeta.jsx';
 import { getJobsService } from '../features/jobs/api/jobsService.js';
 import useAsyncResource, { RESOURCE_STATUS } from '../features/jobs/hooks/useAsyncResource.js';
 import { buildJobDateFacts, isJobOpen, isJobClosed, toContentList } from '../features/jobs/utils/formatJob.js';
+import { buildEligibleWorkCountriesFacts } from '../features/jobs/utils/eligibleWorkCountries.js';
 import resolveJobMarketPresentation, {
   buildRegionalJobFacts,
 } from '../features/jobs/utils/resolveJobMarketPresentation.js';
@@ -146,7 +147,17 @@ export default function JobDetailPage() {
    * closed page a closing date could contradict the closed state (Doc 12
    * section 33), and the accepted closed page is kept as it was.
    */
-  const facts = [...buildRegionalJobFacts(presentation), ...(open ? buildJobDateFacts(job, JOB_DETAIL.labels) : [])];
+  /*
+   * Eligible remote-work countries (OD-2026-11-09-02) come from the Job's own
+   * explicit list only — never from the regional view above, which changes
+   * how location and pay are presented and nothing else. A fully remote Job
+   * without a list shows no row and claims no country.
+   */
+  const facts = [
+    ...buildRegionalJobFacts(presentation),
+    ...buildEligibleWorkCountriesFacts(job, JOB_DETAIL.labels),
+    ...(open ? buildJobDateFacts(job, JOB_DETAIL.labels) : []),
+  ];
   const responsibilities = toContentList(job.responsibilities);
   const requirements = toContentList(job.requirements);
   const preferred = toContentList(job.preferredQualifications);

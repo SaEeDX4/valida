@@ -10,6 +10,9 @@ export const JOB_DETAIL = {
     // C4 — owner decision OD-2026-11-07-01 (an addition to Doc 06 section 97):
     datePosted: 'Date Posted',
     applicationsClose: 'Applications Close',
+    // C4 — owner decision OD-2026-11-09-02 (an addition to Doc 06 section 97):
+    // shown for a fully remote Job with an explicit list only.
+    eligibleWorkCountries: 'Eligible Remote-Work Countries',
   }, // s99
   primaryCta: 'Apply for This Role', // s100
   finalCta: {

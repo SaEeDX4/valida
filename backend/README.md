@@ -356,9 +356,18 @@ then `createdAt` DESC (`_id` DESC breaks exact ties so pages are stable).
 
 Doc 09 §§59-70. Returned when the Job is **OPEN**, or a **previously public**
 Job that no longer accepts applications — `status CLOSED`, or `PUBLISHED` with
-`closesAt <= now` — retained at its stable URL. The detail adds `description`,
-`responsibilities`, `requirements`, `preferredQualifications` and
-`applicationForm`:
+`closesAt <= now` — retained at its stable URL. The detail adds
+`eligibleWorkCountries`, `description`, `responsibilities`, `requirements`,
+`preferredQualifications` and `applicationForm`.
+
+**`eligibleWorkCountries`** (C4, OD-2026-11-09-02) is the Job's explicit list of
+countries from which Valida has approved an employee to perform this remote
+role: uppercase ISO 3166-1 alpha-2 codes in the stored order, e.g.
+`["NZ", "DE"]`. It is always present; `[]` means that none is approved — a Job
+stored before the field existed also gives `[]`. It is never derived from the
+location, the occupational reference or anything else. The list endpoint does
+not carry it. A stored list that is not valid is refused (`500`), never
+narrowed or widened.
 
 | `applicationStatus` | `applicationForm` |
 | --- | --- |
@@ -766,15 +775,22 @@ state of one Job — and identified by its `slug`:
 | `awaitingInput` | content still waiting for approval. **While it is non-empty the Job cannot be published** |
 | `notes` | provenance notes for humans; never stored, never published |
 | `title` … `closesAt` | every content field of Doc 10 §19, all present (use `null` / `""` / `[]` for empty). Money is `compensation.amountMinor` in integer minor units (`3500` = CAD 35.00); `closesAt` is an ISO 8601 time with an offset, or `null` |
+| `eligibleWorkCountries` | **optional** (OD-2026-11-09-02): the countries from which Valida has approved an employee to perform this remote role, as uppercase ISO 3166-1 alpha-2 codes in display order, each once (`["NZ", "DE"]`). **Omitted** keeps the stored list (a new Job gets none); **`[]`** deliberately clears it; a list sets exactly those codes. Allowed on a `FULLY_REMOTE` Job (or a Draft with no arrangement yet) only. Lowercase, unassigned or duplicate codes are refused before the database is contacted. A change is material (Doc 12 §41). It is never derived from `location`, the occupational reference, a publication country or a visitor's region |
 
 The committed definition of the **real initial role** is
-`provisioning/jobs/cybersecurity-specialist.json`. It contains only the
-source-established planning data — *Cybersecurity Specialist*, internal
-reference `NOC 21220` (never public), *British Columbia, Canada*,
-`FULLY_REMOTE`, 30 hours/week, CAD 35.00 gross per hour — and declares
-**AWAITING INPUT** for the employment type, final schedule wording,
-description, responsibilities, requirements, preferred qualifications,
-screening questions and closing date. Its status is `DRAFT`. Nothing may be
+`provisioning/jobs/cybersecurity-specialist.json`. It holds the planning data
+— *Cybersecurity Specialist*, internal occupational reference `NOC 21220`
+(never public, and no Canada-only restriction), `FULLY_REMOTE` with an
+international recruitment audience, 30 hours/week, CAD 35.00 gross per hour —
+and *British Columbia, Canada* as the **historical planning value** of the
+physical work location (Master Prompt §6, Doc 10 §70; not an eligible work
+country). Per OD-2026-11-09-01 and OD-2026-11-09-02 it declares **AWAITING
+INPUT** for the physical work location, the **eligible work countries**
+(`eligibleWorkCountries: []`, OPEN pending company and employment
+arrangements), the employment type, final schedule wording, description,
+responsibilities, requirements, preferred qualifications, screening questions
+and closing date. Its status is `DRAFT`, and its publication remains subject
+to the Release E gates, including E6. Nothing may be
 invented to make it publishable (Doc 12 §45); the illustrative values in the
 Doc 09 API examples are not approval.
 

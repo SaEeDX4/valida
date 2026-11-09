@@ -314,6 +314,24 @@ describe('GET /api/v1/jobs — dependency and unexpected failures', () => {
 });
 
 describe('GET /api/v1/jobs/:jobSlug', () => {
+  it('OD-2026-11-09-02: the detail carries the explicit eligible remote-work countries; the list does not', async () => {
+    const job = openJob({ eligibleWorkCountries: ['NZ', 'DE'] });
+    const detail = await request(appWith(stubRepository({ detail: job }))).get('/api/v1/jobs/qa-synthetic-security-analyst');
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    const list = await request(appWith(stubRepository({ jobs: [job] }))).get('/api/v1/jobs');
+    expect(list.status).toBe(200);
+    expect(list.body.data.items[0]).not.toHaveProperty('eligibleWorkCountries');
+  });
+
+  it('OD-2026-11-09-02: a stored list that is not valid fails closed with a safe 500, never a partial claim', async () => {
+    const job = openJob({ eligibleWorkCountries: ['NZ', 'nz'] });
+    const response = await request(appWith(stubRepository({ detail: job }))).get('/api/v1/jobs/qa-synthetic-security-analyst');
+    expect(response.status).toBe(500);
+    expect(response.body.error.code).toBe('INTERNAL_ERROR');
+    expect(response.text).not.toMatch(/NZ|nz/);
+  });
+
   it('QA-P1-API-002: an OPEN Job returns 200 with its detail and application form', async () => {
     const repository = stubRepository({ detail: openJob() });
     const response = await request(appWith(repository)).get('/api/v1/jobs/qa-synthetic-security-analyst');

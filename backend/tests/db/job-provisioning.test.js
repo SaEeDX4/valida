@@ -462,6 +462,94 @@ describe('screening identifiers survive re-provisioning (Doc 10 sections 48, 53)
   });
 });
 
+describe('eligible remote-work countries in stored data (OD-2026-11-09-02)', () => {
+  const SLUG = 'qa-c4-eligibility-db';
+  const base = (overrides = {}) => syntheticDefinition({ slug: SLUG, status: 'PUBLISHED', ...overrides });
+  const omitted = (overrides = {}) => {
+    const raw = base(overrides);
+    delete raw.eligibleWorkCountries;
+    return raw;
+  };
+  const raw = () => mongoose.connection.db.collection('jobs').findOne({ slug: SLUG });
+  const detail = async () => (await request(buildConnectedApp()).get(`/api/v1/jobs/${SLUG}`)).body.data;
+
+  it('a legacy record without the field loads, reads as none, and an omitted key leaves it untouched', async () => {
+    // Inserted directly, as a Job stored before the field existed would be.
+    const definition = definitionOf(base());
+    const { eligibleWorkCountries, awaitingInput, notes, status, ...content } = definition;
+    expect(eligibleWorkCountries).toBeUndefined();
+    await mongoose.connection.db.collection('jobs').insertOne({
+      ...content,
+      applicationConfig: { ...content.applicationConfig, screeningQuestions: [] },
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-09-01T09:00:00.000Z'),
+      closedAt: null,
+      archivedAt: null,
+      createdAt: new Date('2026-09-01T08:00:00.000Z'),
+      updatedAt: new Date('2026-09-01T09:00:00.000Z'),
+      __v: 0,
+    });
+    expect('eligibleWorkCountries' in (await raw())).toBe(false);
+
+    const loaded = await Job.findOne({ slug: SLUG });
+    expect([...loaded.eligibleWorkCountries]).toEqual([]);
+    expect((await detail()).eligibleWorkCountries).toEqual([]);
+    const list = (await request(buildConnectedApp()).get('/api/v1/jobs')).body.data.items;
+    expect(list.map((item) => item.slug)).toEqual([SLUG]);
+    expect(list[0]).not.toHaveProperty('eligibleWorkCountries');
+
+    const before = await raw();
+    const result = await provision(omitted());
+    expect(result.outcome).toBe('unchanged');
+    expect(await raw()).toEqual(before);
+  });
+
+  it('explicit list -> unrelated edit keeps it -> invalid edit changes nothing -> [] clears it', async () => {
+    const created = await provision(base({ eligibleWorkCountries: ['NZ', 'DE'] }), { confirmLifecycle: true });
+    expect(created.outcome).toBe('created');
+    expect((await raw()).eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    expect((await detail()).eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    expect(created.job.eligibleWorkCountries).toEqual(['NZ', 'DE']);
+
+    // A routine edit that leaves the key out keeps the approved list.
+    const edited = await provision(omitted({ description: 'QA TEST DATA revised description.' }));
+    expect(edited.outcome).toBe('updated');
+    expect(edited.plan.changes).toEqual(['description']);
+    expect((await raw()).eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    expect((await detail()).eligibleWorkCountries).toEqual(['NZ', 'DE']);
+
+    // Invalid input is refused before any database access (definition) or before any write (plan):
+    // the stored record is byte-for-byte what it was.
+    const before = await raw();
+    expect(() => definitionOf(base({ eligibleWorkCountries: ['NZ', 'XX'] }))).toThrow(/not an uppercase ISO 3166-1 alpha-2/);
+    expect(() => definitionOf(base({ eligibleWorkCountries: ['NZ', 'NZ'] }))).toThrow(/listed more than once/);
+    const hybrid = await provision(omitted({ workArrangement: 'HYBRID' }), { confirmLifecycle: true });
+    expect(hybrid.outcome).toBe('refused');
+    expect(codes(hybrid)).toEqual(['ELIGIBLE_WORK_COUNTRIES_INVALID']);
+    expect(await raw()).toEqual(before);
+
+    // A deliberate clear removes the public eligibility.
+    const cleared = await provision(base({ description: 'QA TEST DATA revised description.', eligibleWorkCountries: [] }));
+    expect(cleared.outcome).toBe('updated');
+    expect(cleared.plan.changes).toEqual(['eligibleWorkCountries']);
+    expect((await raw()).eligibleWorkCountries).toEqual([]);
+    expect((await detail()).eligibleWorkCountries).toEqual([]);
+  });
+
+  it('with Applications, changing the list is a material change that needs --confirm-material-change', async () => {
+    await provision(base({ eligibleWorkCountries: ['NZ', 'DE'] }), { confirmLifecycle: true });
+    const job = await Job.findOne({ slug: SLUG });
+    const now = new Date();
+    await Application.collection.insertOne({ jobId: job._id, submittedAt: now, createdAt: now, updatedAt: now });
+    const refused = await provision(base({ eligibleWorkCountries: ['NZ'] }));
+    expect(codes(refused)).toContain('MATERIAL_CHANGE_CONFIRMATION_REQUIRED');
+    expect((await raw()).eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    const confirmed = await provision(base({ eligibleWorkCountries: ['NZ'] }), { confirmMaterialChange: true });
+    expect(confirmed.outcome).toBe('updated');
+    expect((await raw()).eligibleWorkCountries).toEqual(['NZ']);
+  });
+});
+
 describe('the provisioning CLI against the test database', () => {
   const cli = (args) => {
     const result = spawnSync(process.execPath, ['scripts/provision-job.mjs', ...args], {
@@ -511,11 +599,42 @@ describe('the provisioning CLI against the test database', () => {
     }
   }, 120_000);
 
+  it('OD-2026-11-09-02: prints where the eligible countries come from, and refuses an invalid code before any database access', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'valida-c4-eligibility-cli-'));
+    try {
+      const good = join(dir, 'qa-eligible.json');
+      writeFileSync(good, JSON.stringify(syntheticDefinition({ slug: 'qa-cli-eligible', eligibleWorkCountries: ['NZ', 'DE'] })));
+      const created = cli(['apply', '--file', good]);
+      expect(created.code).toBe(0);
+      expect(created.output).toMatch(/eligible countries: NZ, DE \(from the definition\)/);
+      expect(created.output).toMatch(/ {2}eligible countries: NZ, DE/);
+
+      const kept = join(dir, 'qa-kept.json');
+      const keptDefinition = syntheticDefinition({ slug: 'qa-cli-eligible', description: 'QA TEST DATA revised.' });
+      delete keptDefinition.eligibleWorkCountries;
+      writeFileSync(kept, JSON.stringify(keptDefinition));
+      const edited = cli(['apply', '--file', kept]);
+      expect(edited.code).toBe(0);
+      expect(edited.output).toMatch(/eligible countries: NZ, DE \(not in the definition: the stored list is kept\)/);
+
+      const before = await stored('qa-cli-eligible');
+      const bad = join(dir, 'qa-bad.json');
+      writeFileSync(bad, JSON.stringify(syntheticDefinition({ slug: 'qa-cli-eligible', eligibleWorkCountries: ['nz'] })));
+      const refused = cli(['apply', '--file', bad]);
+      expect(refused.code).toBe(1);
+      expect(refused.output).toMatch(/INVALID DEFINITION — nothing was read from or written to the database/);
+      expect(refused.output).toMatch(/eligibleWorkCountries: "nz" is not an uppercase ISO 3166-1 alpha-2 country code/);
+      expect(await stored('qa-cli-eligible')).toEqual(before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   it('provisions the committed real initial role file as DRAFT through the CLI', async () => {
     const result = cli(['apply', '--file', REAL_ROLE_FILE]);
     expect(result.code).toBe(0);
     expect(result.output).toMatch(/result\s+: CREATED/);
-    expect(result.output).toMatch(/awaiting input\s+: location, employmentType, schedule, description/);
+    expect(result.output).toMatch(/awaiting input\s+: location, eligibleWorkCountries, employmentType, schedule, description/);
     expect((await stored('cybersecurity-specialist')).status).toBe('DRAFT');
 
     const publish = cli(['apply', '--file', REAL_ROLE_FILE, '--confirm-lifecycle']);

@@ -110,6 +110,50 @@ describe('Job — field validation', () => {
   });
 });
 
+describe('Job — eligible remote-work countries (OD-2026-11-09-02)', () => {
+  it('is optional and defaults to none', async () => {
+    const job = new Job(jobFields());
+    expect(await validate(job)).toBeNull();
+    expect([...job.eligibleWorkCountries]).toEqual([]);
+  });
+
+  it('accepts uppercase ISO 3166-1 alpha-2 codes and keeps their order', async () => {
+    const job = new Job(jobFields({ workArrangement: 'FULLY_REMOTE', eligibleWorkCountries: ['NZ', 'DE'] }));
+    expect(await validate(job)).toBeNull();
+    expect([...job.eligibleWorkCountries]).toEqual(['NZ', 'DE']);
+  });
+
+  it.each([
+    ['a lowercase code (no silent normalization)', ['de']],
+    ['an unassigned code', ['XX']],
+    ['an alpha-3 code', ['DEU']],
+    ['a duplicate', ['DE', 'DE']],
+  ])('rejects %s', async (_label, eligibleWorkCountries) => {
+    const job = new Job(jobFields({ workArrangement: 'FULLY_REMOTE', eligibleWorkCountries }));
+    expect(await errorsOf(job)).toContain('eligibleWorkCountries');
+  });
+
+  it('belongs to a remote role: a list on HYBRID or ON_SITE is rejected; an empty one is fine', async () => {
+    for (const workArrangement of ['HYBRID', 'ON_SITE']) {
+      expect(await errorsOf(new Job(jobFields({ workArrangement, eligibleWorkCountries: ['DE'] }))), workArrangement).toContain('eligibleWorkCountries');
+      expect(await validate(new Job(jobFields({ workArrangement, eligibleWorkCountries: [] }))), workArrangement).toBeNull();
+    }
+    expect(await validate(new Job(jobFields({ workArrangement: null, eligibleWorkCountries: ['DE'] })))).toBeNull();
+  });
+
+  it('a Job stored before the field existed loads with none and stays valid', async () => {
+    const legacy = Job.hydrate({ _id: new mongoose.Types.ObjectId(), ...jobFields({ workArrangement: 'FULLY_REMOTE' }) });
+    expect([...legacy.eligibleWorkCountries]).toEqual([]);
+    expect(await validate(legacy)).toBeNull();
+  });
+
+  it('is editable through the service allowlist only as a whole list', () => {
+    const job = new Job(jobFields({ workArrangement: 'FULLY_REMOTE' }));
+    applyJobEdit(job, { eligibleWorkCountries: ['CA', 'NZ'] });
+    expect([...job.eligibleWorkCountries]).toEqual(['CA', 'NZ']);
+  });
+});
+
 describe('Job — money as integer minor units (Doc 10 section 13)', () => {
   it('accepts CAD 35.00 as 3500', async () => {
     const job = new Job(jobFields({ compensation: { currency: 'CAD', amountMinor: 3500, unit: 'HOUR', gross: true } }));

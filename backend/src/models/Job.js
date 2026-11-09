@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { ALLOWED_TRANSITIONS, checkPublishReadiness } from '../modules/jobs/job.rules.js';
 import { restrictToValidatedSaves } from './writeGuards.js';
+import {
+  eligibleWorkCountriesArrangementProblem,
+  eligibleWorkCountriesProblem,
+} from '../modules/jobs/eligibleWorkCountries.js';
 
 /**
  * Job model — 10_DATA_MODEL.md sections 17-70.
@@ -263,6 +267,25 @@ const jobSchema = new mongoose.Schema(
 
     location: { type: locationSchema, default: () => ({}) },
     workArrangement: { type: String, enum: [...WORK_ARRANGEMENTS, null], default: null },
+    /*
+     * OD-2026-11-09-02 — the countries from which Valida has approved an
+     * employee to perform this remote role: ISO 3166-1 alpha-2 codes, in the
+     * order given. Optional. Absent (a Job stored before this field existed)
+     * and empty both mean that no country is approved, and no eligibility is
+     * stated anywhere. It is independent of `location` (the physical job
+     * location), of the recruitment audience and of the visitor's regional
+     * view, and is never derived from any of them, from the occupational
+     * reference or from a publication country: only an explicit value for this
+     * Job sets it.
+     */
+    eligibleWorkCountries: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (value) => eligibleWorkCountriesProblem(value) === null,
+        message: (props) => eligibleWorkCountriesProblem(props.value) ?? 'eligibleWorkCountries is invalid',
+      },
+    },
     employmentType: { type: String, enum: [...EMPLOYMENT_TYPES, null], default: null },
     schedule: { type: String, trim: true, maxlength: 240, default: null },
     weeklyHours: {
@@ -315,6 +338,10 @@ jobSchema.post('save', rememberPersistedLifecycle);
 
 jobSchema.pre('validate', function enforceLifecycle() {
   const persisted = this.$locals.persisted;
+
+  // OD-2026-11-09-02 — eligible remote-work countries belong to a remote role.
+  const arrangementProblem = eligibleWorkCountriesArrangementProblem(this.eligibleWorkCountries, this.workArrangement);
+  if (arrangementProblem) this.invalidate('eligibleWorkCountries', arrangementProblem);
 
   // Doc 10 sections 57-58 — every Job begins as a DRAFT.
   if (this.isNew && this.status !== 'DRAFT') {

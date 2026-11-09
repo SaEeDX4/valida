@@ -44,7 +44,7 @@ const LIST_KEYS = [
 ];
 const DETAIL_KEYS = [
   'title', 'slug', 'location', 'workArrangement', 'employmentType', 'schedule', 'weeklyHours',
-  'compensation', 'description', 'responsibilities', 'requirements', 'preferredQualifications',
+  'compensation', 'eligibleWorkCountries', 'description', 'responsibilities', 'requirements', 'preferredQualifications',
   'publishedAt', 'closesAt', 'applicationStatus', 'applicationForm',
 ];
 
@@ -192,6 +192,32 @@ describe('public Job detail (Doc 09 sections 63-67)', () => {
     expect(detail.applicationStatus).toBe('CLOSED');
     expect(detail.applicationForm).toBeNull();
     expect(detail.description).toBe('QA TEST DATA description.');
+  });
+
+  it('OD-2026-11-09-02: carries the explicit eligible remote-work countries as stored, in order; the list row does not', () => {
+    const job = storedJob({ eligibleWorkCountries: ['NZ', 'DE'] });
+    expect(toPublicJobDetail(job, 'OPEN').eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    expect(toPublicJobDetail(job, 'CLOSED').eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    expect(Object.keys(toPublicJobListItem(job, 'OPEN'))).toEqual(LIST_KEYS);
+  });
+
+  it('OD-2026-11-09-02: a Job stored before the field existed, or with none approved, states none: []', () => {
+    const legacy = storedJob();
+    delete legacy.eligibleWorkCountries;
+    expect('eligibleWorkCountries' in legacy).toBe(false);
+    expect(toPublicJobDetail(legacy, 'OPEN').eligibleWorkCountries).toEqual([]);
+    expect(toPublicJobDetail(storedJob({ eligibleWorkCountries: [] }), 'OPEN').eligibleWorkCountries).toEqual([]);
+    expect(toPublicJobDetail(storedJob({ eligibleWorkCountries: null }), 'OPEN').eligibleWorkCountries).toEqual([]);
+  });
+
+  it.each([
+    ['a lowercase code', ['de']],
+    ['an unassigned code', ['XX']],
+    ['an alpha-3 code', ['DEU']],
+    ['a duplicate', ['DE', 'DE']],
+    ['a non-string', [49]],
+  ])('OD-2026-11-09-02: a stored list with %s is refused, never narrowed or widened', (_label, value) => {
+    expect(() => toPublicJobDetail(storedJob({ eligibleWorkCountries: value }), 'OPEN')).toThrow(PublicJobMappingError);
   });
 
   it('exposes no internal field, embedded _id or stored-only flag', () => {

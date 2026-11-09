@@ -18,6 +18,7 @@ import { UnsupportedWriteError } from '../../models/writeGuards.js';
 import { safeErrorSummary } from '../../lib/safeError.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { publicApplicationStatus } from './job.visibility.js';
+import { eligibleWorkCountriesArrangementProblem, eligibleWorkCountriesProblem } from './eligibleWorkCountries.js';
 
 /**
  * Controlled server-side Job provisioning — 18_IMPLEMENTATION_ROADMAP.md
@@ -90,6 +91,17 @@ import { publicApplicationStatus } from './job.visibility.js';
  *
  * - AWAITING INPUT stays unpublished. `awaitingInput` lists the content still
  *   waiting for approval; while it is non-empty the Job cannot be published.
+ *
+ * - Eligible remote-work countries (OD-2026-11-09-02) are the one OPTIONAL
+ *   content key, so that a routine edit cannot erase an approved list by
+ *   leaving it out:
+ *     omitted            the stored list is kept unchanged (a new Job: none);
+ *     []                 a deliberate clear — no country is approved;
+ *     ["DE", "NZ", …]    exactly these ISO 3166-1 alpha-2 codes, in this order.
+ *   Codes must be uppercase, officially assigned and unique; a list is allowed
+ *   on a FULLY_REMOTE Job (or a Draft with no arrangement yet) only. Anything
+ *   else is refused before a write, so the stored Job stays as it was. The
+ *   list is a material field (Doc 12 section 41).
  */
 
 /** Content fields a definition sets, in the order they are compared and reported. */
@@ -98,6 +110,7 @@ export const CONTENT_FIELDS = Object.freeze([
   'internalOccupationalReference',
   'location',
   'workArrangement',
+  'eligibleWorkCountries',
   'employmentType',
   'schedule',
   'weeklyHours',
@@ -119,6 +132,9 @@ export const MATERIAL_FIELDS = Object.freeze([
   'weeklyHours',
   'workArrangement',
   'location',
+  // OD-2026-11-09-02: where the employee may perform the role is as material
+  // as the location (Doc 12 section 41 lists its changes as examples).
+  'eligibleWorkCountries',
   'employmentType',
   'responsibilities',
   'requirements',
@@ -228,6 +244,14 @@ export const jobDefinitionSchema = z
       })
       .strict(),
     workArrangement: z.enum(WORK_ARRANGEMENTS).nullable(),
+    /** OD-2026-11-09-02 — optional: omitted keeps the stored list; [] clears it. */
+    eligibleWorkCountries: z
+      .array(z.string())
+      .superRefine((codes, ctx) => {
+        const problem = eligibleWorkCountriesProblem(codes);
+        if (problem) ctx.addIssue({ code: 'custom', message: problem.replace(/^eligibleWorkCountries:? ?/, '') });
+      })
+      .optional(),
     employmentType: z.enum(EMPLOYMENT_TYPES).nullable(),
     schedule: optionalText(240),
     weeklyHours: z.number().gt(0).max(168).nullable(),
@@ -254,7 +278,11 @@ export const jobDefinitionSchema = z
       .transform((value) => new Date(value))
       .nullable(),
   })
-  .strict();
+  .strict()
+  .superRefine((definition, ctx) => {
+    const problem = eligibleWorkCountriesArrangementProblem(definition.eligibleWorkCountries, definition.workArrangement);
+    if (problem) ctx.addIssue({ code: 'custom', path: ['eligibleWorkCountries'], message: problem });
+  });
 
 /**
  * Validates a parsed JSON value as a Job definition.
@@ -291,6 +319,8 @@ export function canonicalJobContent(job) {
       locality: nullIfEmpty(source.location?.locality),
     },
     workArrangement: nullIfEmpty(source.workArrangement),
+    // A Job stored before the field existed has none: the same as [].
+    eligibleWorkCountries: [...(source.eligibleWorkCountries ?? [])],
     employmentType: nullIfEmpty(source.employmentType),
     schedule: nullIfEmpty(source.schedule),
     weeklyHours: nullIfEmpty(source.weeklyHours),
@@ -399,13 +429,20 @@ export function resolveScreeningQuestions(existingQuestions, desiredQuestions) {
   return errors.length ? { ok: false, errors } : { ok: true, questions };
 }
 
-/** The content the definition asks for, with screening identifiers resolved. */
-function desiredContent(definition, screeningQuestions) {
+/**
+ * The content the definition asks for, with screening identifiers resolved.
+ * An omitted eligibleWorkCountries keeps the stored list (none for a new Job).
+ */
+function desiredContent(definition, screeningQuestions, currentContent) {
   return {
     title: definition.title,
     internalOccupationalReference: definition.internalOccupationalReference,
     location: { ...definition.location },
     workArrangement: definition.workArrangement,
+    eligibleWorkCountries:
+      definition.eligibleWorkCountries !== undefined
+        ? [...definition.eligibleWorkCountries]
+        : [...(currentContent?.eligibleWorkCountries ?? [])],
     employmentType: definition.employmentType,
     schedule: definition.schedule,
     weeklyHours: definition.weeklyHours,
@@ -495,7 +532,11 @@ export function planJobProvisioning({ current, definition, now, applicationCount
     definition.applicationConfig.screeningQuestions,
   );
   if (!resolution.ok) refusals.push(...resolution.errors);
-  const desired = desiredContent(definition, resolution.ok ? resolution.questions : []);
+  const desired = desiredContent(definition, resolution.ok ? resolution.questions : [], currentContent);
+
+  // OD-2026-11-09-02 — a kept list must still suit the arrangement the definition sets.
+  const keptListProblem = eligibleWorkCountriesArrangementProblem(desired.eligibleWorkCountries, desired.workArrangement);
+  if (keptListProblem) refusals.push({ code: 'ELIGIBLE_WORK_COUNTRIES_INVALID', message: keptListProblem });
 
   const changes = currentContent
     ? CONTENT_FIELDS.filter((field) => !sameValue(currentContent[field], desired[field]))
@@ -603,6 +644,10 @@ export function planJobProvisioning({ current, definition, now, applicationCount
     },
     applicationCount,
     newScreeningIdentifiers,
+    eligibleWorkCountries: {
+      source: definition.eligibleWorkCountries !== undefined ? 'definition' : 'kept',
+      value: [...desired.eligibleWorkCountries],
+    },
     readiness,
     awaitingInput: [...definition.awaitingInput],
     publicBefore,
@@ -626,6 +671,7 @@ function describeJob(job, now) {
     closedAt: plain.closedAt instanceof Date ? plain.closedAt.toISOString() : null,
     archivedAt: plain.archivedAt instanceof Date ? plain.archivedAt.toISOString() : null,
     publicNow: publicApplicationStatus(plain, now) ?? 'NOT_PUBLIC',
+    eligibleWorkCountries: [...(plain.eligibleWorkCountries ?? [])],
     screeningQuestions: (plain.applicationConfig?.screeningQuestions ?? []).map((question) => ({
       questionId: question.questionId,
       prompt: question.prompt,

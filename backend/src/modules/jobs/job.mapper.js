@@ -1,5 +1,6 @@
 import { RESUME_UPLOAD_POLICY } from '../../config/resumePolicy.js';
 import { minorToMajor } from './money.js';
+import { eligibleWorkCountriesProblem } from './eligibleWorkCountries.js';
 
 /**
  * Public Job DTOs — 09_BACKEND_API_SPEC.md sections 54, 63-67, 182-186;
@@ -138,6 +139,20 @@ export function toPublicApplicationForm(applicationConfig) {
 }
 
 /**
+ * OD-2026-11-09-02 — the Job's explicit eligible remote-work countries, as the
+ * stored ISO 3166-1 alpha-2 codes in their stored order. A Job stored before the
+ * field existed, or with none approved, gives []. A stored list that is not
+ * valid cannot be stated truthfully, so the mapping is refused rather than
+ * silently narrowed or widened.
+ */
+export function toPublicEligibleWorkCountries(value) {
+  if (value === undefined || value === null) return [];
+  const codes = Array.from(value);
+  if (eligibleWorkCountriesProblem(codes) !== null) throw new PublicJobMappingError('eligible_work_countries');
+  return codes;
+}
+
+/**
  * Doc 09 sections 63-65 — GET /api/v1/jobs/:jobSlug.
  *
  * An OPEN Job carries its application form. A CLOSED Job carries
@@ -149,6 +164,8 @@ export function toPublicJobDetail(job, applicationStatus) {
   }
   return {
     ...publicSummary(job),
+    // OD-2026-11-09-02 — Job Detail only; the Careers list is unchanged.
+    eligibleWorkCountries: toPublicEligibleWorkCountries(job.eligibleWorkCountries),
     description: typeof job.description === 'string' ? job.description : '',
     responsibilities: stringList(job.responsibilities),
     requirements: stringList(job.requirements),

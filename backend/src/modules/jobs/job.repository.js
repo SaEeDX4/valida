@@ -58,6 +58,8 @@ export const LIST_PROJECTION = Object.freeze({
 /** Fields read for a detail page: the list fields plus role content and form configuration. */
 export const DETAIL_PROJECTION = Object.freeze({
   ...LIST_PROJECTION,
+  // OD-2026-11-09-02 — the explicit eligible remote-work countries (Job Detail only).
+  eligibleWorkCountries: 1,
   description: 1,
   responsibilities: 1,
   requirements: 1,

@@ -97,6 +97,8 @@ export function effectiveApplicationStatus(job, now = new Date()) {
  */
 const EDITABLE_FIELDS = new Set([
   'title', 'slug', 'internalOccupationalReference', 'location', 'workArrangement',
+  // OD-2026-11-09-02 — the Job's explicit eligible remote-work countries.
+  'eligibleWorkCountries',
   'employmentType', 'schedule', 'weeklyHours', 'compensation', 'description',
   'responsibilities', 'requirements', 'preferredQualifications', 'applicationConfig',
   'closesAt',

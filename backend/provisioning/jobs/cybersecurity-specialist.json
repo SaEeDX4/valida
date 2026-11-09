@@ -3,6 +3,7 @@
   "status": "DRAFT",
   "awaitingInput": [
     "location",
+    "eligibleWorkCountries",
     "employmentType",
     "schedule",
     "description",
@@ -13,13 +14,14 @@
     "closesAt"
   ],
   "notes": [
-    "REAL INITIAL ROLE. Planning data: Doc 10 section 70, Doc 12 section 44, Doc 18 section 110, as amended by owner decision OD-2026-11-09-01 (docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md).",
-    "OD-2026-11-09-01: fully remote, with an international recruitment audience. NOC 21220 is an occupational reference only: it does not establish a Canada-only restriction and stays internal (Doc 10 section 23).",
-    "OD-2026-11-09-01: the countries from which the employee may perform this role are OPEN pending company and employment arrangements. location is therefore AWAITING INPUT. The stored planning value (British Columbia, Canada / CA / BC) is kept unchanged as planning data only: it is not an approved work country and never establishes eligibility.",
-    "Never derive employment eligibility from the regional selector, location, a publication market, nationality or the occupational reference (OD-2026-11-09-01).",
+    "REAL INITIAL ROLE, DRAFT. Owner decisions OD-2026-11-09-01 (vacancy, audience, work countries OPEN) and OD-2026-11-09-02 (the eligibleWorkCountries field): docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md and docs/review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md.",
+    "Cybersecurity Specialist, fully remote, international recruitment audience. NOC 21220 is an internal occupational reference only (Doc 10 section 23): it establishes no Canada-only restriction and no eligibility.",
+    "eligibleWorkCountries is [] and AWAITING INPUT: the countries from which Valida may employ someone to perform this role are OPEN pending company and employment arrangements. Only an explicit, approved list for this vacancy may set them.",
+    "location (British Columbia, Canada / CA / BC) is the historical planning value of the physical work location (Master Prompt v3.0 section 6; Doc 00 section 10; Doc 01 section 17; Doc 02 section 49; Doc 06 section 107; Doc 10 section 70; Doc 12 section 44). It is kept unchanged and AWAITING INPUT. It is not an eligible work country and establishes no eligibility.",
+    "Never derive eligibility from location, the regional selector, a publication country, a visitor's region, nationality or the occupational reference.",
     "title, workArrangement FULLY_REMOTE, weeklyHours 30 and compensation CAD 35.00 gross per hour (amountMinor 3500) are unchanged planning data.",
     "The slug matches the canonical Job URL /careers/cybersecurity-specialist (Doc 12 section 6).",
-    "AWAITING INPUT: the work country or countries (location), employment type, final schedule wording, description, responsibilities, requirements, preferred qualifications (if used), screening questions (if used) and closing date (if used). The description must reflect Valida's actual responsibilities and requirements. Doc 12 section 45: nothing may be invented; the Job stays DRAFT until approved content exists.",
+    "AWAITING INPUT: the physical work location, the eligible work countries, employment type, final schedule wording, description, responsibilities, requirements, preferred qualifications (if used), screening questions (if used) and closing date (if used). The description must reflect Valida's actual responsibilities and requirements. Doc 12 section 45: nothing may be invented; the Job stays DRAFT until approved content exists, and its publication remains subject to the Release E gates, including E6.",
     "applicationConfig uses the Doc 10 defaults (phone and message disabled, message maxLength 5000, resume required). Whether phone or message is collected is a later approval decision.",
     "internalOccupationalReference is internal only and never appears in the public API (Doc 10 section 23)."
   ],
@@ -32,6 +34,7 @@
     "locality": null
   },
   "workArrangement": "FULLY_REMOTE",
+  "eligibleWorkCountries": [],
   "employmentType": null,
   "schedule": null,
   "weeklyHours": 30,

@@ -96,8 +96,11 @@ describe('the real initial role definition (Doc 10 s70, Doc 12 ss44-45, Doc 18 s
       closesAt: null,
     });
     expect(role.applicationConfig.screeningQuestions).toEqual([]);
+    // OD-2026-11-09-02: explicitly none approved, never inferred from the BC planning location or NOC 21220.
+    expect(role.eligibleWorkCountries).toEqual([]);
     expect(role.awaitingInput).toEqual([
-      'location', // OD-2026-11-09-01: the work countries are OPEN
+      'location', // OD-2026-11-09-01: the historical BC planning value is not an approved location
+      'eligibleWorkCountries', // OD-2026-11-09-01/-02: the work countries are OPEN
       'employmentType',
       'schedule',
       'description',
@@ -136,13 +139,13 @@ describe('the real initial role definition (Doc 10 s70, Doc 12 ss44-45, Doc 18 s
     expect(plan.refusals.map((refusal) => refusal.code)).toEqual(['NOT_PUBLISH_READY']);
   });
 
-  it('the open work location alone blocks publication, even with every other field filled (synthetic QA content)', () => {
+  it.each(['location', 'eligibleWorkCountries'])('the open %s alone blocks publication, even with every other field filled (synthetic QA content)', (field) => {
     const plan = planJobProvisioning({
       current: null,
       definition: parse({
         ...readRealRole(),
         status: 'PUBLISHED',
-        awaitingInput: ['location'],
+        awaitingInput: [field],
         employmentType: 'PART_TIME',
         schedule: 'QA synthetic schedule',
         description: 'QA synthetic description, not role content.',
@@ -153,7 +156,7 @@ describe('the real initial role definition (Doc 10 s70, Doc 12 ss44-45, Doc 18 s
     });
     expect(plan.readiness.ready).toBe(true);
     expect(plan.refusals.map((refusal) => refusal.code)).toEqual(['AWAITING_INPUT']);
-    expect(plan.refusals[0].message).toContain('location');
+    expect(plan.refusals[0].message).toContain(field);
   });
 });
 
@@ -236,11 +239,112 @@ describe('definition validation (before any database access)', () => {
   });
 
   it('covers every content field, and treats only the Doc 12 section 41 fields as material', () => {
-    expect(CONTENT_FIELDS).toHaveLength(14);
+    expect(CONTENT_FIELDS).toHaveLength(15);
     expect(AWAITABLE_FIELDS).toContain('screeningQuestions');
+    expect(AWAITABLE_FIELDS).toContain('eligibleWorkCountries');
     expect(MATERIAL_FIELDS).toEqual([
-      'compensation', 'weeklyHours', 'workArrangement', 'location', 'employmentType', 'responsibilities', 'requirements',
+      'compensation', 'weeklyHours', 'workArrangement', 'location', 'eligibleWorkCountries', 'employmentType',
+      'responsibilities', 'requirements',
     ]);
+  });
+});
+
+describe('eligible remote-work countries (OD-2026-11-09-02)', () => {
+  const plan = (current, raw, extra = {}) =>
+    planJobProvisioning({ current, definition: parse(raw), now: QA_NOW, ...extra });
+  const withoutEligibility = (overrides = {}) => {
+    const raw = syntheticDefinition(overrides);
+    delete raw.eligibleWorkCountries;
+    return raw;
+  };
+  const storedWith = (eligibleWorkCountries, extra = {}) => ({ ...storedFrom(syntheticDefinition()), eligibleWorkCountries, ...extra });
+
+  it('is optional: omitted, [] and an explicit list are valid definitions', () => {
+    expect(parseJobDefinition(withoutEligibility()).ok).toBe(true);
+    expect(parse(withoutEligibility()).eligibleWorkCountries).toBeUndefined();
+    expect(parse(syntheticDefinition({ eligibleWorkCountries: [] })).eligibleWorkCountries).toEqual([]);
+    expect(parse(syntheticDefinition({ eligibleWorkCountries: ['NZ', 'DE'] })).eligibleWorkCountries).toEqual(['NZ', 'DE']);
+  });
+
+  it.each([
+    ['a lowercase code', ['de'], 'not an uppercase ISO 3166-1 alpha-2 country code'],
+    ['an unassigned code', ['XX'], 'not an uppercase ISO 3166-1 alpha-2 country code'],
+    ['an alpha-3 code', ['DEU'], 'not an uppercase ISO 3166-1 alpha-2 country code'],
+    ['a country name', ['Germany'], 'not an uppercase ISO 3166-1 alpha-2 country code'],
+    ['a duplicate', ['DE', 'NZ', 'DE'], 'DE is listed more than once'],
+    ['padding', [' DE'], 'not an uppercase ISO 3166-1 alpha-2 country code'],
+  ])('refuses %s before any database access', (_label, value, message) => {
+    const result = parseJobDefinition(syntheticDefinition({ eligibleWorkCountries: value }));
+    expect(result.ok).toBe(false);
+    expect(result.errors.join('\n')).toContain('eligibleWorkCountries');
+    expect(result.errors.join('\n')).toContain(message);
+  });
+
+  it('refuses a non-list and a non-string entry', () => {
+    expect(parseJobDefinition(syntheticDefinition({ eligibleWorkCountries: 'DE' })).ok).toBe(false);
+    expect(parseJobDefinition(syntheticDefinition({ eligibleWorkCountries: [276] })).ok).toBe(false);
+    expect(parseJobDefinition(syntheticDefinition({ eligibleWorkCountries: null })).ok).toBe(false);
+  });
+
+  it('belongs to a remote role: refused on HYBRID / ON_SITE, allowed on FULLY_REMOTE and on a Draft with no arrangement yet', () => {
+    for (const workArrangement of ['HYBRID', 'ON_SITE']) {
+      const result = parseJobDefinition(syntheticDefinition({ workArrangement, eligibleWorkCountries: ['DE'] }));
+      expect(result.ok, workArrangement).toBe(false);
+      expect(result.errors.join('\n')).toContain('apply to a FULLY_REMOTE Job only');
+      expect(parseJobDefinition(syntheticDefinition({ workArrangement, eligibleWorkCountries: [] })).ok, workArrangement).toBe(true);
+    }
+    expect(parseJobDefinition(syntheticDefinition({ workArrangement: null, eligibleWorkCountries: ['DE'] })).ok).toBe(true);
+  });
+
+  it('a new Job without the key has none; with a list, exactly that list', () => {
+    expect(plan(null, withoutEligibility()).desired.eligibleWorkCountries).toEqual([]);
+    expect(plan(null, withoutEligibility()).eligibleWorkCountries).toEqual({ source: 'kept', value: [] });
+    expect(plan(null, syntheticDefinition({ eligibleWorkCountries: ['NZ', 'DE'] })).desired.eligibleWorkCountries).toEqual(['NZ', 'DE']);
+  });
+
+  it('a routine edit that omits the key keeps the approved list: no change, nothing material', () => {
+    const result = plan(storedWith(['NZ', 'DE']), withoutEligibility({ description: 'QA TEST DATA revised description.' }));
+    expect(result.changes).toEqual(['description']);
+    expect(result.desired.eligibleWorkCountries).toEqual(['NZ', 'DE']);
+    expect(result.eligibleWorkCountries).toEqual({ source: 'kept', value: ['NZ', 'DE'] });
+    expect(result.materialChanges).toEqual([]);
+  });
+
+  it('a Job stored before the field existed reads as none, and an omitted key changes nothing', () => {
+    const legacy = storedFrom(syntheticDefinition());
+    delete legacy.eligibleWorkCountries;
+    expect(canonicalJobContent(legacy).eligibleWorkCountries).toEqual([]);
+    expect(plan(legacy, withoutEligibility()).action).toBe('unchanged');
+    expect(plan(legacy, syntheticDefinition({ eligibleWorkCountries: [] })).action).toBe('unchanged');
+  });
+
+  it('[] is a deliberate clear; a different list or order is a change; both are material', () => {
+    const cleared = plan(storedWith(['NZ', 'DE']), syntheticDefinition({ eligibleWorkCountries: [] }));
+    expect(cleared.changes).toEqual(['eligibleWorkCountries']);
+    expect(cleared.desired.eligibleWorkCountries).toEqual([]);
+    expect(cleared.materialChanges).toEqual(['eligibleWorkCountries']);
+    expect(cleared.eligibleWorkCountries).toEqual({ source: 'definition', value: [] });
+    expect(plan(storedWith(['NZ', 'DE']), syntheticDefinition({ eligibleWorkCountries: ['DE', 'NZ'] })).changes).toEqual(['eligibleWorkCountries']);
+    expect(plan(storedWith(['NZ', 'DE']), syntheticDefinition({ eligibleWorkCountries: ['NZ', 'DE'] })).action).toBe('unchanged');
+  });
+
+  it('with Applications, a change to the list needs --confirm-material-change (Doc 12 sections 41-42)', () => {
+    const result = plan(storedWith(['NZ', 'DE']), syntheticDefinition({ eligibleWorkCountries: ['NZ'] }), { applicationCount: 2 });
+    expect(result.requiresConfirmation.materialChange).toBe(true);
+  });
+
+  it('a kept list on a Job the definition turns HYBRID is refused until it is cleared', () => {
+    const result = plan(storedWith(['NZ']), withoutEligibility({ workArrangement: 'HYBRID' }));
+    expect(result.refusals.map((refusal) => refusal.code)).toEqual(['ELIGIBLE_WORK_COUNTRIES_INVALID']);
+    expect(plan(storedWith(['NZ']), syntheticDefinition({ workArrangement: 'HYBRID', eligibleWorkCountries: [] })).refusals).toEqual([]);
+  });
+
+  it('publication rules are unchanged: the field is optional and not part of publish readiness', () => {
+    const result = plan(null, withoutEligibility({ status: 'PUBLISHED' }));
+    expect(result.readiness).toEqual({ ready: true, missing: [] });
+    expect(result.refusals).toEqual([]);
+    const awaiting = plan(null, syntheticDefinition({ status: 'PUBLISHED', awaitingInput: ['eligibleWorkCountries'], eligibleWorkCountries: [] }));
+    expect(awaiting.refusals.map((refusal) => refusal.code)).toEqual(['AWAITING_INPUT']);
   });
 });
 

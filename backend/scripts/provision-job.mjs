@@ -143,6 +143,16 @@ function report({ mode, file, databaseName, result, confirmations }) {
   lines.push(`stored status     : ${plan.currentStatus ?? 'none (no Job has this slug)'}`);
   lines.push(`action            : ${plan.action}`);
   lines.push(`fields changing   : ${list(plan.changes)}`);
+  // OD-2026-11-09-02 — say where the eligible remote-work countries come from.
+  lines.push(
+    `eligible countries: ${list(plan.eligibleWorkCountries.value)} (${
+      plan.eligibleWorkCountries.source === 'definition'
+        ? plan.eligibleWorkCountries.value.length
+          ? 'from the definition'
+          : 'from the definition: none approved'
+        : 'not in the definition: the stored list is kept'
+    })`,
+  );
   lines.push(
     `lifecycle         : ${
       plan.transition ? `${plan.transition.from} -> ${plan.transition.to}` : `no transition (${plan.desiredStatus})`
@@ -202,6 +212,7 @@ function report({ mode, file, databaseName, result, confirmations }) {
     lines.push(`  closedAt        : ${job.closedAt ?? '—'}`);
     lines.push(`  archivedAt      : ${job.archivedAt ?? '—'}`);
     lines.push(`  public now      : ${publicLabel(job.publicNow)}`);
+    lines.push(`  eligible countries: ${list(job.eligibleWorkCountries)}`);
     for (const question of job.screeningQuestions) {
       lines.push(`  question ${question.questionId}  ${question.prompt.slice(0, 60)}`);
       for (const option of question.options) lines.push(`    option ${option.optionId}  ${option.label.slice(0, 60)}`);

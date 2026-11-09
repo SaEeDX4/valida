@@ -37,8 +37,9 @@ export const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL ?? '').repl
  * SEO configuration of this build (C4): the canonical origin and whether the
  * build may be indexed. See src/seo/siteConfig.js.
  *
- *   VITE_PUBLIC_SITE_URL  the ONE canonical https:// origin (Doc 14 section 23).
- *                         Without a valid value no canonical URL, og:url or
+ *   VITE_PUBLIC_SITE_URL  the ONE canonical https:// origin (Doc 14 section 23):
+ *                         https://cybervalida.com (OD-2026-11-09-01). Without
+ *                         exactly that value no canonical URL, og:url or
  *                         JobPosting is emitted — nothing is fabricated.
  *   VITE_ALLOW_INDEXING   'true' only for the production build. Unset or
  *                         'false' (the default) is a review build: every page is

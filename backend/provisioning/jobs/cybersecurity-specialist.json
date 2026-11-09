@@ -2,6 +2,7 @@
   "slug": "cybersecurity-specialist",
   "status": "DRAFT",
   "awaitingInput": [
+    "location",
     "employmentType",
     "schedule",
     "description",
@@ -12,10 +13,13 @@
     "closesAt"
   ],
   "notes": [
-    "REAL INITIAL ROLE. Source-established planning data only: Doc 10 section 70, Doc 12 section 44, Doc 18 section 110.",
-    "title, internalOccupationalReference, location (British Columbia, Canada / CA / BC), workArrangement FULLY_REMOTE, weeklyHours 30 and compensation CAD 35.00 gross per hour (amountMinor 3500) are source-established.",
+    "REAL INITIAL ROLE. Planning data: Doc 10 section 70, Doc 12 section 44, Doc 18 section 110, as amended by owner decision OD-2026-11-09-01 (docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md).",
+    "OD-2026-11-09-01: fully remote, with an international recruitment audience. NOC 21220 is an occupational reference only: it does not establish a Canada-only restriction and stays internal (Doc 10 section 23).",
+    "OD-2026-11-09-01: the countries from which the employee may perform this role are OPEN pending company and employment arrangements. location is therefore AWAITING INPUT. The stored planning value (British Columbia, Canada / CA / BC) is kept unchanged as planning data only: it is not an approved work country and never establishes eligibility.",
+    "Never derive employment eligibility from the regional selector, location, a publication market, nationality or the occupational reference (OD-2026-11-09-01).",
+    "title, workArrangement FULLY_REMOTE, weeklyHours 30 and compensation CAD 35.00 gross per hour (amountMinor 3500) are unchanged planning data.",
     "The slug matches the canonical Job URL /careers/cybersecurity-specialist (Doc 12 section 6).",
-    "AWAITING INPUT: employment type, final schedule wording, description, responsibilities, requirements, preferred qualifications (if used), screening questions (if used) and closing date (if used). Doc 12 section 45: nothing may be invented; the Job stays DRAFT until approved content exists.",
+    "AWAITING INPUT: the work country or countries (location), employment type, final schedule wording, description, responsibilities, requirements, preferred qualifications (if used), screening questions (if used) and closing date (if used). The description must reflect Valida's actual responsibilities and requirements. Doc 12 section 45: nothing may be invented; the Job stays DRAFT until approved content exists.",
     "applicationConfig uses the Doc 10 defaults (phone and message disabled, message maxLength 5000, resume required). Whether phone or message is collected is a later approval decision.",
     "internalOccupationalReference is internal only and never appears in the public API (Doc 10 section 23)."
   ],

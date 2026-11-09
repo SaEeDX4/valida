@@ -18,11 +18,11 @@ import { ROBOTS } from './head.js';
  * Every title and description is the Document 06 copy already used since
  * A4/A5 (the *.content.js modules); nothing new is written here.
  *
- * Title patterns: Document 06 (sections 11, 54, 77, 94, 109, 155, 170, 179) and
- * Document 16 section 85 give different title patterns. The accepted A6/C2
- * titles follow Document 06 — the baselined content authority — and are kept;
- * the difference is raised as a Doc 00 conflict in the C4 handoff, not
- * resolved silently here.
+ * Title patterns: Document 06 (sections 11, 54, 77, 94, 109, 155, 170, 179) is
+ * the single authority for every page title. The different title strings of
+ * Document 16 sections 85-86 are superseded by owner decision OD-2026-11-09-01
+ * (docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md);
+ * the other Document 16 SEO requirements still apply.
  */
 
 /** The five indexable static routes (Doc 16 section 78). */

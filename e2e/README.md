@@ -133,7 +133,7 @@ A second suite with its own configuration (`playwright.seo.config.js`), setup (`
 
 **The stack:**
 - the **C4 document server**, `frontend/server/serve.mjs`, serving two production builds of the same commit:
-  - **indexed**: `VITE_ALLOW_INDEXING=true`, `VITE_PUBLIC_SITE_URL=https://cybervalida.com` — the intended domain, used as a **test value**;
+  - **indexed**: `VITE_ALLOW_INDEXING=true`, `VITE_PUBLIC_SITE_URL=https://cybervalida.com` — the approved canonical origin ([OD-2026-11-09-01](../docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md)), served only on 127.0.0.1; the build refuses any other origin;
   - **review**: no SEO variables;
 - the real backend, with no mail provider and acknowledgements off;
 - a disposable MongoDB;

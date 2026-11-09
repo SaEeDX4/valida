@@ -9,8 +9,8 @@ import { baseEnvironment } from './processes.js';
  * Two builds of the SAME commit are served by the C4 document server
  * (frontend/server/serve.mjs), both reading the same real backend:
  *   INDEXED  VITE_ALLOW_INDEXING=true, VITE_PUBLIC_SITE_URL=https://cybervalida.com
- *            — the production configuration, with the intended domain from the
- *            C4 brief as a TEST value (the apex/www choice is the owner's);
+ *            — the production configuration, with the approved canonical
+ *            origin (OD-2026-11-09-01); it is not served there, only on 127.0.0.1;
  *   REVIEW   no SEO variables — the default review build.
  * Neither is a deployment: everything listens on 127.0.0.1.
  */

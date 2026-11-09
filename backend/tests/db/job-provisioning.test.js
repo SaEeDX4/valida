@@ -515,7 +515,7 @@ describe('the provisioning CLI against the test database', () => {
     const result = cli(['apply', '--file', REAL_ROLE_FILE]);
     expect(result.code).toBe(0);
     expect(result.output).toMatch(/result\s+: CREATED/);
-    expect(result.output).toMatch(/awaiting input\s+: employmentType, schedule, description/);
+    expect(result.output).toMatch(/awaiting input\s+: location, employmentType, schedule, description/);
     expect((await stored('cybersecurity-specialist')).status).toBe('DRAFT');
 
     const publish = cli(['apply', '--file', REAL_ROLE_FILE, '--confirm-lifecycle']);

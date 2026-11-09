@@ -13,14 +13,13 @@ import {
   jobPostingProperties,
 } from './jobPosting.js';
 import { APPLY_PENDING_HEAD, NOT_FOUND_HEAD, STATIC_HEADS, applyHead, jobDetailHead } from './routeHeads.js';
-import { normalizeSiteUrl, resolveSeoConfig, seoBuildProblems } from './siteConfig.js';
+import { CANONICAL_ORIGIN, normalizeSiteUrl, resolveSeoConfig, seoBuildProblems } from './siteConfig.js';
 
 /**
  * C4 — the shared SEO core (src/seo), tested without a browser.
  *
- * SYNTHETIC DATA ONLY. `qaJob` is a test vacancy; "cybervalida.com" is the
- * intended domain named in the C4 brief, used here as a test value — the
- * apex/www choice (Doc 14 section 23) is still the owner's.
+ * SYNTHETIC DATA ONLY. `qaJob` is a test vacancy. "https://cybervalida.com" is
+ * the approved canonical origin (OD-2026-11-09-01); nothing here is served on it.
  */
 
 const SITE = 'https://cybervalida.com';
@@ -82,6 +81,112 @@ describe('site configuration (Doc 16 sections 89-93, Doc 14 section 23)', () => 
     expect(seoBuildProblems({ allowIndexing: 'yes' })).toHaveLength(1);
     expect(seoBuildProblems({ allowIndexing: 'true' })[0]).toMatch(/SITE_URL_MISSING/);
     expect(seoBuildProblems({ siteUrl: 'http://cybervalida.com', allowIndexing: 'true' })[0]).toMatch(/SITE_URL_NOT_HTTPS/);
+  });
+});
+
+describe('approved canonical origin (OD-2026-11-09-01)', () => {
+  const OTHER_ORIGINS = ['https://www.cybervalida.com', 'https://review.cybervalida.com', 'https://valida.example'];
+
+  it('is the apex https://cybervalida.com', () => {
+    expect(CANONICAL_ORIGIN).toBe('https://cybervalida.com');
+    expect(SITE).toBe(CANONICAL_ORIGIN);
+  });
+
+  it('only the approved origin becomes the site origin; the host check still runs first', () => {
+    expect(resolveSeoConfig({ siteUrl: 'https://CyberValida.com/', allowIndexing: 'true' }).siteOrigin).toBe(CANONICAL_ORIGIN);
+    for (const origin of OTHER_ORIGINS) {
+      expect(resolveSeoConfig({ siteUrl: origin, allowIndexing: 'true' }), origin).toEqual({
+        indexing: true,
+        siteOrigin: null,
+        siteProblem: 'SITE_URL_NOT_CANONICAL',
+      });
+    }
+    // Existing host validation is unchanged and reported as before.
+    expect(resolveSeoConfig({ siteUrl: 'http://cybervalida.com' }).siteProblem).toBe('SITE_URL_NOT_HTTPS');
+    expect(resolveSeoConfig({ siteUrl: 'https://cybervalida.com:8443' }).siteProblem).toBe('SITE_URL_HAS_PORT');
+  });
+
+  it('the indexable build refuses any other origin; a review build is not pinned', () => {
+    for (const origin of OTHER_ORIGINS) {
+      const problems = seoBuildProblems({ siteUrl: origin, allowIndexing: 'true' });
+      expect(problems, origin).toHaveLength(1);
+      expect(problems[0]).toMatch(/SITE_URL_NOT_CANONICAL/);
+      expect(problems[0]).toContain(CANONICAL_ORIGIN);
+      expect(seoBuildProblems({ siteUrl: origin }), origin).toEqual([]);
+      expect(seoBuildProblems({ siteUrl: origin, allowIndexing: 'false' }), origin).toEqual([]);
+    }
+  });
+
+  it('every absolute URL an indexable build generates is on the approved origin', () => {
+    const urls = [];
+    for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
+      const head = describeHead(input, INDEXED);
+      urls.push(head.canonical, ...head.openGraph.filter(([property]) => property === 'og:url').map(([, value]) => value));
+    }
+    const sitemap = buildSitemapXml({ siteOrigin: INDEXED.siteOrigin, openJobSlugs: ['qa-c4-synthetic-analyst'] }).xml;
+    urls.push(...[...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]));
+    urls.push(buildRobotsTxt({ indexing: true, siteOrigin: INDEXED.siteOrigin }).match(/^Sitemap: (.+)$/m)[1]);
+    const { properties } = jobPostingProperties(qaJob(), { siteOrigin: INDEXED.siteOrigin });
+    urls.push(properties.url, properties.hiringOrganization.url, properties.hiringOrganization.logo);
+
+    expect(urls.length).toBeGreaterThanOrEqual(5 * 2 + 2 + 6 + 1 + 3);
+    for (const url of urls) {
+      expect(typeof url, String(url)).toBe('string');
+      expect(new URL(url).origin, url).toBe(CANONICAL_ORIGIN);
+    }
+  });
+
+  it('a non-approved origin yields no absolute URL at all, never one on that host', () => {
+    const wrong = resolveSeoConfig({ siteUrl: 'https://www.cybervalida.com', allowIndexing: 'true' });
+    for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
+      const head = describeHead(input, wrong);
+      expect(head.canonical).toBeNull();
+      expect(head.openGraph.some(([property]) => property === 'og:url')).toBe(false);
+      expect(JSON.stringify(head)).not.toContain('www.cybervalida.com');
+    }
+    expect(buildRobotsTxt({ indexing: true, siteOrigin: wrong.siteOrigin })).not.toMatch(/Sitemap:/);
+  });
+});
+
+describe('page titles are Document 06 (OD-2026-11-09-01 resolves the Doc 16 §§85-86 conflict)', () => {
+  // Document 06, verbatim: §11, §54, §77, §155, §170, §94, §109, §179.
+  const DOC_06 = [
+    [STATIC_HEADS.HOME.title, 'Valida | Cybersecurity & Secure Technology'],
+    [STATIC_HEADS.ABOUT.title, 'About Valida | Security-First Technology'],
+    [STATIC_HEADS.CAREERS.title, 'Careers at Valida | Open Technology & Cybersecurity Roles'],
+    [STATIC_HEADS.PRIVACY.title, 'Privacy Notice | Valida'],
+    [STATIC_HEADS.LEGAL.title, 'Legal Information | Valida'],
+    [jobDetailHead(qaJob()).title, 'QA Synthetic Security Analyst (C4) | Careers at Valida'],
+    [applyHead(qaJob()).title, 'Apply for QA Synthetic Security Analyst (C4) | Valida'],
+    [NOT_FOUND_HEAD.title, 'Page Not Found | Valida'],
+  ];
+  // The superseded Document 16 §85 and §86 strings, for the same pages.
+  const DOC_16_SUPERSEDED = [
+    'Valida — Secure Systems. Deliberate Engineering.',
+    'About Valida | Valida',
+    'Careers | Valida',
+    'Privacy | Valida',
+    'Legal | Valida',
+    'QA Synthetic Security Analyst (C4) | Valida Careers',
+    'Apply — QA Synthetic Security Analyst (C4) | Valida',
+  ];
+
+  it.each(DOC_06)('%s', (actual, expected) => {
+    expect(actual).toBe(expected);
+  });
+
+  it('no page uses a superseded Doc 16 title string, and og:title repeats the Document 06 title', () => {
+    const titles = DOC_06.map(([actual]) => actual);
+    for (const superseded of DOC_16_SUPERSEDED) expect(titles).not.toContain(superseded);
+    for (const input of Object.values(STATIC_HEADS)) {
+      const head = describeHead(input, INDEXED);
+      expect(head.openGraph.find(([property]) => property === 'og:title')[1]).toBe(input.title);
+    }
+  });
+
+  it('every indexable page title is unique (Doc 16 §84, preserved)', () => {
+    const indexable = [...Object.values(STATIC_HEADS).map((head) => head.title), jobDetailHead(qaJob()).title];
+    expect(new Set(indexable).size).toBe(indexable.length);
   });
 });
 

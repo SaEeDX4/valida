@@ -70,7 +70,7 @@ describe('the real initial role definition (Doc 10 s70, Doc 12 ss44-45, Doc 18 s
     expect(parseJobDefinition(readRealRole()).ok).toBe(true);
   });
 
-  it('carries exactly the source-established planning data', () => {
+  it('keeps the stored planning data unchanged (OD-2026-11-09-01 marks the work location AWAITING INPUT, it deletes nothing)', () => {
     const role = parse(readRealRole());
     expect(role).toMatchObject({
       slug: 'cybersecurity-specialist',
@@ -97,6 +97,7 @@ describe('the real initial role definition (Doc 10 s70, Doc 12 ss44-45, Doc 18 s
     });
     expect(role.applicationConfig.screeningQuestions).toEqual([]);
     expect(role.awaitingInput).toEqual([
+      'location', // OD-2026-11-09-01: the work countries are OPEN
       'employmentType',
       'schedule',
       'description',
@@ -133,6 +134,26 @@ describe('the real initial role definition (Doc 10 s70, Doc 12 ss44-45, Doc 18 s
       now: QA_NOW,
     });
     expect(plan.refusals.map((refusal) => refusal.code)).toEqual(['NOT_PUBLISH_READY']);
+  });
+
+  it('the open work location alone blocks publication, even with every other field filled (synthetic QA content)', () => {
+    const plan = planJobProvisioning({
+      current: null,
+      definition: parse({
+        ...readRealRole(),
+        status: 'PUBLISHED',
+        awaitingInput: ['location'],
+        employmentType: 'PART_TIME',
+        schedule: 'QA synthetic schedule',
+        description: 'QA synthetic description, not role content.',
+        responsibilities: ['QA synthetic responsibility.'],
+        requirements: ['QA synthetic requirement.'],
+      }),
+      now: QA_NOW,
+    });
+    expect(plan.readiness.ready).toBe(true);
+    expect(plan.refusals.map((refusal) => refusal.code)).toEqual(['AWAITING_INPUT']);
+    expect(plan.refusals[0].message).toContain('location');
   });
 });
 

@@ -38,7 +38,7 @@ Four states are kept apart below, and one does not imply another:
 | C1 — Frontend ↔ Jobs API integration | **Owner-accepted** at `24b92a7` (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) | yes — inside `c3-work` (no separate `c1-work` branch) | no | no |
 | C2 — Real Job Detail | **Owner-accepted** at `46818bb`, including the focus correction (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) | yes — inside `c3-work` (no separate `c2-work` branch) | no | no |
 | C3 — Real Apply Integration | **Owner-accepted** at `f07ea35` (r3; recorded in the owner's C4 instruction, with the accepted bundle's SHA-256 `0b7293bd…369b`). The critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md) | **yes — `c3-work` at `f07ea35`**, pushed 2026-11-07 08:19 UTC on the owner's authorisation and verified by a fresh fetch ([`docs/review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md`](docs/review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md)) | no | no |
-| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted**, with the review corrections: origin-safe redirects, the approved date labels ([OD-2026-11-07-01](docs/review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md)), and no inferred applicant eligibility. Local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md) | no — `c4-work` is local only | no | no |
+| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted**, with the review corrections: origin-safe redirects, the approved date labels ([OD-2026-11-07-01](docs/review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md)), and no inferred applicant eligibility. Then [OD-2026-11-09-01](docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md): the canonical origin `https://cybervalida.com` (pinned for indexable builds), the Document 06 titles, a social-card preview awaiting approval, and the first vacancy's work countries OPEN. Local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md) | no — `c4-work` is local only | no | no |
 | Phase 1 | **Not verified** — only after Release C (C7) | — | — | — |
 
 The C1, C2 and C3 commits descend from `eabd604`, so `c3-work` (published at
@@ -336,7 +336,7 @@ Run every check. Each should complete without an error.
 cd frontend
 npm ci
 npm run verify:quality   # expect: ALL QUALITY BUDGET CHECKS PASSED,
-                         #         Test Files 41 passed, Tests 1078 passed
+                         #         Test Files 41 passed, Tests 1093 passed
 ```
 
 `verify:budgets` measures the real production build. Legacy `.woff` font

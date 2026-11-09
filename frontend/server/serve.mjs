@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { resolveSeoConfig } from '../src/seo/siteConfig.js';
+import { CANONICAL_ORIGIN, resolveSeoConfig } from '../src/seo/siteConfig.js';
 import { startDocumentServer } from './documentServer.js';
 import { createJobsClient } from './jobsClient.js';
 
@@ -54,7 +54,9 @@ try {
   fail(`no valida-seo.json in ${distDir}: serve a build made by this repository's vite.config.js`);
 }
 const config = resolveSeoConfig({ siteUrl: manifest.siteOrigin ?? '', allowIndexing: manifest.indexing === true });
-if (manifest.indexing === true && !config.siteOrigin) fail('the build is indexable but has no valid canonical origin');
+if (manifest.indexing === true && !config.siteOrigin) {
+  fail(`the build is indexable but has no valid canonical origin (${config.siteProblem}; only ${CANONICAL_ORIGIN} is accepted)`);
+}
 
 const apiOrigin = values['api-origin'] ?? manifest.apiBaseUrl;
 let jobs;

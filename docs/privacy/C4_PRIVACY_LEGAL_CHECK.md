@@ -40,4 +40,4 @@
 | P-3 | Recruitment retention period (Doc 13 §§186–187, 204) | Privacy §165; Doc 10 retention fields | **AWAITING PRIVACY / LEGAL / OPERATIONAL DETERMINATION** |
 | P-4 | Production log destination and log retention | Privacy §160 technical information | **AWAITING INPUT** (C6) |
 | P-5 | Legal and privacy review: the applicability gate (Doc 13 §§201–203) and the page gates (Doc 06 §§169, 178) | Both pages; publication | **AWAITING INPUT** |
-| P-6 | Real approved vacancy content (Doc 06 §231, Doc 12 §45) | What a real Application collects (screening questions) | **AWAITING INPUT** |
+| P-6 | Real approved vacancy content (Doc 06 §231, Doc 12 §45), including the work country or countries, which are OPEN ([OD-2026-11-09-01](../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md)) | What a real Application collects (screening questions); the international recruitment audience is an input to the applicability review (P-5) | **AWAITING INPUT** |

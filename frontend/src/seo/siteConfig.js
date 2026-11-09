@@ -10,14 +10,24 @@
  *   Doc 16 sections 89-93 — one absolute HTTPS self-canonical per indexable
  *     page, on the selected production host, never on a query variant.
  *   Doc 14 section 23 — exactly one public hostname is canonical (apex OR www);
- *     the other redirects. WHICH one is an owner decision; this module only
- *     accepts a single origin and never derives a second one.
+ *     the other redirects. The owner chose the apex: CANONICAL_ORIGIN below
+ *     (OD-2026-11-09-01). This module accepts that single origin and never
+ *     derives a second one; the www redirect itself is host work (C6).
  *   Doc 16 section 82, SEO-020 — a review/testing environment is
  *     "noindex, nofollow". Indexing is therefore OFF unless a build says,
  *     explicitly, that it is the production build: VITE_ALLOW_INDEXING=true.
  */
 
 export const SITE_NAME = 'Valida';
+
+/**
+ * The approved canonical origin of the public website (owner decision
+ * OD-2026-11-09-01). Every absolute URL the site generates — canonical links,
+ * og:url, sitemap <loc>, the robots.txt Sitemap line and JobPosting URLs — is
+ * built on this origin or not at all. The configured VITE_PUBLIC_SITE_URL must
+ * equal it; it is not a default that a missing value falls back to.
+ */
+export const CANONICAL_ORIGIN = 'https://cybervalida.com';
 
 /** Allowed spellings of the indexing switch. Anything else is a configuration error. */
 export const INDEXING_VALUES = Object.freeze(['true', 'false']);
@@ -58,12 +68,14 @@ export function normalizeSiteUrl(value) {
  *               Missing, empty, 'false' — and anything else — mean a
  *               non-indexed (review) build. The build refuses "anything else"
  *               outright (vite.config.js), so a typo cannot ship.
- *   siteOrigin  the canonical origin, or null when none is configured or the
- *               value is not acceptable. Canonical URLs, og:url and JobPosting
- *               need it; without it they are simply not emitted.
+ *   siteOrigin  the canonical origin, or null when none is configured, the
+ *               value is not acceptable, or it is a well-formed origin other
+ *               than CANONICAL_ORIGIN (SITE_URL_NOT_CANONICAL). Canonical URLs,
+ *               og:url and JobPosting need it; without it they are simply not
+ *               emitted — never built on another host.
  */
 export function resolveSeoConfig({ siteUrl, allowIndexing } = {}) {
-  const site = normalizeSiteUrl(siteUrl);
+  const site = canonicalSite(siteUrl);
   return Object.freeze({
     indexing: allowIndexing === true || allowIndexing === 'true',
     siteOrigin: site.ok ? site.origin : null,
@@ -71,13 +83,21 @@ export function resolveSeoConfig({ siteUrl, allowIndexing } = {}) {
   });
 }
 
+/** normalizeSiteUrl, then the approved-origin check (OD-2026-11-09-01). */
+function canonicalSite(siteUrl) {
+  const site = normalizeSiteUrl(siteUrl);
+  if (site.ok && site.origin !== CANONICAL_ORIGIN) return { ok: false, reason: 'SITE_URL_NOT_CANONICAL' };
+  return site;
+}
+
 /**
  * Build-time check (vite.config.js). Returns the problems that must stop a
  * build; an empty list means the configuration is coherent.
  *
- * A production (indexable) build without a valid canonical origin would ship
- * indexable pages with no canonical URL (SEO-004) — so it is refused rather
- * than built.
+ * A production (indexable) build without the approved canonical origin would
+ * ship indexable pages with no canonical URL (SEO-004), or with one on the
+ * wrong host — so it is refused rather than built. A review build is not
+ * pinned: it emits no absolute URL at all (Doc 16 section 82).
  */
 export function seoBuildProblems({ siteUrl, allowIndexing } = {}) {
   const problems = [];
@@ -86,10 +106,10 @@ export function seoBuildProblems({ siteUrl, allowIndexing } = {}) {
     problems.push('VITE_ALLOW_INDEXING must be "true" or "false" (or unset, which means "false").');
   }
   if (flag === 'true') {
-    const site = normalizeSiteUrl(siteUrl);
+    const site = canonicalSite(siteUrl);
     if (!site.ok) {
       problems.push(
-        `VITE_ALLOW_INDEXING=true needs VITE_PUBLIC_SITE_URL to be the canonical https:// origin with no path (${site.reason}).`,
+        `VITE_ALLOW_INDEXING=true needs VITE_PUBLIC_SITE_URL to be the approved canonical origin ${CANONICAL_ORIGIN} (${site.reason}).`,
       );
     }
   }

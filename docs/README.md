@@ -29,6 +29,9 @@ never evidence that the feature works.
 | [`review/OWNER_RECORD_2026-11-07_C3_ACCEPTANCE.md`](review/OWNER_RECORD_2026-11-07_C3_ACCEPTANCE.md) | The owner's acceptance of C3 at `f07ea35`, with the four states kept separate | C4 |
 | [`review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md`](review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md) | The authorised push of `f07ea35` to `refs/heads/c3-work`: pre-flight, push, post-flight, fresh-fetch verification | C4 |
 | [`review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md`](review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md) | OD-2026-11-07-01: the Job Detail labels "Date Posted" and "Applications Close", and how they are shown | C4 |
+| [`review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md`](review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md) | OD-2026-11-09-01: the first vacancy (international audience, work countries OPEN), the canonical origin `https://cybervalida.com`, the Doc 06 titles against Doc 16 §85, the social-card preview, and requirement BR-ELIG-01 | C4 |
+| [`recruitment/E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md`](recruitment/E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md) | BR-ELIG-01 traced to the Job lifecycle (Doc 12, Doc 18 E3/E6); the gaps, each with its smallest PROPOSED amendment; the website-versus-E6 sequencing question | C4 (analysis for E3/E6) |
+| [`brand/social-card-preview/README.md`](brand/social-card-preview/README.md) | The 1200 × 630 social-card preview: source, inputs, rendering command, checksum and proposed alt text. Not a build input; awaiting owner approval | C4 |
 
 The canonical documents 00-18 are maintained outside the repository. Copying
 them in is a documentation decision for Saeed, not an implementation

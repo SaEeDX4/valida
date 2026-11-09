@@ -13,8 +13,8 @@ import { httpError, installJobsService, networkError, renderRoute, resetServices
  *
  * The suite runs as an indexable build with no canonical origin
  * (vitest.config.js); each test here sets the configuration it is about with
- * vi.stubEnv. "https://cybervalida.com" is the intended domain from the C4
- * brief, used as a TEST value. All Jobs are synthetic (testJob).
+ * vi.stubEnv. "https://cybervalida.com" is the approved canonical origin
+ * (OD-2026-11-09-01); nothing is served on it. All Jobs are synthetic (testJob).
  */
 
 const SITE = 'https://cybervalida.com';

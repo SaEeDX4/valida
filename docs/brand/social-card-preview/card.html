@@ -1,0 +1,123 @@
+<!doctype html>
+<!--
+  Valida social card — PREVIEW, NOT APPROVED (OD-2026-11-09-01, R5).
+
+  1200 x 630 Open Graph card source. Rendered by render.mjs in this folder.
+  This folder is documentation, not a build input: nothing here is served by the
+  website, and no og:image tag points at it until the owner approves the image.
+
+  Inputs, all already approved:
+    - logo   frontend/public/brand/valida-logo-horizontal-transparent.png
+             (approved pack, 2026-09-10), scaled only, aspect ratio kept;
+    - colours and type   Document 03 sections 8, 13, 22 / frontend tokens.css;
+    - copy   Document 06 section 13 (eyebrow), section 6 / 14 (headline),
+             section 4 (primary brand description). Nothing else is written.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Valida social card preview</title>
+<style>
+  @font-face {
+    font-family: "Space Grotesk";
+    font-weight: 600;
+    src: url("../../../frontend/node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-600-normal.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-weight: 400;
+    src: url("../../../frontend/node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-weight: 500;
+    src: url("../../../frontend/node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2") format("woff2");
+  }
+
+  :root {
+    /* Document 03 section 8, as in frontend/src/styles/tokens.css */
+    --color-bg-primary: #05070A;
+    --color-text-primary: #F4F7FA;
+    --color-text-secondary: #B6C0CC;
+    --color-text-muted: #7E8997;
+    --color-silver: #C9D1DA;
+    --color-border-subtle: rgba(190, 210, 230, 0.12);
+    --color-accent: #328FFF;
+  }
+
+  html, body { margin: 0; padding: 0; }
+
+  .card {
+    position: relative;
+    box-sizing: border-box;
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    padding: 72px 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    /* Document 03 section 13, the primary gradient family example. */
+    background:
+      radial-gradient(circle at 70% 30%, rgba(50, 143, 255, 0.14), transparent 42%),
+      var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: "Inter", sans-serif;
+  }
+
+  /* Approved horizontal lockup, scaled only: 1009 x 230 -> 281 x 64. */
+  .logo { display: block; width: 281px; height: 64px; }
+
+  .text { display: flex; flex-direction: column; gap: 24px; }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    color: var(--color-text-muted);
+  }
+  /* The site's eyebrow rule (Section.module.css): accent to transparent. */
+  .eyebrow::before {
+    content: "";
+    width: 32px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--color-accent), transparent);
+  }
+
+  h1 {
+    margin: 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 76px;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  h1 span { display: block; }
+  /* As the Home hero: the second line in silver. */
+  h1 .second { color: var(--color-silver); }
+
+  .description {
+    margin: 0;
+    max-width: 760px;
+    font-weight: 400;
+    font-size: 24px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <img class="logo" src="../../../frontend/public/brand/valida-logo-horizontal-transparent.png" alt="Valida">
+    <div class="text">
+      <p class="eyebrow">CYBERSECURITY · SECURE TECHNOLOGY</p>
+      <h1><span>Secure systems.</span><span class="second">Deliberate engineering.</span></h1>
+      <p class="description">Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,10 +1,10 @@
-# Social card — PREVIEW, awaiting owner approval
+# Social card — approved for local integration; final visual sign-off pending
 
 | | |
 | --- | --- |
 | Authority | [OD-2026-11-09-01](../../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md), R5: "The owner authorizes a 1200 × 630 social-card preview and proposed alt text. Final asset approval is pending." |
 | Governing | Doc 16 §§94–97 (Open Graph, social card 1200 × 630, social image truth); Doc 03 §§8, 13, 16–20, 22 (colours, gradient, logo rules, type); Doc 06 §§4, 6, 13–14 (copy) |
-| Status | **PREVIEW — NOT APPROVED.** It is not a build input and is not wired: the site emits no `og:image` or `og:image:alt` until the owner approves the image and the alt text |
+| Status | **Local integration authorised** by [OD-2026-11-09-02](../../review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md): the exact PNG and the alt text below are approved for integration; **the owner's final visual sign-off is pending**. This folder stays the reviewed source and is still not a build input. The site serves the same bytes from `frontend/public/social/valida-social-card-1200x630.png` |
 
 ## The image
 
@@ -15,9 +15,11 @@
 | SHA-256 | `2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a` (213,187 bytes) |
 | Rendered with | `node docs/brand/social-card-preview/render.mjs`. Chromium 153.0.8010.12, from e2e's `@playwright/test`. A render on another machine or browser build may differ in bytes; the checksum identifies this delivered file |
 
-**Proposed alt text (PROPOSED, for `og:image:alt`):**
+**Approved alt text (OD-2026-11-09-02), exactly as used in `og:image:alt`:**
 
-> Valida logo with the headline “Secure systems. Deliberate engineering.” and the line “Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering.”
+> Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering."
+
+(The preview round proposed the same words with typographic quotation marks; the approval uses straight ones.)
 
 ## What it is made of — approved inputs only
 
@@ -43,8 +45,8 @@
 
 The C4 verification checks that the built `dist/` contains no file or reference from this folder.
 
-## What approval would change (not done)
+## Integration (OD-2026-11-09-02, local)
 
-1. Copy the approved PNG into `frontend/public/brand/` under an approved name, and add its checksum to `SHA256SUMS.txt`.
-2. Emit `og:image` (absolute, on `https://cybervalida.com`), `og:image:width` 1200, `og:image:height` 630 and `og:image:alt` on the indexable routes (`frontend/src/seo/head.js`), with tests.
-3. Verify the real platform previews on the production host (Doc 16 §266, C6).
+1. Done: the exact bytes are copied to `frontend/public/social/valida-social-card-1200x630.png`. It is the same git blob, `78116a83…`. The brand pack and its `SHA256SUMS.txt` are untouched. A test pins the hash and the 1200 × 630 size.
+2. Done: `og:image` (absolute, on `https://cybervalida.com`), `og:image:width` 1200, `og:image:height` 630 and `og:image:alt` on every page with Open Graph (`frontend/src/seo/socialCard.js`, `head.js`). They are verified in the initial HTML and after client navigation (stack case C4-12).
+3. Open: the owner's final visual sign-off; real platform previews on the production host (Doc 16 §266, C6).

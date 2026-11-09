@@ -4,7 +4,7 @@
 | --- | --- |
 | Milestone | Release C — C4 SEO / Privacy / Legal Production Integration (Doc 18 §§163–167) |
 | Governing | Doc 16 §§77–152, 255, 262 (SEO-001…040), 266 (gate); Doc 17 §§214, 258–273; Doc 04 §§47–49; Doc 06 SEO copy; Doc 12 §§6–10, 33; Doc 14 §23; Doc 15 §§63–67 |
-| Owner decisions | [OD-2026-11-07-01](../review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md) (date labels); [OD-2026-11-09-01](../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md) (canonical origin, titles, social-card preview, work countries) |
+| Owner decisions | [OD-2026-11-07-01](../review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md) (date labels); [OD-2026-11-09-01](../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md) (canonical origin, titles, social-card preview, work countries); [OD-2026-11-09-02](../review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md) (social card integration, eligible remote-work countries) |
 | Status | Implemented and verified **locally**. Not accepted; not deployed. Production checks are C6 (§6) |
 
 ## 1. Mechanism
@@ -37,7 +37,7 @@ Every absolute URL — canonical links, `og:url`, sitemap `<loc>`, the robots.tx
 | Route | Status | Robots | Canonical / Open Graph | JobPosting |
 | --- | --- | --- | --- | --- |
 | `/`, `/about`, `/careers`, `/privacy`, `/legal` | 200 | none | yes | no |
-| `/careers/:slug` — OPEN | 200 | none | yes | **withheld today**: no approved location input (§4) |
+| `/careers/:slug` — OPEN | 200 | none | yes | **Fully remote with explicit eligible remote-work countries: emitted** (`TELECOMMUTE`). Otherwise withheld (§4) |
 | `/careers/:slug` — retained CLOSED | 200 | `noindex, follow` | no | no |
 | `/careers/:slug` — unknown, Draft, Archived or invalid slug | 404 (branded page) | `noindex, follow` | no | no |
 | `/careers/:slug` — Jobs API failure or malformed data | 503 + `Retry-After` | `noindex, follow` | no | no |
@@ -56,7 +56,12 @@ Other rules:
   - This closes a review finding: the raw target `/\outside.example/A` was redirected to `/\outside.example/a`, which browsers resolve to `https://outside.example/a`, because `\` counts as `/` in WHATWG URL parsing.
 - **Canonical URLs.** A canonical never includes the query string, such as `?region=` or tracking parameters (Doc 16 §93, SEO-039).
 - **Canonical and noindex.** A page that is not indexable carries no canonical URL. A noindex page with a canonical would send mixed signals.
-- **Open Graph tags.** `og:type`, `og:site_name`, `og:title`, `og:description` and `og:url` are emitted. **`og:image` and `og:image:alt` are not emitted.** A 1200 × 630 preview exists for review outside the build inputs (`docs/brand/social-card-preview/`), but the owner has not yet approved the image (Doc 16 §95; D-3).
+- **Open Graph tags.** `og:type`, `og:site_name`, `og:title`, `og:description`, `og:url`, and the approved social card ([OD-2026-11-09-02](../review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md)):
+  - `og:image` `https://cybervalida.com/social/valida-social-card-1200x630.png`;
+  - `og:image:width` `1200`, `og:image:height` `630`;
+  - `og:image:alt` with the approved text.
+
+  The image is `frontend/public/social/valida-social-card-1200x630.png`, the approved file byte for byte (SHA-256 `2667d619…a71a`), served unchanged from that stable path. Local integration is authorised; the owner's final visual sign-off is pending (Doc 16 §§94–97; D-3).
 
 **Sitemap** (Doc 16 §§103–109). The five static routes are listed, then every OPEN Job from `GET /api/v1/jobs`, page by page. The sitemap is built per request, so publishing, closing or archiving a Job changes it at once (SEO-012).
 - Excluded: Apply, 404, Draft, Archived and Closed Jobs, the API and review URLs.
@@ -70,17 +75,16 @@ Other rules:
 
 ## 4. JobPosting and the Job's dates
 
-**Status: no JobPosting is emitted from real data** (C4 correction). Google needs one of two things. For a fully remote job, it needs where applicants may be (`applicantLocationRequirements`, at least one country). Otherwise, it needs a structured workplace address (`jobLocation`). The approved Job contract has neither:
+**Status (OD-2026-11-09-02).** Google needs one of two things. For a fully remote job, it needs the countries from which the employee may work (`applicantLocationRequirements`, at least one country, with `jobLocationType: TELECOMMUTE`). Otherwise, it needs a structured workplace address (`jobLocation`).
 
-- **`location` is not an eligibility source.** Doc 10 §§24–28 define it; Doc 09 §63 exposes only its display name. Under OD-2026-11-09-01 the countries from which the first vacancy may be performed are **OPEN**, and eligibility is never derived from `location`, the regional selector, a publication market, nationality or the occupational reference.
-- **No Job field, public DTO field or visible page element states applicant eligibility.**
-- **The public DTO has no structured workplace address.**
+- **Fully remote, with explicit eligible remote-work countries** (`eligibleWorkCountries`, contract: [`ELIGIBLE_WORK_COUNTRIES_CONTRACT.md`](../recruitment/ELIGIBLE_WORK_COUNTRIES_CONTRACT.md)): **emitted**.
+  - It carries `jobLocationType: TELECOMMUTE`.
+  - `applicantLocationRequirements` names the same countries, in the same order, as the visible "Eligible Remote-Work Countries" row.
+  - The description repeats the visible "Work Arrangement" and "Eligible Remote-Work Countries" rows, so it states that the job is fully remote (Google).
+- **Fully remote without a list** (absent or `[]`): **withheld** (`NO_APPLICANT_ELIGIBILITY`), in the initial HTML and the rendered page. Eligibility is never derived from `location`, the regional selector, a hiring market, a publication country, nationality or the occupational reference.
+- **Hybrid or on-site:** withheld (`NO_STRUCTURED_WORKPLACE`). The public DTO has no structured workplace address (D-8).
 
-So `buildJobPosting` withholds every open Job with a reason:
-- `NO_APPLICANT_ELIGIBILITY` for a fully remote Job;
-- `NO_STRUCTURED_WORKPLACE` for a hybrid or on-site Job.
-
-The exact missing inputs are in `JOB_POSTING_MISSING_INPUT` and in §7, items D-5 and D-8. The visible vacancy, the Apply flow and the public API are unchanged.
+The genuine vacancy's countries are OPEN, so no real Job carries a JobPosting today.
 
 **The rest of the mapping.** It is kept in `jobPostingProperties()` and tested, so an approved input only adds the location properties. The mapping uses the same public DTO and formatting helpers as the page. The rules were checked against Google's current JobPosting documentation: "all information in the markup must be visible on the job page"; one job per page; remove the markup when the job closes.
 
@@ -120,7 +124,7 @@ The JSON-LD is serialised with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a Jo
 | --- | --- |
 | Unit and component tests | `frontend/src/seo/seo.test.js`, `frontend/src/components/seo/PageMeta.c4.test.jsx` |
 | Document server over HTTP, against a stand-in API | `frontend/server/documentServer.test.js` |
-| Real stack: the document server, the real backend, a disposable MongoDB, synthetic Jobs, Chromium | `e2e/` → `npm run test:e2e:seo` (cases C4-01…C4-11; see `e2e/README.md`) |
+| Real stack: the document server, the real backend, a disposable MongoDB, synthetic Jobs, Chromium | `e2e/` → `npm run test:e2e:seo` (cases C4-01…C4-16; see `e2e/README.md`) |
 
 ## 6. Deferred to the production host (C6) — not claimed
 
@@ -141,9 +145,9 @@ The JSON-LD is serialised with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a Jo
 | --- | --- | --- |
 | D-1 | Apex or www as the canonical host | **Decided**: OD-2026-11-09-01, the apex `https://cybervalida.com` (implemented: indexable builds are pinned to it). The www redirect is C6 |
 | D-2 | The Doc 06 / Doc 16 §85 title-pattern conflict (C4 keeps Doc 06) | **Decided**: OD-2026-11-09-01 §2.3, Document 06 titles; the other Doc 16 requirements unchanged. No code change |
-| D-3 | An approved 1200×630 social card and its alt text | **Preview authorised** (OD-2026-11-09-01); the image and alt text await owner approval. Unlocks `og:image` / `og:image:alt` and social preview verification |
+| D-3 | An approved 1200×630 social card and its alt text | **Approved for local integration** (OD-2026-11-09-02) and integrated: `og:image` with its size and alt text. The owner's final visual sign-off is pending; real platform previews are C6 |
 | D-4 | Labels for the posting and closing dates | **Decided**: OD-2026-11-07-01, "Date Posted" and "Applications Close" (implemented) |
-| D-5 | **The eligible work countries per vacancy** (approved as requirement BR-ELIG-01 in OD-2026-11-09-01; the countries for the first vacancy are OPEN). It needs a Job field (Doc 10), the public DTO (Doc 09) and a visible label and value on Job Detail (Doc 06): see [`E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md`](../recruitment/E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md) | Open. Unlocks `jobLocationType: TELECOMMUTE` + `applicantLocationRequirements`, and with them the JobPosting for fully remote Jobs (SEO-025/030) |
+| D-5 | **The eligible work countries per vacancy** (approved as requirement BR-ELIG-01 in OD-2026-11-09-01; the countries for the first vacancy are OPEN). It needs a Job field (Doc 10), the public DTO (Doc 09) and a visible label and value on Job Detail (Doc 06): see [`E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md`](../recruitment/E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md) | **Field approved and implemented** (OD-2026-11-09-02): `eligibleWorkCountries`, with `TELECOMMUTE` + `applicantLocationRequirements` from the explicit list. **Still open for the genuine vacancy**: the explicit list of countries from which Valida has confirmed it can employ someone for the role |
 | D-6 | Mapping of FIXED_TERM and CONTRACT to Google employment types | Open, and needed only if a real Job uses one |
 | D-7 | Real approved vacancy content | Open. Unlocks real data and SEO-034 validation |
 | D-8 | A structured workplace address in the public DTO (Doc 09 amendment), needed only for hybrid or on-site Jobs | Open. Unlocks `jobLocation` and the JobPosting for those Jobs |

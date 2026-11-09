@@ -5,7 +5,25 @@
 | Authority | [OD-2026-11-09-01](../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md), R2 and R6 |
 | Read | Doc 18 §§109–110, 145, 165, 180–186, 218, 230–234 (E3), 237, 246–252 (E6), 364, 384; Doc 09 §§54, 63, 169–173, 180–186; Doc 10 §§19–28, 57–70, 75–78, 136–141, 147–151; Doc 11 §§146–160, 172–174, 198–201; Doc 12 §§4–47, 176, 208–218, 262–263; Doc 13 §§313–314; Doc 02 §§48–51, 62; Doc 06 §§87, 97–98, 107–108, 169, 178; Doc 15 §§171–175; Doc 16 §§124–138 |
 | Scope | **Documentation and gap analysis only.** Nothing here is implemented. No Admin implementation and no public API contract change are authorised. |
-| Status of every design below | **PROPOSED.** Names, types, limits, shapes and labels are suggestions for the amendments, not approved contracts. |
+| Status of every design below | Written as **PROPOSED** (OD-2026-11-09-01). Since OD-2026-11-09-02, see §0 for what is implemented. |
+
+## 0. Status after OD-2026-11-09-02 (2026-11-09)
+
+The owner approved one optional field in C4 ([OD-2026-11-09-02](../review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md)). Its contract is [`ELIGIBLE_WORK_COUNTRIES_CONTRACT.md`](ELIGIBLE_WORK_COUNTRIES_CONTRACT.md). The analysis below is kept as written; where it says PROPOSED, read this table.
+
+| Gap | Status |
+| --- | --- |
+| G1 Job model | **Implemented** (C4): `Job.eligibleWorkCountries`, ISO 3166-1 alpha-2. The Doc 10 text is pending synchronisation |
+| G2 Controlled provisioning | **Implemented**: the optional definition key (omitted keeps, `[]` clears), validated, material |
+| G3 Admin editing | **Release E (E3)**, unchanged. How it will be managed: contract §6 |
+| G4 Validation | **Implemented** for codes, duplicates and the arrangement. The proposed "at least one country before publication" is **not adopted**: the field is optional, and a remote Job without a list carries no JobPosting |
+| G5 Public DTO | **Implemented**, Job Detail only. The list is unchanged |
+| G6 Visible copy | **Implemented**: "Eligible Remote-Work Countries". The Doc 06 text is pending synchronisation |
+| G7 JobPosting | **Implemented**: `TELECOMMUTE` plus `applicantLocationRequirements` from the explicit list; withheld otherwise. The Doc 16 §132 text is pending synchronisation |
+| G8 Material change | **Implemented** under Doc 12 §41's "examples such as". The canonical text is pending synchronisation |
+| G9 `jobSnapshot` | **Open**: not approved, unchanged |
+| G10 External consistency | **Canonical text only**, pending synchronisation (contract §5) |
+| G11 Release A `hiringMarkets` | **Done as proposed**: comments now say presentation only; no runtime change |
 
 ## 1. The approved business requirement
 

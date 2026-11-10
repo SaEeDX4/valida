@@ -27,6 +27,13 @@
  *   first C5 runs did. Brotli quality 11 on the main script costs about 0.67 s
  *   of proxy CPU per request on the C5 machine, which those runs' LCP included.
  *
+ * --experiment-preload-job-api <API origin> (EXPERIMENT, off by default; C5 LCP
+ *   investigation): on /careers/<slug> and /careers/<slug>/apply documents it
+ *   adds <link rel="preload" as="fetch" crossorigin="anonymous"> for that Job's
+ *   API URL to the head, so the browser requests the Job while the script is
+ *   still downloading. It measures a PROPOSED product change (the document
+ *   server would emit this link); the product itself does not do this.
+ *
  * It is NOT the production host, proves nothing about the host's compression
  * or caching, and is never part of the product. It listens on 127.0.0.1 only
  * and prints "READY {json}" with the address it actually listens on.
@@ -36,7 +43,7 @@ import { parseArgs } from 'node:util';
 import { constants, createBrotliCompress, createGzip } from 'node:zlib';
 
 const { values } = parseArgs({
-  options: { upstream: { type: 'string' }, host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string' }, mode: { type: 'string', default: 'precompressed' } },
+  options: { upstream: { type: 'string' }, host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string' }, mode: { type: 'string', default: 'precompressed' }, 'experiment-preload-job-api': { type: 'string' } },
 });
 const upstream = new URL(values.upstream ?? '');
 if (upstream.protocol !== 'http:' || upstream.hostname !== '127.0.0.1') {
@@ -89,6 +96,7 @@ const server = createServer((req, res) => {
         up.pipe(res);
         return;
       }
+      const jobRoute = values['experiment-preload-job-api'] && /^text\/html/i.test(type) ? /^\/careers\/([a-z0-9-]+)(?:\/apply)?(?:\?.*)?$/.exec(req.url) : null;
       const out = { ...up.headers, 'content-encoding': encoding, vary: up.headers.vary ? `${up.headers.vary}, Accept-Encoding` : 'Accept-Encoding' };
       delete out['content-length'];
       res.writeHead(up.statusCode, out);
@@ -99,6 +107,16 @@ const server = createServer((req, res) => {
       const chunks = [];
       compressor.on('data', (chunk) => { if (keep) chunks.push(chunk); });
       compressor.on('end', () => { if (keep) stored.set(`${encoding} ${req.url}`, { headers: out, body: Buffer.concat(chunks) }); });
+      if (jobRoute) {
+        const parts = [];
+        up.on('data', (chunk) => parts.push(chunk));
+        up.on('end', () => {
+          const link = `<link rel="preload" as="fetch" crossorigin="anonymous" href="${values['experiment-preload-job-api']}/api/v1/jobs/${jobRoute[1]}">`;
+          compressor.pipe(res);
+          compressor.end(Buffer.concat(parts).toString('utf8').replace('</head>', `${link}</head>`));
+        });
+        return;
+      }
       up.pipe(compressor).pipe(res);
     },
   );
@@ -111,7 +129,7 @@ const server = createServer((req, res) => {
 
 server.listen(Number(values.port), values.host, () => {
   const address = server.address();
-  process.stdout.write(`READY ${JSON.stringify({ address: address.address, family: address.family, port: address.port, upstream: upstream.origin, mode: values.mode, labOnly: true })}\n`);
+  process.stdout.write(`READY ${JSON.stringify({ address: address.address, family: address.family, port: address.port, upstream: upstream.origin, mode: values.mode, experimentPreloadJobApi: values['experiment-preload-job-api'] ?? null, labOnly: true })}\n`);
 });
 const stop = () => server.close(() => process.exit(0));
 process.on('SIGINT', stop);

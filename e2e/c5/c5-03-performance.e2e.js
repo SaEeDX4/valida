@@ -232,7 +232,7 @@ const round = (v, d = 0) => (v === null || v === undefined ? null : Math.round(v
 test('C5-17 Lab Core Web Vitals and transfer, mobile (Slow 4G, 4x CPU) and desktop, cold cache, against the lab compression proxy', async ({ browser }) => {
   test.setTimeout(3_600_000);
   await ensureJobs();
-  const out = { method: 'LAB', origin: C5_LAB_ORIGIN, labCompression: process.env.C5_LAB_COMPRESSION ?? 'precompressed', profiles: Object.fromEntries(Object.entries(PROFILES).map(([k, v]) => [k, v.label])), browserVersion: browser.version(), runsPerPage: RUNS, pages: {} };
+  const out = { method: 'LAB', origin: C5_LAB_ORIGIN, labCompression: process.env.C5_LAB_COMPRESSION ?? 'precompressed', experimentPreloadJobApi: process.env.C5_EXPERIMENT_PRELOAD_JOB_API === '1', profiles: Object.fromEntries(Object.entries(PROFILES).map(([k, v]) => [k, v.label])), browserVersion: browser.version(), runsPerPage: RUNS, pages: {} };
   for (const profile of ['mobile', 'desktop']) {
     for (const [name, pathname] of PAGES) {
       const runs = [];

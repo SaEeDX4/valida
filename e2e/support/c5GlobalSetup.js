@@ -108,7 +108,9 @@ export default async function c5GlobalSetup() {
 
     const proxyScript = fileURLToPath(new URL('./c5LabCompression.mjs', import.meta.url));
     const labMode = process.env.C5_LAB_COMPRESSION ?? 'precompressed';
-    const lab = startNode([proxyScript, '--upstream', C5_SITE_ORIGIN, '--host', '127.0.0.1', '--port', String(C5_LAB_PORT), '--mode', labMode], {
+    const lab = startNode([proxyScript, '--upstream', C5_SITE_ORIGIN, '--host', '127.0.0.1', '--port', String(C5_LAB_PORT), '--mode', labMode,
+      // EXPERIMENT (C5 LCP investigation), off unless asked for: see c5LabCompression.mjs.
+      ...(process.env.C5_EXPERIMENT_PRELOAD_JOB_API === '1' ? ['--experiment-preload-job-api', C5_BACKEND_ORIGIN] : [])], {
       cwd: REPO_ROOT,
       env: baseEnvironment(),
       logFile: path.join(dirs.logs, 'lab-compression.log'),

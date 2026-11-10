@@ -18,6 +18,15 @@
  *   - passes everything else (fonts, PNG, 304s, errors) through untouched,
  *     with every upstream header, Cache-Control included.
  *
+ * --mode precompressed (default): the compressed bytes of an immutable response
+ *   (Cache-Control: immutable, i.e. the fingerprinted /assets/ files) are kept
+ *   and reused, as a host that serves precompressed or cached-compressed assets
+ *   does. The first request for each asset pays the compression once; the C5
+ *   setup makes that request before any measurement.
+ * --mode on-demand: every response is compressed again on every request, as the
+ *   first C5 runs did. Brotli quality 11 on the main script costs about 0.67 s
+ *   of proxy CPU per request on the C5 machine, which those runs' LCP included.
+ *
  * It is NOT the production host, proves nothing about the host's compression
  * or caching, and is never part of the product. It listens on 127.0.0.1 only
  * and prints "READY {json}" with the address it actually listens on.
@@ -27,7 +36,7 @@ import { parseArgs } from 'node:util';
 import { constants, createBrotliCompress, createGzip } from 'node:zlib';
 
 const { values } = parseArgs({
-  options: { upstream: { type: 'string' }, host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string' } },
+  options: { upstream: { type: 'string' }, host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string' }, mode: { type: 'string', default: 'precompressed' } },
 });
 const upstream = new URL(values.upstream ?? '');
 if (upstream.protocol !== 'http:' || upstream.hostname !== '127.0.0.1') {
@@ -38,6 +47,13 @@ if (values.host !== '127.0.0.1') {
   console.error('c5LabCompression: --host must be 127.0.0.1');
   process.exit(2);
 }
+
+if (!['precompressed', 'on-demand'].includes(values.mode)) {
+  console.error('c5LabCompression: --mode must be precompressed or on-demand');
+  process.exit(2);
+}
+/** precompressed mode: path + encoding -> { headers, body } of an immutable response. */
+const stored = new Map();
 
 const TEXT = /^(text\/|application\/(javascript|json|xml|manifest\+json|ld\+json)|image\/svg\+xml)/i;
 
@@ -51,6 +67,13 @@ function chooseEncoding(acceptEncoding = '') {
 const server = createServer((req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' }).end();
+    return;
+  }
+  const wanted = chooseEncoding(req.headers['accept-encoding']);
+  const hit = values.mode === 'precompressed' && req.method === 'GET' && wanted ? stored.get(`${wanted} ${req.url}`) : null;
+  if (hit) {
+    res.writeHead(200, { ...hit.headers, 'content-length': String(hit.body.length) });
+    res.end(hit.body);
     return;
   }
   const headers = { ...req.headers, host: upstream.host };
@@ -72,6 +95,10 @@ const server = createServer((req, res) => {
       const compressor = encoding === 'br'
         ? createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 11 } })
         : createGzip({ level: 9 });
+      const keep = values.mode === 'precompressed' && /\bimmutable\b/i.test(up.headers['cache-control'] ?? '');
+      const chunks = [];
+      compressor.on('data', (chunk) => { if (keep) chunks.push(chunk); });
+      compressor.on('end', () => { if (keep) stored.set(`${encoding} ${req.url}`, { headers: out, body: Buffer.concat(chunks) }); });
       up.pipe(compressor).pipe(res);
     },
   );
@@ -84,7 +111,7 @@ const server = createServer((req, res) => {
 
 server.listen(Number(values.port), values.host, () => {
   const address = server.address();
-  process.stdout.write(`READY ${JSON.stringify({ address: address.address, family: address.family, port: address.port, upstream: upstream.origin, labOnly: true })}\n`);
+  process.stdout.write(`READY ${JSON.stringify({ address: address.address, family: address.family, port: address.port, upstream: upstream.origin, mode: values.mode, labOnly: true })}\n`);
 });
 const stop = () => server.close(() => process.exit(0));
 process.on('SIGINT', stop);

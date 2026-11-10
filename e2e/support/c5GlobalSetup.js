@@ -107,7 +107,8 @@ export default async function c5GlobalSetup() {
     await waitForHttp(`${C5_SITE_ORIGIN}/robots.txt`, { child: site, label: 'document server' });
 
     const proxyScript = fileURLToPath(new URL('./c5LabCompression.mjs', import.meta.url));
-    const lab = startNode([proxyScript, '--upstream', C5_SITE_ORIGIN, '--host', '127.0.0.1', '--port', String(C5_LAB_PORT)], {
+    const labMode = process.env.C5_LAB_COMPRESSION ?? 'precompressed';
+    const lab = startNode([proxyScript, '--upstream', C5_SITE_ORIGIN, '--host', '127.0.0.1', '--port', String(C5_LAB_PORT), '--mode', labMode], {
       cwd: REPO_ROOT,
       env: baseEnvironment(),
       logFile: path.join(dirs.logs, 'lab-compression.log'),
@@ -118,6 +119,19 @@ export default async function c5GlobalSetup() {
     if (labProblem) throw new Error(`E2E refused: lab compression proxy: ${labProblem.replace('the backend', 'it')}.`);
     run.labCompression = { ...labReady, otherInterfaces: await reachFromOtherInterfaces(C5_LAB_PORT) };
     await waitForHttp(`${C5_LAB_ORIGIN}/robots.txt`, { child: lab, label: 'lab compression proxy' });
+    // precompressed mode: each fingerprinted script and stylesheet is requested once per encoding now, so no
+    // measurement pays for its compression (a host serves these precompressed or from its compressed cache).
+    run.labCompression.warmed = [];
+    if (labMode === 'precompressed') {
+      for (const name of readdirSync(path.join(dirs.dist, 'assets')).filter((f) => /\.(js|css)$/.test(f))) {
+        for (const encoding of ['br', 'gzip']) {
+          const started = Date.now();
+          const response = await fetch(`${C5_LAB_ORIGIN}/assets/${name}`, { headers: { 'Accept-Encoding': encoding } });
+          await response.arrayBuffer();
+          run.labCompression.warmed.push({ asset: name, encoding, status: response.status, ms: Date.now() - started });
+        }
+      }
+    }
 
     writeFileSync(path.join(runDir, 'run.json'), JSON.stringify(run, null, 2));
     console.log(`\nC5 stack ready. Run directory (evidence, logs): ${runDir}\n`);

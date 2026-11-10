@@ -153,12 +153,15 @@ async function measure(browser, { origin, profile, name, pathname, interactions 
   const requests = new Map();
   const transfers = [];
   await cdp.send('Network.enable');
+  // Request timing for the LCP critical path (document, script, stylesheet, API), on the CDP monotonic clock.
+  const started = new Map();
+  cdp.on('Network.requestWillBeSent', (e) => started.set(e.requestId, e.timestamp));
   cdp.on('Network.responseReceived', (e) => requests.set(e.requestId, {
     url: e.response.url, type: TYPE(e.type), status: e.response.status, encoding: e.response.headers['content-encoding'] ?? e.response.headers['Content-Encoding'] ?? null, fromCache: e.response.fromDiskCache || e.response.fromServiceWorker || false,
   }));
   cdp.on('Network.loadingFinished', (e) => {
     const r = requests.get(e.requestId);
-    if (r) transfers.push({ ...r, bytes: e.encodedDataLength });
+    if (r) transfers.push({ ...r, bytes: e.encodedDataLength, startedAt: started.get(e.requestId) ?? null, finishedAt: e.timestamp });
   });
   await cdp.send('Network.emulateNetworkConditions', p.network);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: p.cpu });
@@ -198,6 +201,12 @@ async function measure(browser, { origin, profile, name, pathname, interactions 
       transferKiB: Object.fromEntries(Object.entries(bytes).map(([k, v]) => [k, round(v / KIB, 1)])),
       totalKiB: round(transfers.reduce((s, t) => s + t.bytes, 0) / KIB, 1),
       requests: transfers.length,
+      // Milliseconds from the document request: when each critical request started and finished.
+      criticalPath: (() => {
+        const origin0 = transfers.find((t) => t.type === 'document')?.startedAt;
+        if (!origin0) return null;
+        return transfers.filter((t) => ['document', 'js', 'css', 'api'].includes(t.type)).map((t) => ({ type: t.type, path: new URL(t.url).pathname.replace(/-[A-Za-z0-9_-]{8}\./, '.'), start: round((t.startedAt - origin0) * 1000), end: round((t.finishedAt - origin0) * 1000), kib: round(t.bytes / KIB, 1) }));
+      })(),
       encodings: [...new Set(transfers.filter((t) => ['document', 'js', 'css'].includes(t.type)).map((t) => `${t.type}:${t.encoding ?? 'identity'}`))],
     };
     if (interactions && !repeatView) {
@@ -223,7 +232,7 @@ const round = (v, d = 0) => (v === null || v === undefined ? null : Math.round(v
 test('C5-17 Lab Core Web Vitals and transfer, mobile (Slow 4G, 4x CPU) and desktop, cold cache, against the lab compression proxy', async ({ browser }) => {
   test.setTimeout(3_600_000);
   await ensureJobs();
-  const out = { method: 'LAB', origin: C5_LAB_ORIGIN, profiles: Object.fromEntries(Object.entries(PROFILES).map(([k, v]) => [k, v.label])), browserVersion: browser.version(), runsPerPage: RUNS, pages: {} };
+  const out = { method: 'LAB', origin: C5_LAB_ORIGIN, labCompression: process.env.C5_LAB_COMPRESSION ?? 'precompressed', profiles: Object.fromEntries(Object.entries(PROFILES).map(([k, v]) => [k, v.label])), browserVersion: browser.version(), runsPerPage: RUNS, pages: {} };
   for (const profile of ['mobile', 'desktop']) {
     for (const [name, pathname] of PAGES) {
       const runs = [];

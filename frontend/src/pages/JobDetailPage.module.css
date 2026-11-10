@@ -19,7 +19,9 @@
  * left and the summary on the right. Only the visual arrangement changes; the
  * document order does not.
  */
-.layout { display: grid; gap: var(--space-9); grid-template-columns: 1fr; align-items: start; }
+/* C5 — Doc 16 section 37: minmax(0, 1fr), so enlarged text can never widen the
+   single mobile column past the viewport. */
+.layout { display: grid; gap: var(--space-9); grid-template-columns: minmax(0, 1fr); align-items: start; }
 @media (min-width: 1000px) {
   .layout { grid-template-columns: 8fr 4fr; gap: var(--space-10); }
   .content { grid-column: 1; grid-row: 1; }
@@ -68,6 +70,9 @@
 }
 
 .applyPanel { display: flex; flex-direction: column; gap: var(--space-5); }
+/* C5 — Doc 16 section 37: the card's call to action may wrap rather than
+   overflow the card when text is enlarged; it fits on one line otherwise. */
+.applyPanel > a { white-space: normal; text-align: center; }
 
 .closedBanner {
   display: inline-flex;

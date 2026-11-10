@@ -40,7 +40,9 @@
 
 /* The submit button keeps its width while the label changes, so the layout
    does not shift when the request starts. */
-.submit { min-inline-size: 14rem; justify-content: center; }
+/* C5 — Doc 16 section 37: capped at the container and allowed to wrap, so the
+   button stays inside the viewport when text is enlarged. */
+.submit { min-inline-size: min(14rem, 100%); justify-content: center; white-space: normal; }
 
 .stateBlock { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-5); max-inline-size: 46rem; }
 .successBody { color: var(--color-text-secondary); }

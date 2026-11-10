@@ -28,7 +28,8 @@
   border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
-  max-inline-size: 12rem;
+  /* C5 — Doc 16 section 37: never wider than its container at enlarged text. */
+  max-inline-size: min(12rem, 100%);
 }
 
 .select:hover { border-color: var(--color-control-border-hover); }

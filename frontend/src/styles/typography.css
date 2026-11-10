@@ -18,6 +18,11 @@
   font-weight: var(--weight-semibold);
   color: var(--color-text-primary);
   text-wrap: balance;
+  /* C5 — Doc 16 section 37 (text at 200%): a heading word wider than its
+     column may break instead of widening the column past the viewport (seen
+     at 360-390 CSS px with the browser text size doubled). No effect while a
+     word fits. */
+  overflow-wrap: anywhere;
 }
 
 .t-display {

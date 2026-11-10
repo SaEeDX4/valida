@@ -17,13 +17,28 @@ import { buildEligibleWorkCountriesFacts } from '../features/jobs/utils/eligible
 import { SELECTABLE_REGIONS } from '../features/jobs/markets.js';
 import { CANONICAL_ORIGIN, normalizeSiteUrl, resolveSeoConfig, seoBuildProblems } from './siteConfig.js';
 import { SOCIAL_CARD } from './socialCard.js';
+import { HOME_META } from '../pages/HomePage.content.js';
+import { ABOUT_SECTIONS } from '../pages/AboutPage.content.js';
+import { COMPANY_FACTS } from '../pages/LegalPage.content.js';
+import { PRIVACY_SECTIONS } from '../pages/PrivacyPage.content.js';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-/** OD-2026-11-09-02: the approved alternative text, exactly as the owner wrote it. */
+/** OD-2026-11-09-03: the approved alternative text of the revised card, exactly as the owner wrote it. */
 const APPROVED_CARD_ALT =
-  'Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering."';
+  'Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a technology company focused on cybersecurity, secure technology, and security engineering."';
+/** OD-2026-11-09-03: the revised card (revision 2) and the reviewed revision 1, which stays recoverable. */
+const CARD_V2_SHA256 = 'c86554a2a7ea2cc020eccdb8d3e5a8171de0518e9eeaefba804197171a8cc2a5';
+const CARD_V1_SHA256 = '2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a';
+/** Doc 06 section 12, the Home search description: unchanged. */
+const DOC06_HOME_DESCRIPTION =
+  'Valida is a Lithuanian technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.';
+/** OD-2026-11-09-03: the Home social-sharing description (og:description). */
+const APPROVED_HOME_SHARING_DESCRIPTION =
+  'Valida is a technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.';
+const repoFile = (relative) => fileURLToPath(new URL(`../../../${relative}`, import.meta.url));
+const sha256Of = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 /**
  * C4 — the shared SEO core (src/seo), tested without a browser.
@@ -214,7 +229,7 @@ describe('describeHead — one head for browser and server', () => {
         ['og:title', STATIC_HEADS.ABOUT.title],
         ['og:description', STATIC_HEADS.ABOUT.description],
         ['og:url', `${SITE}/about`],
-        ['og:image', `${SITE}/social/valida-social-card-1200x630.png`],
+        ['og:image', `${SITE}/social/valida-social-card-v2-1200x630.png`],
         ['og:image:width', '1200'],
         ['og:image:height', '630'],
         ['og:image:alt', APPROVED_CARD_ALT],
@@ -224,7 +239,7 @@ describe('describeHead — one head for browser and server', () => {
     expect(describeHead(STATIC_HEADS.HOME, INDEXED).canonical).toBe(`${SITE}/`);
   });
 
-  it('every page with Open Graph carries the approved social card, absolute on the approved origin (OD-2026-11-09-02)', () => {
+  it('every page with Open Graph carries the revised social card, absolute on the approved origin (OD-2026-11-09-02/-03)', () => {
     for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
       const og = Object.fromEntries(describeHead(input, INDEXED).openGraph);
       expect(og['og:image'], input.title).toBe(`${CANONICAL_ORIGIN}${SOCIAL_CARD.path}`);
@@ -234,14 +249,59 @@ describe('describeHead — one head for browser and server', () => {
     expect(SOCIAL_CARD.alt).toBe(APPROVED_CARD_ALT);
   });
 
-  it('the card at the stable public path is the approved file: 1200 x 630 PNG, the approved SHA-256', () => {
+  it('the card at its public path is the revised file: 1200 x 630 PNG, its own SHA-256; revision 1 stays recoverable and is no longer served', () => {
     const bytes = readFileSync(fileURLToPath(new URL(`../../public${SOCIAL_CARD.path}`, import.meta.url)));
-    expect(createHash('sha256').update(bytes).digest('hex')).toBe('2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a');
-    expect(SOCIAL_CARD.sha256).toBe('2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a');
+    expect(sha256Of(bytes)).toBe(CARD_V2_SHA256);
+    expect(SOCIAL_CARD.sha256).toBe(CARD_V2_SHA256);
+    // The reviewed source copy in docs/ is the same file; revision 1 is kept there unchanged.
+    expect(sha256Of(readFileSync(repoFile('docs/brand/social-card-preview/valida-social-card-v2-1200x630.png')))).toBe(CARD_V2_SHA256);
+    expect(sha256Of(readFileSync(repoFile('docs/brand/social-card-preview/valida-social-card-preview-1200x630.png')))).toBe(CARD_V1_SHA256);
+    expect(existsSync(fileURLToPath(new URL('../../public/social/valida-social-card-1200x630.png', import.meta.url)))).toBe(false);
     // PNG signature, then the IHDR chunk: width and height as big-endian 32-bit integers.
     expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect(bytes.subarray(12, 16).toString('ascii')).toBe('IHDR');
     expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([SOCIAL_CARD.width, SOCIAL_CARD.height]);
+  });
+
+  it('Home shares the approved social-sharing description; its search description stays Doc 06 section 12 (OD-2026-11-09-03)', () => {
+    expect(HOME_META.socialDescription).toBe(APPROVED_HOME_SHARING_DESCRIPTION);
+    expect(HOME_META.description).toBe(DOC06_HOME_DESCRIPTION);
+    const head = describeHead(STATIC_HEADS.HOME, INDEXED);
+    expect(head.description).toBe(DOC06_HOME_DESCRIPTION);
+    expect(Object.fromEntries(head.openGraph)['og:description']).toBe(APPROVED_HOME_SHARING_DESCRIPTION);
+    const html = renderHeadTags(head);
+    expect(html).toContain(`<meta name="description" content="${DOC06_HOME_DESCRIPTION}">`);
+    expect(html).toContain(`<meta property="og:description" content="${APPROVED_HOME_SHARING_DESCRIPTION}">`);
+  });
+
+  it('the amendment is limited to social sharing: one phrase on Home, every other route shares its own search description', () => {
+    expect(APPROVED_HOME_SHARING_DESCRIPTION).toBe(DOC06_HOME_DESCRIPTION.replace('a Lithuanian technology company', 'a technology company'));
+    const others = [STATIC_HEADS.ABOUT, STATIC_HEADS.CAREERS, STATIC_HEADS.PRIVACY, STATIC_HEADS.LEGAL, jobDetailHead(qaJob())];
+    for (const input of others) {
+      expect(input.socialDescription, input.title).toBeUndefined();
+      expect(Object.fromEntries(describeHead(input, INDEXED).openGraph)['og:description'], input.title).toBe(input.description);
+    }
+    for (const input of [...Object.values(STATIC_HEADS), jobDetailHead(qaJob())]) {
+      const og = Object.fromEntries(describeHead(input, INDEXED).openGraph);
+      expect(og['og:description'], input.title).not.toMatch(/Lithuanian/);
+      expect(og['og:image:alt'], input.title).not.toMatch(/Lithuanian/);
+    }
+  });
+
+  it('the factual Lithuanian references are untouched: About, Privacy and Legal (Valida MB, its registration)', () => {
+    expect(ABOUT_SECTIONS[0].paragraphs[0]).toBe('Valida MB is a Lithuanian technology company whose registered activity context includes computer programming, computer consultancy, and other IT services.');
+    expect(PRIVACY_SECTIONS[0].paragraphs).toEqual(['Valida MB is a Lithuanian technology company.']);
+    expect(COMPANY_FACTS).toContainEqual({ term: 'Company type', value: 'Lithuanian Mažoji bendrija (MB)' });
+  });
+
+  it('a socialDescription never reaches a page without Open Graph, and never replaces the search description', () => {
+    const noindex = describeHead({ ...STATIC_HEADS.HOME, robots: ROBOTS.NOINDEX_FOLLOW }, INDEXED);
+    expect(noindex.openGraph).toEqual([]);
+    expect(noindex.description).toBe(DOC06_HOME_DESCRIPTION);
+    expect(renderHeadTags(noindex)).not.toContain(APPROVED_HOME_SHARING_DESCRIPTION);
+    const review = describeHead(STATIC_HEADS.HOME, REVIEW);
+    expect(review.openGraph).toEqual([]);
+    expect(renderHeadTags(review)).not.toContain(APPROVED_HOME_SHARING_DESCRIPTION);
   });
 
   it('a review build: every page "noindex, nofollow", and no canonical, Open Graph or JobPosting (SEO-020)', () => {

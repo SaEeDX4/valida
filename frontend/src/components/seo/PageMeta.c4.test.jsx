@@ -76,23 +76,41 @@ describe('C4 — review build (the default): every page "noindex, nofollow" (Doc
 });
 
 describe('C4 — production build: canonical and Open Graph on indexable pages (Doc 16 sections 89-97)', () => {
-  it('Home: self-canonical on the root, the Open Graph tags with the approved social card, no robots, no JobPosting', async () => {
+  it('Home: self-canonical on the root, the Open Graph tags with the revised social card and the social-sharing description, no robots, no JobPosting', async () => {
     production();
     renderRoute('/');
     await waitFor(() => expect(canonical()).toEqual([`${SITE}/`]));
     expect(robots()).toEqual([]);
+    // OD-2026-11-09-03: og:description is the social-sharing description; the search description is unchanged.
+    expect(q('meta[name="description"]').map((tag) => tag.getAttribute('content'))).toEqual([HOME_META.description]);
     expect(openGraph()).toEqual([
       ['og:type', 'website'],
       ['og:site_name', 'Valida'],
       ['og:title', HOME_META.title],
-      ['og:description', HOME_META.description],
+      ['og:description', HOME_META.socialDescription],
       ['og:url', `${SITE}/`],
-      ['og:image', `${SITE}/social/valida-social-card-1200x630.png`],
+      ['og:image', `${SITE}/social/valida-social-card-v2-1200x630.png`],
       ['og:image:width', '1200'],
       ['og:image:height', '630'],
       ['og:image:alt', SOCIAL_CARD.alt],
     ]);
     expect(jsonLd()).toEqual([]);
+  });
+
+  it('client navigation from Home to About replaces the sharing description with About\'s own (OD-2026-11-09-03)', async () => {
+    production();
+    const user = userEvent.setup();
+    renderRoute('/');
+    await waitFor(() => expect(canonical()).toEqual([`${SITE}/`]));
+    const description = () => q('meta[name="description"]').map((tag) => tag.getAttribute('content'));
+    const ogDescription = () => openGraph().filter(([property]) => property === 'og:description').map(([, content]) => content);
+    expect(ogDescription()).toEqual([HOME_META.socialDescription]);
+    await user.click(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'About' }));
+    await waitFor(() => expect(canonical()).toEqual([`${SITE}/about`]));
+    expect(ogDescription()).toEqual(description());
+    expect(ogDescription()).toHaveLength(1);
+    expect(ogDescription()[0]).not.toBe(HOME_META.socialDescription);
+    expect(openGraph().filter(([property]) => property === 'og:image')).toEqual([['og:image', `${SITE}${SOCIAL_CARD.path}`]]);
   });
 
   it('the canonical never carries the query (region view, tracking): one URL per page (Doc 16 section 93, SEO-039)', async () => {

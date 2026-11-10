@@ -10,7 +10,12 @@ import { SOCIAL_CARD } from './socialCard.js';
  *
  * Input (what a page states about itself; see routeHeads.js):
  *   title        Document 06 title.
- *   description  Document 06 description, when the route has one.
+ *   description  Document 06 description, when the route has one: the
+ *                search description (<meta name="description">) and, unless
+ *                socialDescription is given, og:description.
+ *   socialDescription  the route's social-sharing description, when it differs
+ *                from its search description: og:description only (Home,
+ *                OD-2026-11-09-03). Never used without Open Graph.
  *   robots       the route's own directive ('noindex, follow' for Apply, 404,
  *                retained closed Jobs and error states); absent = indexable.
  *   path         the route's canonical PATH (no query, no trailing slash).
@@ -27,10 +32,12 @@ import { SOCIAL_CARD } from './socialCard.js';
  *   - Without a configured canonical origin there is no canonical, no og:url —
  *     and so no Open Graph set — and no JobPosting: none of them can be built
  *     without an absolute URL.
- *   - Every page with Open Graph also carries the approved default social
- *     card (socialCard.js; OD-2026-11-09-02): og:image as an absolute URL on
- *     the canonical origin, og:image:width, og:image:height and og:image:alt
- *     (Doc 16 sections 94-97).
+ *   - Every page with Open Graph also carries the default social card
+ *     (socialCard.js; OD-2026-11-09-02, revised by OD-2026-11-09-03):
+ *     og:image as an absolute URL on the canonical origin, og:image:width,
+ *     og:image:height and og:image:alt (Doc 16 sections 94-97).
+ *   - og:description is the route's social-sharing description when it has
+ *     one, otherwise its search description (OD-2026-11-09-03).
  */
 
 export const ROBOTS = Object.freeze({
@@ -38,13 +45,16 @@ export const ROBOTS = Object.freeze({
   REVIEW: 'noindex, nofollow',
 });
 
-export function describeHead({ title, description, robots, path, jobPosting } = {}, config = {}) {
+export function describeHead({ title, description, socialDescription, robots, path, jobPosting } = {}, config = {}) {
   const indexing = config.indexing === true;
   const siteOrigin = config.siteOrigin ?? null;
   const ownRobots = typeof robots === 'string' && robots.trim() ? robots.trim() : null;
   const effectiveRobots = indexing ? ownRobots : ROBOTS.REVIEW;
   const indexable = indexing && ownRobots === null;
   const cleanDescription = typeof description === 'string' && description.trim() ? description.trim() : null;
+  const cleanSocialDescription =
+    typeof socialDescription === 'string' && socialDescription.trim() ? socialDescription.trim() : null;
+  const sharingDescription = cleanSocialDescription ?? cleanDescription;
 
   const canonical = indexable ? absoluteUrl(siteOrigin, path) : null;
 
@@ -53,7 +63,7 @@ export function describeHead({ title, description, robots, path, jobPosting } = 
         ['og:type', 'website'],
         ['og:site_name', SITE_NAME],
         ['og:title', title],
-        ...(cleanDescription ? [['og:description', cleanDescription]] : []),
+        ...(sharingDescription ? [['og:description', sharingDescription]] : []),
         ['og:url', canonical],
         ['og:image', absoluteUrl(siteOrigin, SOCIAL_CARD.path)],
         ['og:image:width', String(SOCIAL_CARD.width)],

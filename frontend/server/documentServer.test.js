@@ -160,17 +160,28 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     expect(headOf(html)).toContain(`<title>${title}</title>`);
     expect(headOf(html)).toContain(`<link rel="canonical" href="${href}">`);
     expect(headOf(html)).toContain(`<meta property="og:url" content="${href}">`);
-    // OD-2026-11-09-02: the approved social card, absolute on the approved origin, with its dimensions and alt text.
-    expect(headOf(html)).toContain(`<meta property="og:image" content="${SITE}/social/valida-social-card-1200x630.png">`);
+    // OD-2026-11-09-02, revised by OD-2026-11-09-03: the social card, absolute on the approved origin, with its dimensions and alt text.
+    expect(headOf(html)).toContain(`<meta property="og:image" content="${SITE}/social/valida-social-card-v2-1200x630.png">`);
     expect(headOf(html)).toContain('<meta property="og:image:width" content="1200">');
     expect(headOf(html)).toContain('<meta property="og:image:height" content="630">');
     expect(headOf(html)).toContain(
-      '<meta property="og:image:alt" content="Valida logo with the headline &quot;Secure systems. Deliberate engineering.&quot; and the line &quot;Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering.&quot;">',
+      '<meta property="og:image:alt" content="Valida logo with the headline &quot;Secure systems. Deliberate engineering.&quot; and the line &quot;Valida is a technology company focused on cybersecurity, secure technology, and security engineering.&quot;">',
     );
     expect(headOf(html)).not.toMatch(/name="robots"|valida:head|application\/ld\+json/);
     expect(response.headers.get('x-robots-tag')).toBeNull();
     expect(response.headers.get('cache-control')).toBe('no-cache');
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    // OD-2026-11-09-03: the sharing description is the route's own search description, except on Home.
+    const metaContent = (selector) => [...headOf(html).matchAll(new RegExp(`<meta ${selector} content="([^"]*)">`, 'g'))].map((match) => match[1]);
+    const description = metaContent('name="description"');
+    const ogDescription = metaContent('property="og:description"');
+    expect([description.length, ogDescription.length]).toEqual([1, 1]);
+    if (pathname === '/') {
+      expect(description[0]).toBe('Valida is a Lithuanian technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.');
+      expect(ogDescription[0]).toBe('Valida is a technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.');
+    } else {
+      expect(ogDescription).toEqual(description);
+    }
   });
 
   it('an open Job: 200, its title and canonical, indexable — and NO JobPosting (no explicit eligible remote-work countries)', async () => {

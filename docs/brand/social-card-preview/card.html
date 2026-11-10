@@ -1,22 +1,32 @@
 <!doctype html>
 <!--
-  Valida social card — PREVIEW, NOT APPROVED (OD-2026-11-09-01, R5).
+  Valida social card — the source of the site's Open Graph image.
 
-  1200 x 630 Open Graph card source. Rendered by render.mjs in this folder.
-  This folder is documentation, not a build input: nothing here is served by the
-  website, and no og:image tag points at it until the owner approves the image.
+  Revision 2 (OD-2026-11-09-03; final visual sign-off pending the owner):
+    - the text group moves up together, its internal spacing unchanged: the
+      gap between the logo and the eyebrow line is 80 CSS px, where the
+      revision 1 layout (justify-content: space-between) left 125.8 px;
+    - the visible description is the approved social-sharing copy.
+  Revision 1, the card integrated under OD-2026-11-09-02, stays unchanged in
+  this folder as valida-social-card-preview-1200x630.png (SHA-256
+  2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a).
 
-  Inputs, all already approved:
+  1200 x 630, rendered by render.mjs in this folder. This folder is
+  documentation, not a build input: the site serves its own copy of the
+  rendered bytes from frontend/public/social/.
+
+  Inputs:
     - logo   frontend/public/brand/valida-logo-horizontal-transparent.png
              (approved pack, 2026-09-10), scaled only, aspect ratio kept;
     - colours and type   Document 03 sections 8, 13, 22 / frontend tokens.css;
-    - copy   Document 06 section 13 (eyebrow), section 6 / 14 (headline),
-             section 4 (primary brand description). Nothing else is written.
+    - copy   Document 06 section 13 (eyebrow), section 6 / 14 (headline); the
+             description is Document 06 section 4 as amended for social
+             sharing only by OD-2026-11-09-03. Nothing else is written.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Valida social card preview</title>
+<title>Valida social card</title>
 <style>
   @font-face {
     font-family: "Space Grotesk";
@@ -56,7 +66,7 @@
     padding: 72px 80px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
     /* Document 03 section 13, the primary gradient family example. */
     background:
       radial-gradient(circle at 70% 30%, rgba(50, 143, 255, 0.14), transparent 42%),
@@ -68,7 +78,10 @@
   /* Approved horizontal lockup, scaled only: 1009 x 230 -> 281 x 64. */
   .logo { display: block; width: 281px; height: 64px; }
 
-  .text { display: flex; flex-direction: column; gap: 24px; }
+  /* Revision 2: a fixed gap below the logo (was the free space of
+     justify-content: space-between, 125.8 px). The 24 px internal gaps are
+     unchanged. */
+  .text { display: flex; flex-direction: column; gap: 24px; margin-top: 80px; }
 
   .eyebrow {
     display: flex;
@@ -116,7 +129,7 @@
     <div class="text">
       <p class="eyebrow">CYBERSECURITY · SECURE TECHNOLOGY</p>
       <h1><span>Secure systems.</span><span class="second">Deliberate engineering.</span></h1>
-      <p class="description">Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering.</p>
+      <p class="description">Valida is a technology company focused on cybersecurity, secure technology, and security engineering.</p>
     </div>
   </div>
 </body>

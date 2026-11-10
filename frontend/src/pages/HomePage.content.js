@@ -10,9 +10,15 @@
 export const HOME_META = {
   // Doc 06 section 11
   title: 'Valida | Cybersecurity & Secure Technology',
-  // Doc 06 section 12
+  // Doc 06 section 12 — the search description (<meta name="description">).
   description:
     'Valida is a Lithuanian technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.',
+  // The social-sharing description (og:description only): Doc 06 section 12
+  // with "a Lithuanian technology company" -> "a technology company", nothing
+  // else changed. OD-2026-11-09-03 limits this copy amendment to social
+  // sharing; the search description above and the page copy are unchanged.
+  socialDescription:
+    'Valida is a technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.',
 };
 
 export const HERO = {

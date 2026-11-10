@@ -18,9 +18,10 @@ import { HEAD_SELECTORS, describeHead, serializeJsonLd } from '../../seo/head.js
  * client navigation settles on identical metadata:
  *   title, description, robots           as before (A4-A6, C2);
  *   canonical (link rel="canonical")      indexable pages, canonical origin set;
- *   Open Graph (og:type, og:site_name,    the same pages;
- *     og:title, og:description, og:url,
- *     og:image + width/height/alt)       the approved social card (OD-2026-11-09-02)
+ *   Open Graph (og:type, og:site_name,    the same pages; og:description is the
+ *     og:title, og:description, og:url,  route's social-sharing description when
+ *     og:image + width/height/alt)       it has one (Home, OD-2026-11-09-03);
+ *                                         the social card (OD-2026-11-09-02/-03)
  *   JobPosting JSON-LD                    an open Job Detail page only, and only
  *                                         when its inputs exist (src/seo/jobPosting.js:
  *                                         a fully remote Job needs its explicit
@@ -43,8 +44,8 @@ import { HEAD_SELECTORS, describeHead, serializeJsonLd } from '../../seo/head.js
  * removes that timing dependency entirely: whichever route is on screen is the
  * one that decides.
  */
-export default function PageMeta({ title, description, robots, path, jobPosting }) {
-  const head = describeHead({ title, description, robots, path, jobPosting }, getSeoConfig());
+export default function PageMeta({ title, description, socialDescription, robots, path, jobPosting }) {
+  const head = describeHead({ title, description, socialDescription, robots, path, jobPosting }, getSeoConfig());
   const openGraphKey = JSON.stringify(head.openGraph);
   const jsonLdText = head.jsonLd ? serializeJsonLd(head.jsonLd) : null;
 

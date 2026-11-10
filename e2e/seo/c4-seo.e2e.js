@@ -29,12 +29,20 @@ import {
 const SITE = SEO_SITE_URL;
 const run = () => readSeoRun();
 
-/** OD-2026-11-09-02 — the approved social card: its bytes, size and alternative text, as approved. */
+/** OD-2026-11-09-03 — the revised social card (revision 2): its path, bytes and alternative text, as approved. */
 const CARD = Object.freeze({
-  path: '/social/valida-social-card-1200x630.png',
-  sha256: '2667d6191d73696e5b82019cc301aef82345dddc5e5c6645f6ac5abe5af9a71a',
-  alt: 'Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a Lithuanian technology company focused on cybersecurity, secure technology, and security engineering."',
+  path: '/social/valida-social-card-v2-1200x630.png',
+  sha256: 'c86554a2a7ea2cc020eccdb8d3e5a8171de0518e9eeaefba804197171a8cc2a5',
+  alt: 'Valida logo with the headline "Secure systems. Deliberate engineering." and the line "Valida is a technology company focused on cybersecurity, secure technology, and security engineering."',
 });
+/** Revision 1 (OD-2026-11-09-02): kept in docs/, no longer served. */
+const CARD_R1_PATH = '/social/valida-social-card-1200x630.png';
+/** Doc 06 section 12 (the Home search description, unchanged) and the Home social-sharing description of OD-2026-11-09-03. */
+const HOME_SEARCH_DESCRIPTION = 'Valida is a Lithuanian technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.';
+const HOME_SHARING_DESCRIPTION = 'Valida is a technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems.';
+/** The route-specific sharing description: Home's own, elsewhere the route's search description. */
+const expectedSharing = (pathname, description) => (pathname === '/' ? HOME_SHARING_DESCRIPTION : description);
+const ogValue = (openGraph, property) => openGraph.filter(([name]) => name === property).map(([, content]) => content);
 const OG_PROPERTIES = ['og:type', 'og:site_name', 'og:title', 'og:description', 'og:url', 'og:image', 'og:image:width', 'og:image:height', 'og:image:alt'];
 const job = (name) => run().jobs[name];
 
@@ -577,16 +585,23 @@ test('C4-11 Jobs API unreachable: Job routes and the sitemap answer 503, never 4
 
 // ===================================================== OD-2026-11-09-02 ==
 
-test('C4-12 social card: og:image, its size and alt in the initial HTML and after client navigation; the local asset is the approved file', async ({ page, browser }) => {
+test('C4-12 social card (revision 2): og:image, its size and alt, and the route-specific sharing description in the initial HTML and after client navigation; the local asset is the revised file', async ({ page, browser }) => {
   const expected = [['og:image', `${SITE}${CARD.path}`], ['og:image:width', '1200'], ['og:image:height', '630'], ['og:image:alt', CARD.alt]];
   const cardTags = (openGraph) => openGraph.filter(([property]) => property.startsWith('og:image'));
 
   const initial = {};
+  const sharing = {};
   for (const pathname of ['/', '/about', '/careers', '/privacy', '/legal', `/careers/${job('qa-c4-open-eligible').slug}`]) {
     const head = headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, pathname)).body);
     initial[pathname] = cardTags(head.openGraph);
     expect(initial[pathname], pathname).toEqual(expected);
+    // OD-2026-11-09-03: og:description is the route's sharing description; the search description is untouched.
+    sharing[pathname] = { description: head.description, ogDescription: ogValue(head.openGraph, 'og:description') };
+    expect(head.description, pathname).toHaveLength(1);
+    expect(sharing[pathname].ogDescription, pathname).toEqual([expectedSharing(pathname, head.description[0])]);
+    expect(head.canonical, pathname).toEqual([`${SITE}${pathname}`]);
   }
+  expect(sharing['/'].description).toEqual([HOME_SEARCH_DESCRIPTION]);
   const without = {};
   for (const pathname of [`/careers/${job('qa-c4-retained-closed').slug}`, `/careers/${job('qa-c4-open-remote').slug}/apply`, '/qa-c4-no-such-page']) {
     without[pathname] = cardTags(headFacts((await fetchDocument(SEO_INDEXED_ORIGIN, pathname)).body).openGraph);
@@ -598,7 +613,10 @@ test('C4-12 social card: og:image, its size and alt in the initial HTML and afte
 
   // Client navigation: every indexable page the browser settles on carries the same card tags.
   const steps = [];
-  const note = async (label) => steps.push({ label, url: new URL(page.url()).pathname, card: cardTags((await browserHead(page)).openGraph) });
+  const note = async (label) => {
+    const head = await browserHead(page);
+    steps.push({ label, url: new URL(page.url()).pathname, card: cardTags(head.openGraph), description: head.description, ogDescription: ogValue(head.openGraph, 'og:description') });
+  };
   const eligible = job('qa-c4-open-eligible');
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -614,7 +632,12 @@ test('C4-12 social card: og:image, its size and alt in the initial HTML and afte
   await page.getByRole('link', { name: 'Apply for This Role' }).first().click();
   await expect.poll(async () => (await browserHead(page)).robots).toEqual(['noindex, follow']);
   await note('Apply (client navigation)');
-  for (const step of steps) expect(step.card, step.label).toEqual(step.label.startsWith('Apply') ? [] : expected);
+  for (const step of steps) {
+    expect(step.card, step.label).toEqual(step.label.startsWith('Apply') ? [] : expected);
+    expect(step.ogDescription, step.label).toEqual(step.label.startsWith('Apply') ? [] : [expectedSharing(step.url, step.description[0])]);
+  }
+  expect(steps[0].description).toEqual([HOME_SEARCH_DESCRIPTION]);
+  expect(steps.filter((step) => step.ogDescription[0] === HOME_SHARING_DESCRIPTION).map((step) => step.label)).toEqual(['Home (direct)']);
 
   // The asset itself, from the local production build.
   const imageUrl = new URL(expected[0][1]);
@@ -632,6 +655,12 @@ test('C4-12 social card: og:image, its size and alt in the initial HTML and afte
   };
   expect([assetFacts.status, assetFacts.contentType, assetFacts.sha256]).toEqual([200, 'image/png', CARD.sha256]);
   expect(assetFacts.pngSize).toEqual([1200, 630]);
+  // Revision 1 is no longer an asset of the build: its old path is not served as an image.
+  const r1 = await fetch(`${SEO_INDEXED_ORIGIN}${CARD_R1_PATH}`);
+  const r1Facts = { url: `${SEO_INDEXED_ORIGIN}${CARD_R1_PATH}`, status: r1.status, contentType: r1.headers.get('content-type') };
+  await r1.arrayBuffer();
+  expect(r1Facts.contentType ?? '').not.toContain('image/png');
+  expect(r1Facts.status).toBe(404);
   const robots = await fetchDocument(SEO_INDEXED_ORIGIN, '/robots.txt');
   expect(robots.body.split('\n').filter((line) => line.startsWith('Disallow:')).some((line) => imageUrl.pathname.startsWith(line.slice(9).trim()))).toBe(false);
 
@@ -655,6 +684,18 @@ test('C4-12 social card: og:image, its size and alt in the initial HTML and afte
       <div class="meta"><div class="domain">${esc(new URL(og['og:url']).host)}</div><div class="title">${esc(og['og:title'])}</div><div class="desc">${esc(og['og:description'])}</div></div>
     </div></body></html>`);
   await preview.waitForFunction(() => { const image = document.getElementById('image'); return image.complete && image.naturalWidth === 1200; });
+  // What the preview actually displays: the served image at 500 x 262 and the snippet drawn from the page's metadata.
+  const shown = await preview.evaluate(() => {
+    const image = document.getElementById('image');
+    const box = image.getBoundingClientRect();
+    const text = (selector) => document.querySelector(selector).textContent;
+    return { imageCss: [box.width, box.height], imageNatural: [image.naturalWidth, image.naturalHeight], imageSrcPath: new URL(image.src).pathname, domain: text('.domain'), title: text('.title'), description: text('.desc') };
+  });
+  expect(shown.imageCss).toEqual([500, 262]);
+  expect(shown.imageNatural).toEqual([1200, 630]);
+  expect(shown.imageSrcPath).toBe(CARD.path);
+  expect([shown.domain, shown.title, shown.description]).toEqual([new URL(og['og:url']).host, og['og:title'], og['og:description']]);
+  expect(shown.description).toBe(HOME_SHARING_DESCRIPTION);
   const previewFile = path.join(outputDir('screenshots'), 'C4-12-sharing-preview.png');
   await preview.locator('body').screenshot({ path: previewFile });
   await context.close();
@@ -662,11 +703,13 @@ test('C4-12 social card: og:image, its size and alt in the initial HTML and afte
   record('C4-12-social-card', {
     observation: 'REAL (local production build; image served by the document server)',
     initialHtml: initial,
+    sharingDescriptionInitialHtml: sharing,
     noCardOn: without,
     reviewBuildHome: { cardTags: [], referencesCardPath: false },
     clientNavigation: steps,
     asset: assetFacts,
-    sharingPreview: { screenshot: 'screenshots/C4-12-sharing-preview.png', fromOpenGraph: { title: og['og:title'], description: og['og:description'], url: og['og:url'], image: og['og:image'], alt: og['og:image:alt'] } },
+    revision1PathNotServed: r1Facts,
+    sharingPreview: { screenshot: 'screenshots/C4-12-sharing-preview.png', fromOpenGraph: { title: og['og:title'], description: og['og:description'], url: og['og:url'], image: og['og:image'], alt: og['og:image:alt'] }, displayed: shown },
   });
 });
 

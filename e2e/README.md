@@ -188,13 +188,16 @@ A third suite with its own configuration (`playwright.c5.config.js`), setup (`su
 - a disposable MongoDB;
 - the synthetic Jobs in `fixtures/c5-jobs/` (a long-title open Job with long content and screening questions, an open hybrid Job, a retained closed Job). The first case records the **empty** Careers state against the real, empty API, then provisions them through the backend CLI.
 
+The lab proxy serves immutable assets **precompressed** (compressed once, before any measurement), as a host does. `C5_LAB_COMPRESSION=on-demand` restores per-request compression, which costs about 0.67 s of proxy CPU per request for the main script. `C5_EXPERIMENT_PRELOAD_JOB_API=1` is an experiment only: the proxy adds a Job API preload to Job and Apply documents, to measure a proposed change the product does not make.
+
 Ports can be changed with `E2E_C5_BACKEND_PORT`, `E2E_C5_SITE_PORT` and `E2E_C5_LAB_PORT`.
 
 | File | Cases |
 | --- | --- |
 | `c5-01-layout-states.e2e.js` | C5-01 empty Careers; C5-02 every public route at 360, 390, 430, 768, 1024, 1440 and 1920 CSS px (full-page screenshots; overflow, clipping, WCAG 2.5.8 targets, obscured controls); C5-03 every 10 px from 320 to 1920, each breakpoint −1/0, phone landscape; C5-04 Careers and Job Detail loading (HOLD), error (FAULT) and recovery; C5-05 Careers → Job Detail → Apply with validation, long values, a server refusal, submitting, a network failure, recovery and success |
-| `c5-02-accessibility.e2e.js` | C5-06 axe-core on every route, plus the WCAG 2.5.3 rule recorded on its own; C5-07 structure; C5-08 keyboard Tab and Shift+Tab with focus visibility and the sticky header; C5-09 mobile menu by keyboard; C5-10 keyboard-only Apply, the file chooser included; C5-11 accessibility-tree snapshots, live regions, error associations; C5-12 200% text and page zoom; C5-13 reflow at 320 CSS px; C5-14 reduced motion; C5-15 non-text contrast; C5-16 forced colours |
+| `c5-02-accessibility.e2e.js` | C5-06 axe-core on every route, with WCAG 2.5.3 label in name gated (OD-2026-11-10-01) and the computed names checked; C5-07 structure; C5-08 keyboard Tab and Shift+Tab with focus visibility and the sticky header; C5-09 mobile menu by keyboard; C5-10 keyboard-only Apply, the file chooser included; C5-11 accessibility-tree snapshots, live regions, error associations; C5-12 200% text and page zoom; C5-13 reflow at 320 CSS px; C5-14 reduced motion; C5-15 non-text contrast; C5-16 forced colours |
 | `c5-03-performance.e2e.js` | C5-17 lab LCP, CLS, INP, FCP, TTFB, long tasks and transfer by type: mobile (Slow 4G, 4× CPU) and desktop, cold cache, 5 runs per page, plus a repeat view; C5-18 the same mobile runs against the uncompressed document server, for reference |
+| `c5-05-continuity.e2e.js` | C5-21 keyboard continuity: where focus lands and the next Tab stop after Try Again recovery (Careers, Job Detail) and after Apply failure, retry and success; no duplicate announcement; the footer unpainted only while content is pending, and back after success, unavailable and error |
 | `c5-04-lighthouse.e2e.js` | C5-19 Lighthouse, mobile and desktop presets, 3 runs per page. Runs only when `C5_LIGHTHOUSE_CLI` names a Lighthouse CLI installed **outside** the repository; skipped otherwise, saying so |
 
 Each record says how it was observed: REAL, HOLD (a real request held, then sent unchanged), FAULT (a request made to fail, then recovered for real), EMULATED (a browser emulation, not a device, assistive technology or user setting) or LAB.

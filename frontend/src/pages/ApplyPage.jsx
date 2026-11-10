@@ -212,7 +212,7 @@ function ApplyFlow({ jobSlug }) {
         <Section spacing="lg">
           <Container width="standard">
             <StatusMessage visible={false}>{APPLY.loadingStatus}</StatusMessage>
-            <div aria-hidden="true" data-testid="apply-loading">
+            <div aria-hidden="true" data-testid="apply-loading" data-content-pending="">
               <LoadingSkeleton lines={5} label="" />
             </div>
           </Container>

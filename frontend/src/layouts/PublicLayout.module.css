@@ -10,6 +10,16 @@
 
 .main { flex: 1 0 auto; }
 
+/*
+ * C5 — layout stability (Doc 16 CLS <= 0.1). While a route's primary content
+ * is still loading (marked data-content-pending: Job Detail), the footer sits
+ * at the bottom of the first viewport and the content that arrives pushes it
+ * down: lab CLS 0.24-0.27 on Job Detail. It stays in the layout but is not
+ * painted until the content is there; an element that becomes visible is not
+ * a layout shift, and nothing else moves.
+ */
+.shell:has([data-content-pending]) > footer { visibility: hidden; }
+
 /* Removes the focus ring on the programmatic route-change focus target: the
    heading is focused for orientation, not because the user tabbed to it. */
 .main:focus { outline: none; }

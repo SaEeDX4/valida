@@ -74,7 +74,7 @@ export default function JobDetailPage() {
           <Container width="wide">
             <StatusMessage visible={false}>{JOB_DETAIL.loadingStatus}</StatusMessage>
             {/* Structural skeleton only — no fake title, salary or responsibilities. */}
-            <div aria-hidden="true" data-testid="job-loading">
+            <div aria-hidden="true" data-testid="job-loading" data-content-pending="">
               <LoadingSkeleton lines={2} height="var(--space-8)" label="" />
               <div className={styles.skeletonGap} />
               <LoadingSkeleton lines={6} label="" />

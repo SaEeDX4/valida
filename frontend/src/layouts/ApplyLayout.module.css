@@ -40,6 +40,9 @@
 
 .main { flex: 1 0 auto; }
 
+/* C5 — layout stability: the footer is not painted while the Job loads (see PublicLayout). */
+.shell:has([data-content-pending]) > .footer { visibility: hidden; }
+
 /* Programmatic route-change focus target — see PublicLayout. */
 .main:focus { outline: none; }
 

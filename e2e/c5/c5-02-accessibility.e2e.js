@@ -303,6 +303,23 @@ test('C5-11 Screen-reader proxies: accessibility tree of every route and Apply s
   expect(associations.every((a) => a.labelled)).toBe(true);
 });
 
+/**
+ * Chromium's screenshot path does not render the CDP font-size setting (the captured image shows default-size
+ * text). The visual is therefore captured with the equivalent root size set in CSS (html { font-size: 32px },
+ * the site sizes text in rem), and the case records that the computed sizes and the layout are the same both ways.
+ */
+async function text200Shot(page, name) {
+  const read = () => page.evaluate(() => ({ root: getComputedStyle(document.documentElement).fontSize, body: getComputedStyle(document.body).fontSize, h1: getComputedStyle(document.querySelector('h1')).fontSize }));
+  const viaSetting = await read();
+  const tag = await page.addStyleTag({ content: 'html { font-size: 32px !important; }' });
+  await settle(page);
+  const viaCss = await read();
+  const layoutViaCss = await layoutProbe(page);
+  const screenshot = await shot(page, name);
+  await tag.evaluate((node) => node.remove());
+  return { screenshot, capture: 'html { font-size: 32px } (equivalent root size; see text200Shot)', sizesEqual: JSON.stringify(viaSetting) === JSON.stringify(viaCss), sizesViaCss: viaCss, layoutViaCss };
+}
+
 test('C5-12 Text at 200% (browser font-size setting) and page zoom 200% (EMULATED): layout, overflow, function', async ({ page, context }) => {
   await ensureJobs();
   const results = { fontSetting: {}, zoom: {} };
@@ -314,14 +331,14 @@ test('C5-12 Text at 200% (browser font-size setting) and page zoom 200% (EMULATE
       await page.setViewportSize({ width, height });
       await openRoute(page, pathname);
       const sizes = await page.evaluate(() => ({ root: getComputedStyle(document.documentElement).fontSize, body: getComputedStyle(document.body).fontSize, h1: getComputedStyle(document.querySelector('h1')).fontSize }));
-      results.fontSetting[`${name}@${width}`] = { sizes, layout: await layoutProbe(page), screenshot: await shot(page, `text200-${name}-${width}`) };
+      results.fontSetting[`${name}@${width}`] = { sizes, layout: await layoutProbe(page), ...(await text200Shot(page, `text200-${name}-${width}`)) };
     }
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await openRoute(page, `/careers/${C5_SLUGS.open}/apply`);
   await page.getByRole('button', { name: 'Submit Application' }).click();
   await expect(page.getByText('Review the highlighted fields.')).toBeVisible();
-  results.fontSetting['apply-validation@390'] = { layout: await layoutProbe(page), screenshot: await shot(page, 'text200-apply-validation-390') };
+  results.fontSetting['apply-validation@390'] = { layout: await layoutProbe(page), ...(await text200Shot(page, 'text200-apply-validation-390')) };
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16, fixed: 13 } });
 
   // (b) Page zoom 200% of a 1280x900 window = a 640x450 CSS px viewport at device scale 2.
@@ -349,6 +366,8 @@ test('C5-12 Text at 200% (browser font-size setting) and page zoom 200% (EMULATE
   record('C5-12', { observation: 'EMULATED (Chromium font-size setting via CDP Page.setFontSizes; page zoom as the equivalent CSS viewport at device scale 2)', results });
   const problems = [
     ...Object.entries(results.fontSetting).filter(([, r]) => r.layout.horizontalScroll || r.layout.outsideCount || r.layout.clippedCount).map(([n]) => `text200 ${n}`),
+    ...Object.entries(results.fontSetting).filter(([, r]) => r.layoutViaCss.horizontalScroll || r.layoutViaCss.outsideCount || r.layoutViaCss.clippedCount).map(([n]) => `text200 (css) ${n}`),
+    ...Object.entries(results.fontSetting).filter(([n, r]) => n !== 'apply-validation@390' && !r.sizesEqual).map(([n]) => `text200 sizes differ ${n}`),
     ...Object.entries(results.zoom).filter(([, r]) => r?.layout && (r.layout.horizontalScroll || r.layout.outsideCount || r.layout.clippedCount)).map(([n]) => `zoom200 ${n}`),
   ];
   expect(problems).toEqual([]);

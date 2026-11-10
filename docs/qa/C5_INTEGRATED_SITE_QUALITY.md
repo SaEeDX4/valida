@@ -367,7 +367,7 @@ $env:C5_HOLD_MINUTES = "60"
 npx playwright test --config playwright.c5.config.js c5/c5-99-hold.e2e.js
 ```
 
-- Use a **new folder**, not `C:\ME\Valida`.
+- Use a **new folder**, never the owner's working copy.
 - **The set-up DROPS the database named in `MONGODB_TEST_URI` every time it starts.** Use a fresh, disposable name such as `valida_test_c5_manual`. The suite refuses any name that does not match `valida_test` or `valida_test_<suffix>`; never point it at a database you want to keep.
 - The site is then at `http://127.0.0.1:4203` until Ctrl+C. Nothing leaves 127.0.0.1, and no e-mail is sent.
 

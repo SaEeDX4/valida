@@ -5,7 +5,7 @@
 | Authority | [OD-2026-11-09-01](../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md), R2 and R6 |
 | Read | Doc 18 §§109–110, 145, 165, 180–186, 218, 230–234 (E3), 237, 246–252 (E6), 364, 384; Doc 09 §§54, 63, 169–173, 180–186; Doc 10 §§19–28, 57–70, 75–78, 136–141, 147–151; Doc 11 §§146–160, 172–174, 198–201; Doc 12 §§4–47, 176, 208–218, 262–263; Doc 13 §§313–314; Doc 02 §§48–51, 62; Doc 06 §§87, 97–98, 107–108, 169, 178; Doc 15 §§171–175; Doc 16 §§124–138 |
 | Scope | **Documentation and gap analysis only.** Nothing here is implemented. No Admin implementation and no public API contract change are authorised. |
-| Status of every design below | Written as **PROPOSED** (OD-2026-11-09-01). Since OD-2026-11-09-02, see §0 for what is implemented. |
+| Status of every design below | Written as **PROPOSED** (OD-2026-11-09-01). Since OD-2026-11-09-02, see §0 for what is implemented. SEQ-1 is closed by OD-2026-11-09-03 (§0, §5.3). |
 
 ## 0. Status after OD-2026-11-09-02 (2026-11-09)
 
@@ -24,6 +24,7 @@ The owner approved one optional field in C4 ([OD-2026-11-09-02](../review/OWNER_
 | G9 `jobSnapshot` | **Open**: not approved, unchanged |
 | G10 External consistency | **Canonical text only**, pending synchronisation (contract §5) |
 | G11 Release A `hiringMarkets` | **Done as proposed**: comments now say presentation only; no runtime change |
+| SEQ-1 (§5.3) | **CLOSED by [OD-2026-11-09-03](../review/OWNER_DECISION_2026-11-09-03_C4_CARD_REVISION_SHARING_COPY_SEQ1.md) §4: no.** The first genuine Cybersecurity Specialist vacancy may be published only after the approved Release E launch gates, including E6, are satisfied. Its eligible work countries remain OPEN |
 
 ## 1. The approved business requirement
 
@@ -131,8 +132,12 @@ Each amendment follows Doc 00 §5 and Doc 18 §364:
 
 **Smallest decision (SEQ-1):** *May the genuine vacancy be PUBLISHED on the Valida website, through controlled provisioning, after Release C is verified (C7) and the §5.1 gates pass, before E6, with LinkedIn/Indeed advertising still waiting for E6?*
 
-- **Yes:** amend Doc 18 §248 to "Publish the real vacancy, or confirm the one already published on the website under SEQ-1, and verify it against §250".
-- **No:** read §145 as a capability. C7 then proves the chain without a genuine public vacancy, and the method is decided at C7.
+> **DECIDED — no ([OD-2026-11-09-03](../review/OWNER_DECISION_2026-11-09-03_C4_CARD_REVISION_SHARING_COPY_SEQ1.md) §4, 2026-11-09).** "The first genuine Cybersecurity Specialist vacancy may be published only after the approved Release E launch gates, including E6, are satisfied." Its eligible work countries remain OPEN. Doc 18 §145 is read as a capability of the Release C system; C7 proves the chain without the genuine vacancy, by a method decided at C7. The "yes" amendment below is withdrawn; Doc 18 §248 is unchanged. The proposed clarification of §145 is pending synchronisation (OD-2026-11-09-03 §5).
+
+The two options, as analysed before the decision:
+
+- **Yes:** amend Doc 18 §248 to "Publish the real vacancy, or confirm the one already published on the website under SEQ-1, and verify it against §250". *(Not chosen.)*
+- **No:** read §145 as a capability. C7 then proves the chain without a genuine public vacancy, and the method is decided at C7. *(Chosen.)*
 
 **Either way:**
 - the release order C5 → C6 → C7 → D → E stays;
@@ -156,6 +161,6 @@ Doc 12 §22's protected preview is Phase 3. Before E3, the owner could review th
 - **The public API.** Unchanged.
 
 **Now, under OD-2026-11-09-02:**
-- **The Draft.** It stays DRAFT. Its `awaitingInput` lists `location` (the physical work location, whose stored "British Columbia, Canada" is the historical planning value) and `eligibleWorkCountries` (stored `[]`: **OPEN**). Either one alone refuses publication with `AWAITING_INPUT` (`backend/tests/jobs-provisioning.test.js`). The location is never read as the eligible work countries. It is provisioned only by the existing B3 real-database test, into a disposable `valida_test_*` database, which asserts that it stays DRAFT and returns 404 publicly. Publication remains subject to the Release E gates, including E6.
+- **The Draft.** It stays DRAFT. Its `awaitingInput` lists `location` (the physical work location, whose stored "British Columbia, Canada" is the historical planning value) and `eligibleWorkCountries` (stored `[]`: **OPEN**). Either one alone refuses publication with `AWAITING_INPUT` (`backend/tests/jobs-provisioning.test.js`). The location is never read as the eligible work countries. It is provisioned only by the existing B3 real-database test, into a disposable `valida_test_*` database, which asserts that it stays DRAFT and returns 404 publicly. Publication remains subject to the Release E gates, including E6: under OD-2026-11-09-03 it may be published only after those gates are satisfied (SEQ-1 closed).
 - **The JobPosting.** Emitted only for an open, fully remote Job with an explicit list. A fully remote Job without one is still withheld (`NO_APPLICANT_ELIGIBILITY`).
 - **The public API.** One additive field on Job Detail only ([contract](ELIGIBLE_WORK_COUNTRIES_CONTRACT.md) §3). Careers and Apply are unchanged.

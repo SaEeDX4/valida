@@ -38,7 +38,7 @@ Four states are kept apart below, and one does not imply another:
 | C1 — Frontend ↔ Jobs API integration | **Owner-accepted** at `24b92a7` (Careers against the real API, disposable database, synthetic Jobs; one fixture-gate correction) | yes — inside `c3-work` (no separate `c1-work` branch) | no | no |
 | C2 — Real Job Detail | **Owner-accepted** at `46818bb`, including the focus correction (Job Detail against the real API, disposable database, synthetic Jobs: open, closed, unknown/draft/archived, direct URL, refresh; one route-change scroll correction) | yes — inside `c3-work` (no separate `c2-work` branch) | no | no |
 | C3 — Real Apply Integration | **Owner-accepted** at `f07ea35` (r3; recorded in the owner's C4 instruction, with the accepted bundle's SHA-256 `0b7293bd…369b`). The critical browser E2E suite against the real stack: [`e2e/README.md`](e2e/README.md) | **yes — `c3-work` at `f07ea35`**, pushed 2026-11-07 08:19 UTC on the owner's authorisation and verified by a fresh fetch ([`docs/review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md`](docs/review/OWNER_RECORD_2026-11-07_C3_PUBLICATION.md)) | no | no |
-| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted**, with the review corrections: origin-safe redirects, the approved date labels ([OD-2026-11-07-01](docs/review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md)), and no inferred applicant eligibility. Then [OD-2026-11-09-01](docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md): the canonical origin `https://cybervalida.com` (pinned for indexable builds), the Document 06 titles, and the first vacancy's work countries OPEN. Then [OD-2026-11-09-02](docs/review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md): the approved social card in Open Graph (final visual sign-off pending), and the optional per-Job `eligibleWorkCountries` field, from provisioning to the API, the Job Detail page and the remote JobPosting ([contract](docs/recruitment/ELIGIBLE_WORK_COUNTRIES_CONTRACT.md)). Local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md) | no — `c4-work` is local only | no | no |
+| C4 — SEO / Privacy / Legal production integration | **Submitted for review — not accepted**, with the review corrections: origin-safe redirects, the approved date labels ([OD-2026-11-07-01](docs/review/OWNER_DECISION_2026-11-07-01_C4_DATE_LABELS.md)), and no inferred applicant eligibility. Then [OD-2026-11-09-01](docs/review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md): the canonical origin `https://cybervalida.com` (pinned for indexable builds), the Document 06 titles, and the first vacancy's work countries OPEN. Then [OD-2026-11-09-02](docs/review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md): the approved social card in Open Graph (final visual sign-off pending), and the optional per-Job `eligibleWorkCountries` field, from provisioning to the API, the Job Detail page and the remote JobPosting ([contract](docs/recruitment/ELIGIBLE_WORK_COUNTRIES_CONTRACT.md)). Then [OD-2026-11-09-03](docs/review/OWNER_DECISION_2026-11-09-03_C4_CARD_REVISION_SHARING_COPY_SEQ1.md): the eligibility implementation (`86e1459`) and the label "Eligible Remote-Work Countries" approved; social card revision 2 with the approved sharing copy (final visual sign-off and C4 acceptance pending); SEQ-1 closed — the first genuine vacancy may be published only after the Release E launch gates, including E6. Local implementation and stack verification: [`docs/seo/C4_SEO_IMPLEMENTATION.md`](docs/seo/C4_SEO_IMPLEMENTATION.md), [`docs/privacy/C4_PRIVACY_LEGAL_CHECK.md`](docs/privacy/C4_PRIVACY_LEGAL_CHECK.md) | no — `c4-work` is local only | no | no |
 | Phase 1 | **Not verified** — only after Release C (C7) | — | — | — |
 
 The C1, C2 and C3 commits descend from `eabd604`, so `c3-work` (published at
@@ -336,7 +336,7 @@ Run every check. Each should complete without an error.
 cd frontend
 npm ci
 npm run verify:quality   # expect: ALL QUALITY BUDGET CHECKS PASSED,
-                         #         Test Files 42 passed, Tests 1118 passed
+                         #         Test Files 42 passed, Tests 1123 passed
 ```
 
 `verify:budgets` measures the real production build. Legacy `.woff` font
@@ -448,8 +448,8 @@ is under review; see **Current state**.)
 
 Awaiting input rather than scheduled: the production API origin, real approved
 Job content and per-market compensation, a corporate contact mechanism (and a
-designated privacy contact), the owner's final visual sign-off of the integrated
-social card, the eligible remote-work countries of each real vacancy (OPEN for
+designated privacy contact), the owner's final visual sign-off of social card
+revision 2, the eligible remote-work countries of each real vacancy (OPEN for
 the Cybersecurity Specialist Draft; never derived from its location), a
 smaller approved transparent logo export, the email-backup setup inputs (Outlook
 version, `shervin@` access, encryption, second device), the production private-storage provider (selected at

@@ -1,10 +1,10 @@
-# Social card — revision 2; final visual sign-off pending
+# Social card — revision 2, approved
 
 | | |
 | --- | --- |
 | Authority | [OD-2026-11-09-01](../../review/OWNER_DECISION_2026-11-09-01_C4_RECRUITMENT_ORIGIN_TITLES_SOCIAL.md) R5 (preview); [OD-2026-11-09-02](../../review/OWNER_DECISION_2026-11-09-02_C4_SOCIAL_CARD_AND_ELIGIBLE_WORK_COUNTRIES.md) A1 (integration of revision 1); [OD-2026-11-09-03](../../review/OWNER_DECISION_2026-11-09-03_C4_CARD_REVISION_SHARING_COPY_SEQ1.md) §2 (revision 2: spacing and approved copy) |
 | Governing | Doc 16 §§94–97 (Open Graph, social card 1200 × 630, social image truth); Doc 03 §§8, 13, 16–20, 22 (colours, gradient, logo rules, type); Doc 06 §§4, 6, 13–14 (copy), §4 as amended for social sharing by OD-2026-11-09-03 |
-| Status | **Revision 2 is the active card. Final visual sign-off is pending the owner's inspection.** This folder is the reviewed source and is not a build input. The site serves the same bytes from `frontend/public/social/valida-social-card-v2-1200x630.png` |
+| Status | **Revision 2 is the active card, with the owner's final visual approval** ([C4 acceptance record](../../review/OWNER_RECORD_2026-11-10_C4_ACCEPTANCE.md), 2026-11-10; SHA-256 `c86554a2…c2a5`; the revised sharing preview `1d3d0a13…cd`). This folder is the reviewed source and is not a build input. The site serves the same bytes from `frontend/public/social/valida-social-card-v2-1200x630.png` |
 
 ## The images
 
@@ -74,6 +74,6 @@ The rendering script reports the layout gaps on every run.
    - `og:image:width` 1200 and `og:image:height` 630;
    - `og:image:alt`.
 3. **The sharing description.** Home's `og:description` is the social-sharing description of OD-2026-11-09-03; every other route shares its own search description. Home's `<meta name="description">` is unchanged.
-4. **Open:**
-   - the owner's final visual sign-off;
+4. **Approved:** the owner's final visual approval, given with C4's acceptance (2026-11-10).
+5. **Open:**
    - real platform previews on the production host (Doc 16 §266, C6).

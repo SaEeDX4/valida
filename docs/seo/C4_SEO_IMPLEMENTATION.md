@@ -61,7 +61,7 @@ Other rules:
   - `og:image:width` `1200`, `og:image:height` `630`;
   - `og:image:alt` with the approved text.
 
-  The image is `frontend/public/social/valida-social-card-v2-1200x630.png`, the rendered revision 2 byte for byte (SHA-256 `c86554a2…c2a5`), served unchanged from that path. Revision 1 (`2667d619…a71a`) is no longer served; it is kept in `docs/brand/social-card-preview/`. The owner's final visual sign-off is pending (Doc 16 §§94–97; D-3).
+  The image is `frontend/public/social/valida-social-card-v2-1200x630.png`, the rendered revision 2 byte for byte (SHA-256 `c86554a2…c2a5`), served unchanged from that path. Revision 1 (`2667d619…a71a`) is no longer served; it is kept in `docs/brand/social-card-preview/`. The owner approved it with C4's acceptance (Doc 16 §§94–97; D-3).
 - **`og:description`** is the route's sharing description. On Home it is the social-sharing description of OD-2026-11-09-03: "Valida is a technology company focused on cybersecurity, secure technology, security engineering, and modern digital systems." Everywhere else it is the route's own search description. `<meta name="description">` is unchanged on every route; Home's is still Doc 06 §12.
 
 **Sitemap** (Doc 16 §§103–109). The five static routes are listed, then every OPEN Job from `GET /api/v1/jobs`, page by page. The sitemap is built per request, so publishing, closing or archiving a Job changes it at once (SEO-012).
@@ -146,7 +146,7 @@ The JSON-LD is serialised with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a Jo
 | --- | --- | --- |
 | D-1 | Apex or www as the canonical host | **Decided**: OD-2026-11-09-01, the apex `https://cybervalida.com` (implemented: indexable builds are pinned to it). The www redirect is C6 |
 | D-2 | The Doc 06 / Doc 16 §85 title-pattern conflict (C4 keeps Doc 06) | **Decided**: OD-2026-11-09-01 §2.3, Document 06 titles; the other Doc 16 requirements unchanged. No code change |
-| D-3 | An approved 1200×630 social card and its alt text | **Integrated** (OD-2026-11-09-02), then **revised** (OD-2026-11-09-03): revision 2, with the spacing adjustment and the approved copy and alt text. The owner's final visual sign-off of revision 2 is pending; real platform previews are C6 |
+| D-3 | An approved 1200×630 social card and its alt text | **Integrated** (OD-2026-11-09-02), then **revised** (OD-2026-11-09-03): revision 2, with the spacing adjustment and the approved copy and alt text. **Approved:** the owner's final visual approval of revision 2 and its revised preview, with C4's acceptance at `2193433` ([record](../review/OWNER_RECORD_2026-11-10_C4_ACCEPTANCE.md)). Real platform previews are C6 |
 | D-4 | Labels for the posting and closing dates | **Decided**: OD-2026-11-07-01, "Date Posted" and "Applications Close" (implemented) |
 | D-5 | **The eligible work countries per vacancy** (approved as requirement BR-ELIG-01 in OD-2026-11-09-01; the countries for the first vacancy are OPEN). It needs a Job field (Doc 10), the public DTO (Doc 09) and a visible label and value on Job Detail (Doc 06): see [`E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md`](../recruitment/E3_E6_TRACE_AND_ELIGIBILITY_GAPS.md) | **Field approved and implemented** (OD-2026-11-09-02): `eligibleWorkCountries`, with `TELECOMMUTE` + `applicantLocationRequirements` from the explicit list. **Still open for the genuine vacancy**: the explicit list of countries from which Valida has confirmed it can employ someone for the role |
 | D-6 | Mapping of FIXED_TERM and CONTRACT to Google employment types | Open, and needed only if a real Job uses one |

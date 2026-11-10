@@ -84,6 +84,8 @@ test('C5-07 Structure on every route: lang, title, one main, landmarks, one h1, 
         return el ? `${el.tagName.toLowerCase()} "${el.textContent.trim()}" -> ${el.getAttribute('href')}` : null;
       })(),
       imagesWithoutAlt: [...document.images].filter((img) => !img.hasAttribute('alt')).length,
+      // Every list in the design is drawn without default markers; a marker left on hangs outside its column (C5 F1).
+      listsWithDefaultMarkers: [...document.querySelectorAll('ul, ol')].filter((el) => getComputedStyle(el).display !== 'none' && getComputedStyle(el).listStyleType !== 'none').map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`),
     }));
     results[name] = { ...structure, ...counts, headingProblems: headingProblems(structure.headings) };
   }
@@ -93,6 +95,7 @@ test('C5-07 Structure on every route: lang, title, one main, landmarks, one h1, 
     expect.soft(r.main, name).toBe(1);
     expect.soft(r.positiveTabindex, name).toBe(0);
     expect.soft(r.imagesWithoutAlt, name).toBe(0);
+    expect.soft(r.listsWithDefaultMarkers, name).toEqual([]);
     expect.soft(r.firstFocusable, name).toBe('a "Skip to main content" -> #main-content');
     expect.soft(r.headingProblems, name).toEqual([]);
   }
@@ -235,13 +238,21 @@ test('C5-10 Keyboard only: Careers -> Job Detail -> Apply, validation summary, e
   await page.keyboard.press('Tab');
   await page.keyboard.type('+1 555 0100 2026');
   const fileProbe = await tabTo((p) => p.type === 'file', 'Apply: resume control');
-  const chooserPromise = page.waitForEvent('filechooser');
-  await page.keyboard.press('Enter');
-  const chooser = await chooserPromise;
+  // Enter, then Space if Enter opened nothing (a harness flake seen once with Enter in headless Chromium); bounded, and recorded.
+  let chooser = null;
+  const chooserKeys = [];
+  for (const key of ['Enter', 'Space']) {
+    const chooserPromise = page.waitForEvent('filechooser', { timeout: 5_000 }).catch(() => null);
+    await page.keyboard.press(key);
+    chooser = await chooserPromise;
+    chooserKeys.push({ key, opened: Boolean(chooser) });
+    if (chooser) break;
+  }
+  expect(chooser, 'the file chooser opens from the keyboard').not.toBeNull();
   // The operating system's file dialog itself is outside the page: the file is supplied to the chooser the keyboard opened.
   await chooser.setFiles({ name: 'qa-c5-keyboard-resume.pdf', mimeType: 'application/pdf', buffer: readFileSync(RESUME_PDF) });
   await expect(page.getByText('Resume ready to submit.')).toBeVisible();
-  journey.push({ step: 'Apply: file chooser opened from the keyboard (Enter)', fileProbe, chooserOpened: true });
+  journey.push({ step: 'Apply: file chooser opened from the keyboard', fileProbe, chooserKeys });
   await tabTo((p) => p.name === 'Message', 'Apply: Message');
   await page.keyboard.type('QA TEST DATA (C5 keyboard): synthetic message.');
   await tabTo((p) => p.type === 'radio', 'Apply: first radio');

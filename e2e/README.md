@@ -176,3 +176,47 @@ Remove-Item Env:MONGODB_TEST_URI
 - `dist/` and `dist-review/`.
 
 **Not proven here.** The production host: HTTPS, the apex/www redirect, compression, the CDN, real crawlers and social previews, Search Console, and the Rich Results Test. These are C6 (see `docs/seo/C4_SEO_IMPLEMENTATION.md` §6).
+
+## C5 — integrated site quality (`c5/`)
+
+A third suite with its own configuration (`playwright.c5.config.js`), setup (`support/c5GlobalSetup.js`) and test directory (`c5/`), for Doc 18 §§168–172: layout, states, accessibility and lab performance of the whole public site. It reuses the run-directory, process and loopback helpers above unchanged, and runs neither inside nor alongside the C3 and C4 suites. The method, the findings and the manual checklist are in [`docs/qa/C5_INTEGRATED_SITE_QUALITY.md`](../docs/qa/C5_INTEGRATED_SITE_QUALITY.md).
+
+**The stack:**
+- one **production build** (`VITE_ALLOW_INDEXING=true`, `VITE_PUBLIC_SITE_URL=https://cybervalida.com`), served by the C4 document server on 127.0.0.1:4203;
+- a **lab-only compression proxy** (`support/c5LabCompression.mjs`) in front of it, on 127.0.0.1:4204. The document server serves files uncompressed, and compression is the production host's job (C6). The proxy exists only so that throttled lab measurements are not charged for bytes a host would compress. It is not the host and proves nothing about it;
+- the real backend on 127.0.0.1:4120: no mail transport at all, so nothing is sent, not even locally, and acknowledgements are off;
+- a disposable MongoDB;
+- the synthetic Jobs in `fixtures/c5-jobs/` (a long-title open Job with long content and screening questions, an open hybrid Job, a retained closed Job). The first case records the **empty** Careers state against the real, empty API, then provisions them through the backend CLI.
+
+Ports can be changed with `E2E_C5_BACKEND_PORT`, `E2E_C5_SITE_PORT` and `E2E_C5_LAB_PORT`.
+
+| File | Cases |
+| --- | --- |
+| `c5-01-layout-states.e2e.js` | C5-01 empty Careers; C5-02 every public route at 360, 390, 430, 768, 1024, 1440 and 1920 CSS px (full-page screenshots; overflow, clipping, WCAG 2.5.8 targets, obscured controls); C5-03 every 10 px from 320 to 1920, each breakpoint −1/0, phone landscape; C5-04 Careers and Job Detail loading (HOLD), error (FAULT) and recovery; C5-05 Careers → Job Detail → Apply with validation, long values, a server refusal, submitting, a network failure, recovery and success |
+| `c5-02-accessibility.e2e.js` | C5-06 axe-core on every route, plus the WCAG 2.5.3 rule recorded on its own; C5-07 structure; C5-08 keyboard Tab and Shift+Tab with focus visibility and the sticky header; C5-09 mobile menu by keyboard; C5-10 keyboard-only Apply, the file chooser included; C5-11 accessibility-tree snapshots, live regions, error associations; C5-12 200% text and page zoom; C5-13 reflow at 320 CSS px; C5-14 reduced motion; C5-15 non-text contrast; C5-16 forced colours |
+| `c5-03-performance.e2e.js` | C5-17 lab LCP, CLS, INP, FCP, TTFB, long tasks and transfer by type: mobile (Slow 4G, 4× CPU) and desktop, cold cache, 5 runs per page, plus a repeat view; C5-18 the same mobile runs against the uncompressed document server, for reference |
+| `c5-04-lighthouse.e2e.js` | C5-19 Lighthouse, mobile and desktop presets, 3 runs per page. Runs only when `C5_LIGHTHOUSE_CLI` names a Lighthouse CLI installed **outside** the repository; skipped otherwise, saying so |
+
+Each record says how it was observed: REAL, HOLD (a real request held, then sent unchanged), FAULT (a request made to fail, then recovered for real), EMULATED (a browser emulation, not a device, assistive technology or user setting) or LAB.
+
+Run (PowerShell), after the one-time setup above:
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c5"
+# Optional: Lighthouse, installed outside the repository.
+# npm install --prefix C:\Tools\lighthouse lighthouse@13.6.0
+# $env:C5_LIGHTHOUSE_CLI = "C:\Tools\lighthouse\node_modules\lighthouse\cli\index.js"
+npm run test:e2e:c5
+Remove-Item Env:MONGODB_TEST_URI
+```
+
+`C5_PERF_RUNS` (default 5), `C5_PERF_REFERENCE_RUNS` (3) and `C5_LIGHTHOUSE_RUNS` (3) change the run counts. Lab numbers depend on the machine: compare runs made on the same machine.
+
+**Output.** The run directory holds:
+- `output/cases/C5-*.json`;
+- `output/screenshots/`, `output/aria/` (accessibility-tree snapshots) and `output/lighthouse/` (full reports);
+- `logs/`;
+- `dist/`.
+
+**Not proven here.** Other browsers and real devices, real screen readers, OS text scaling, field Core Web Vitals, and the production host's compression, caching and TLS. These are in the manual checklist and in C6/C7.

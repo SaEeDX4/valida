@@ -1,0 +1,74 @@
+{
+  "status": "CLOSED",
+  "awaitingInput": [],
+  "notes": [
+    "SYNTHETIC C5 QUALITY DATA - disposable test database only (Doc 17 sections 25-26). Not a real vacancy."
+  ],
+  "internalOccupationalReference": "NOC 99999 QA-INTERNAL-C5",
+  "location": {
+    "displayName": "QA C5 Region, Canada",
+    "countryCode": "CA",
+    "regionCode": "QC5",
+    "locality": null
+  },
+  "workArrangement": "FULLY_REMOTE",
+  "employmentType": "PART_TIME",
+  "schedule": "QA TEST DATA: synthetic schedule, Monday to Wednesday",
+  "weeklyHours": 24,
+  "compensation": {
+    "currency": "CAD",
+    "amountMinor": 4321,
+    "unit": "HOUR",
+    "gross": true
+  },
+  "description": "QA TEST DATA (C5 quality): a synthetic retained closed role.",
+  "responsibilities": [
+    "QA TEST DATA (C5) responsibility one."
+  ],
+  "requirements": [
+    "QA TEST DATA (C5) requirement one."
+  ],
+  "preferredQualifications": [],
+  "closesAt": null,
+  "slug": "qa-c5-closed",
+  "title": "QA C5 Synthetic Closed Analyst",
+  "applicationConfig": {
+    "resumeRequired": true,
+    "phone": {
+      "enabled": true,
+      "required": false
+    },
+    "message": {
+      "enabled": true,
+      "required": false,
+      "maxLength": 2000
+    },
+    "screeningQuestions": [
+      {
+        "type": "YES_NO",
+        "prompt": "QA TEST DATA (E2E): can you work the synthetic schedule?",
+        "required": true,
+        "options": []
+      },
+      {
+        "type": "SINGLE_SELECT",
+        "prompt": "QA TEST DATA (E2E): preferred synthetic start window?",
+        "required": true,
+        "options": [
+          {
+            "label": "QA option early"
+          },
+          {
+            "label": "QA option late"
+          }
+        ]
+      },
+      {
+        "type": "SHORT_TEXT",
+        "prompt": "QA TEST DATA (E2E): optional synthetic note?",
+        "required": false,
+        "options": []
+      }
+    ]
+  }
+}

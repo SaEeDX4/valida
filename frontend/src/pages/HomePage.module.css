@@ -225,6 +225,9 @@
 /* --------------------------------------------------- OPERATING PRINCIPLES */
 /* Doc 05 section 52: concise, not a values wall. */
 .operatingGrid {
+  /* C5: like every other structured list here, no default markers (they hung
+     outside the column, into the page gutter at 360 CSS px). */
+  list-style: none;
   display: grid;
   gap: var(--space-7);
   grid-template-columns: 1fr;

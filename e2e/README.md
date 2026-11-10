@@ -213,6 +213,14 @@ Remove-Item Env:MONGODB_TEST_URI
 
 `C5_PERF_RUNS` (default 5), `C5_PERF_REFERENCE_RUNS` (3) and `C5_LIGHTHOUSE_RUNS` (3) change the run counts. Lab numbers depend on the machine: compare runs made on the same machine.
 
+**Lab-metric aggregation** (`c5/perfStats.js`):
+- each metric is aggregated from all of its samples, in any order;
+- each metric reports its valid and missing counts;
+- a verdict is `PASS` only when every expected sample is valid and the p75 meets the target. A missing or short sample set is `INSUFFICIENT`, which fails the case;
+- a page with no scripted interaction has INP `NOT_APPLICABLE`.
+
+`npm run test:c5:stats` runs its unit tests (no stack needed). `node c5/perfRecompute.mjs <C5-17.json> <out.json>` recomputes a recorded case's summaries from its raw runs.
+
 **Output.** The run directory holds:
 - `output/cases/C5-*.json`;
 - `output/screenshots/`, `output/aria/` (accessibility-tree snapshots) and `output/lighthouse/` (full reports);

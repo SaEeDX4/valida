@@ -11,6 +11,7 @@
     "test:e2e": "playwright test",
     "test:e2e:seo": "playwright test --config playwright.seo.config.js",
     "test:e2e:c5": "playwright test --config playwright.c5.config.js",
+    "test:c5:stats": "node --test c5/perfStats.test.js",
     "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {

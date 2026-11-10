@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { C5_LAB_ORIGIN, C5_SITE_ORIGIN, C5_SLUGS } from '../support/c5Stack.js';
 import { ensureJobs, record } from './c5Support.js';
+import { summariseRuns } from './perfStats.js';
 
 /**
  * C5 — LAB performance of the integrated site (Doc 16 sections 153-282,
@@ -219,34 +220,6 @@ async function measure(browser, { origin, profile, name, pathname, interactions 
 }
 
 const round = (v, d = 0) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d);
-const median = (values) => {
-  const v = values.filter((x) => typeof x === 'number').sort((a, b) => a - b);
-  if (!v.length) return null;
-  const mid = Math.floor(v.length / 2);
-  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
-};
-const p75 = (values) => {
-  const v = values.filter((x) => typeof x === 'number').sort((a, b) => a - b);
-  if (!v.length) return null;
-  return v[Math.min(v.length - 1, Math.ceil(0.75 * v.length) - 1)];
-};
-function summarise(runs) {
-  const pick = (k) => runs.map((r) => r[k]);
-  return {
-    runs: runs.length,
-    lcp: { median: median(pick('lcp')), p75: p75(pick('lcp')), max: Math.max(...pick('lcp')) },
-    cls: { median: median(pick('cls')), p75: p75(pick('cls')), max: Math.max(...pick('cls')) },
-    inp: runs[0].inp === undefined || runs[0].inp === null ? null : { median: median(pick('inp')), p75: p75(pick('inp')), max: Math.max(...pick('inp').filter((x) => x !== null)) },
-    fcp: { median: median(pick('fcp')) },
-    ttfb: { median: median(pick('ttfb')) },
-    tbtAfterFcp: { median: median(pick('tbtAfterFcp')) },
-    lcpElements: [...new Set(pick('lcpElement'))],
-    transferKiB: runs[0].transferKiB,
-    totalKiB: { median: median(pick('totalKiB')) },
-    encodings: runs[0].encodings,
-  };
-}
-
 test('C5-17 Lab Core Web Vitals and transfer, mobile (Slow 4G, 4x CPU) and desktop, cold cache, against the lab compression proxy', async ({ browser }) => {
   test.setTimeout(3_600_000);
   await ensureJobs();
@@ -256,15 +229,16 @@ test('C5-17 Lab Core Web Vitals and transfer, mobile (Slow 4G, 4x CPU) and deskt
       const runs = [];
       for (let i = 0; i < RUNS; i += 1) runs.push(await measure(browser, { origin: C5_LAB_ORIGIN, profile, name, pathname }));
       const repeat = await measure(browser, { origin: C5_LAB_ORIGIN, profile, name, pathname, interactions: false, repeatView: true });
-      out.pages[`${name}/${profile}`] = { summary: summarise(runs), repeatView: { totalKiB: repeat.totalKiB, transferKiB: repeat.transferKiB, lcp: repeat.lcp, requests: repeat.requests }, runs };
+      out.pages[`${name}/${profile}`] = { summary: summariseRuns(runs, { expected: RUNS }), repeatView: { totalKiB: repeat.totalKiB, transferKiB: repeat.transferKiB, lcp: repeat.lcp, requests: repeat.requests }, runs };
     }
   }
   record('C5-17', out);
-  // Doc 16 targets (field p75 targets, used here as LAB gates only).
+  // Doc 16 targets (field p75 targets, used here as LAB gates only). Only PASS passes: FAIL and INSUFFICIENT
+  // (a missing or short sample set) both fail; INP may be NOT_APPLICABLE on a page with no scripted interaction.
   for (const [key, r] of Object.entries(out.pages)) {
-    expect.soft(r.summary.lcp.p75, `${key} LCP`).toBeLessThanOrEqual(2500);
-    expect.soft(r.summary.cls.p75, `${key} CLS`).toBeLessThanOrEqual(0.1);
-    if (r.summary.inp) expect.soft(r.summary.inp.p75, `${key} INP`).toBeLessThanOrEqual(200);
+    expect.soft(r.summary.lcp.verdict.status, `${key} LCP: ${r.summary.lcp.verdict.reason}`).toBe('PASS');
+    expect.soft(r.summary.cls.verdict.status, `${key} CLS: ${r.summary.cls.verdict.reason}`).toBe('PASS');
+    expect.soft(['PASS', 'NOT_APPLICABLE'], `${key} INP: ${r.summary.inp.verdict.reason}`).toContain(r.summary.inp.verdict.status);
   }
   const home = out.pages['home/mobile'].summary;
   expect.soft(home.transferKiB.js ?? 0, 'Home JS (lab-compressed)').toBeLessThanOrEqual(220);
@@ -280,7 +254,7 @@ test('C5-18 Reference: the same mobile runs against the uncompressed local docum
   for (const [name, pathname] of PAGES) {
     const runs = [];
     for (let i = 0; i < REFERENCE_RUNS; i += 1) runs.push(await measure(browser, { origin: C5_SITE_ORIGIN, profile: 'mobile', name, pathname, interactions: false }));
-    out.pages[name] = { summary: summarise(runs), runs };
+    out.pages[name] = { summary: summariseRuns(runs, { expected: REFERENCE_RUNS }), runs };
   }
   record('C5-18', out);
 });

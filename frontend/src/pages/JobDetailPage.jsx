@@ -10,6 +10,7 @@ import StatusMessage from '../components/ui/StatusMessage/StatusMessage.jsx';
 import PageMeta from '../components/seo/PageMeta.jsx';
 import { getJobsService } from '../features/jobs/api/jobsService.js';
 import useAsyncResource, { RESOURCE_STATUS } from '../features/jobs/hooks/useAsyncResource.js';
+import { FOCUS_LANDING, useRetryFocus } from '../hooks/useFocusLanding.js';
 import { buildJobDateFacts, isJobOpen, isJobClosed, toContentList } from '../features/jobs/utils/formatJob.js';
 import { buildEligibleWorkCountriesFacts } from '../features/jobs/utils/eligibleWorkCountries.js';
 import resolveJobMarketPresentation, {
@@ -50,6 +51,8 @@ export default function JobDetailPage() {
     [jobSlug],
   );
   const { status, data, error, reload } = useAsyncResource(loadJob, [jobSlug]);
+  // C5: after Try Again resolves, focus lands on the outcome's heading instead of falling to <body>.
+  const retry = useRetryFocus(status, reload, RESOURCE_STATUS.LOADING);
   const job = data?.job ?? null;
 
   const breadcrumbs = (currentLabel) => (
@@ -93,7 +96,7 @@ export default function JobDetailPage() {
         <Section spacing="lg">
           <Container width="wide">
             <div className={styles.stateBlock} data-testid="job-unavailable">
-              <h1 className="t-h2">{JOB_DETAIL.notFound.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{JOB_DETAIL.notFound.heading}</h1>
               <p className="t-body-lg">{JOB_DETAIL.notFound.body}</p>
               <div className={styles.actions}>
                 <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="primary" size="large">
@@ -117,10 +120,10 @@ export default function JobDetailPage() {
         <Section spacing="lg">
           <Container width="wide">
             <div className={styles.stateBlock} data-testid="job-error">
-              <h1 className="t-h2">{JOB_DETAIL.error.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{JOB_DETAIL.error.heading}</h1>
               <p className="t-body-lg">{JOB_DETAIL.error.body}</p>
               <div className={styles.actions}>
-                <Button variant="primary" size="large" onClick={reload}>
+                <Button variant="primary" size="large" onClick={retry}>
                   {JOB_DETAIL.error.primary}
                 </Button>
                 <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="secondary" size="large">
@@ -182,7 +185,7 @@ export default function JobDetailPage() {
               {JOB_DETAIL.closed.status}
             </p>
           ) : null}
-          <h1 id="job-title" className={`t-h1 ${styles.title}`}>{job.title}</h1>
+          <h1 {...FOCUS_LANDING} id="job-title" className={`t-h1 ${styles.title}`}>{job.title}</h1>
           <p className={`t-body ${styles.company}`}>Valida</p>
         </Container>
       </section>

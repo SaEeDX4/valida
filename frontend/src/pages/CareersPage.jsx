@@ -15,6 +15,7 @@ import RegionSelector from '../features/jobs/components/RegionSelector.jsx';
 import useActiveRegion from '../features/jobs/hooks/useActiveRegion.js';
 import { getJobsService } from '../features/jobs/api/jobsService.js';
 import useAsyncResource, { RESOURCE_STATUS } from '../features/jobs/hooks/useAsyncResource.js';
+import { FOCUS_LANDING, useRetryFocus } from '../hooks/useFocusLanding.js';
 import { ROUTES, jobRoute } from '../routes/paths.js';
 import {
   CAREERS_HERO, WORK_CONTEXT, OPEN_ROLES, RECRUITMENT_PROCESS, PRIVACY_NOTE,
@@ -44,6 +45,8 @@ export default function CareersPage() {
   const { region, setRegion, withRegion } = useActiveRegion();
   const loadJobs = useCallback(({ signal }) => getJobsService().getPublishedJobs({ signal }), []);
   const { status, data, reload } = useAsyncResource(loadJobs);
+  // C5: after Try Again resolves, focus lands on the Open Roles heading instead of falling to <body>.
+  const retry = useRetryFocus(status, reload, RESOURCE_STATUS.LOADING);
 
   const jobs = status === RESOURCE_STATUS.SUCCESS && Array.isArray(data?.items) ? data.items : [];
 
@@ -83,7 +86,7 @@ export default function CareersPage() {
       <Section spacing="lg" surface="secondary" aria-labelledby="careers-roles-heading">
         <Container width="wide">
           <div className={styles.rolesHeader}>
-            <h2 id="careers-roles-heading" className="t-h2">{OPEN_ROLES.heading}</h2>
+            <h2 id="careers-roles-heading" className="t-h2" {...FOCUS_LANDING}>{OPEN_ROLES.heading}</h2>
             <p className={`t-body-lg ${styles.rolesIntro}`}>{OPEN_ROLES.intro}</p>
           </div>
 
@@ -139,7 +142,7 @@ export default function CareersPage() {
                 title={OPEN_ROLES.error.heading}
                 message={OPEN_ROLES.error.body}
                 retryLabel={OPEN_ROLES.error.retry}
-                onRetry={reload}
+                onRetry={retry}
               />
             </div>
           ) : null}

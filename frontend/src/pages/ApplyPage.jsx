@@ -21,6 +21,7 @@ import { validateResumeFile } from '../features/applications/validation/resumeVa
 import buildApplicationFormData from '../features/applications/utils/buildApplicationFormData.js';
 import { getJobsService } from '../features/jobs/api/jobsService.js';
 import useAsyncResource, { RESOURCE_STATUS } from '../features/jobs/hooks/useAsyncResource.js';
+import { FOCUS_LANDING, useOutcomeFocus, useRetryFocus } from '../hooks/useFocusLanding.js';
 import { isJobOpen } from '../features/jobs/utils/formatJob.js';
 import resolveJobMarketPresentation, {
   buildRegionalJobFacts,
@@ -53,6 +54,9 @@ import styles from './ApplyPage.module.css';
  * PERSONAL DATA: form state lives in memory only. Nothing is written to
  * localStorage, sessionStorage or the URL, and no candidate value is logged.
  */
+/** The submission outcomes that replace the form, after which focus would otherwise fall to <body>. */
+const OUTCOMES_REPLACING_FORM = [SUBMIT_STATUS.SUCCESS, SUBMIT_STATUS.JOB_UNAVAILABLE, SUBMIT_STATUS.JOB_CLOSED];
+
 /**
  * Route wrapper.
  *
@@ -81,6 +85,8 @@ function ApplyFlow({ jobSlug }) {
     [jobSlug],
   );
   const { status: jobStatus, data, error: jobError, reload: reloadJob } = useAsyncResource(loadJob, [jobSlug]);
+  // C5: after Try Again resolves, focus lands on the outcome's heading instead of falling to <body>.
+  const retryJob = useRetryFocus(jobStatus, reloadJob, RESOURCE_STATUS.LOADING);
   const job = data?.job ?? null;
   const applicationForm = job?.applicationForm ?? null;
 
@@ -112,6 +118,8 @@ function ApplyFlow({ jobSlug }) {
   );
 
   const submission = useApplicationSubmission(jobSlug, { screeningQuestionIds });
+  // C5: when an outcome replaces the form (success, the role unavailable or closed), focus lands on its heading.
+  useOutcomeFocus(submission.status, OUTCOMES_REPLACING_FORM);
 
   // Server field errors override client ones for the same field.
   const errors = useMemo(
@@ -240,7 +248,7 @@ function ApplyFlow({ jobSlug }) {
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-unavailable">
-              <h1 className="t-h2">{APPLY.unavailable.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{APPLY.unavailable.heading}</h1>
               <p className="t-body-lg">{APPLY.unavailable.body}</p>
               <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="primary" size="large">
                 {APPLY.unavailable.cta}
@@ -261,10 +269,10 @@ function ApplyFlow({ jobSlug }) {
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-job-error">
-              <h1 className="t-h2">{JOB_DETAIL.error.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{JOB_DETAIL.error.heading}</h1>
               <p className="t-body-lg">{JOB_DETAIL.error.body}</p>
               <div className={styles.actions}>
-                <Button variant="primary" size="large" onClick={reloadJob}>
+                <Button variant="primary" size="large" onClick={retryJob}>
                   {JOB_DETAIL.error.primary}
                 </Button>
                 <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="secondary" size="large">
@@ -287,7 +295,7 @@ function ApplyFlow({ jobSlug }) {
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-success">
               <SectionEyebrow>{APPLY.success.eyebrow}</SectionEyebrow>
-              <h1 className="t-h1">{APPLY.success.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h1">{APPLY.success.heading}</h1>
               {/* Announced politely rather than by stealing focus. */}
               <StatusMessage>{successBody(job.title)}</StatusMessage>
               <p className={`t-body-lg ${styles.successBody}`}>{APPLY.success.bodySuffix}</p>
@@ -319,7 +327,7 @@ function ApplyFlow({ jobSlug }) {
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-unavailable">
-              <h1 className="t-h2">{APPLY.unavailable.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{APPLY.unavailable.heading}</h1>
               <p className="t-body-lg">{APPLY.unavailable.body}</p>
               <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="primary" size="large">
                 {APPLY.unavailable.cta}
@@ -339,7 +347,7 @@ function ApplyFlow({ jobSlug }) {
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-closed-during">
-              <h1 className="t-h2">{APPLY.closedDuringApplication.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{APPLY.closedDuringApplication.heading}</h1>
               <p className="t-body-lg">{APPLY.closedDuringApplication.body}</p>
               <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="primary" size="large">
                 {APPLY.closedDuringApplication.cta}
@@ -359,7 +367,7 @@ function ApplyFlow({ jobSlug }) {
         <Section spacing="lg">
           <Container width="standard">
             <div className={styles.stateBlock} data-testid="apply-not-accepting">
-              <h1 className="t-h2">{APPLY.closedDuringApplication.heading}</h1>
+              <h1 {...FOCUS_LANDING} className="t-h2">{APPLY.closedDuringApplication.heading}</h1>
               <p className="t-body-lg">{APPLY.unavailable.body}</p>
               <Button as={Link} href={withRegion(ROUTES.CAREERS)} variant="primary" size="large">
                 {APPLY.unavailable.cta}
@@ -414,7 +422,7 @@ function ApplyFlow({ jobSlug }) {
 
           <div className={styles.header}>
             <SectionEyebrow>{APPLY.eyebrow}</SectionEyebrow>
-            <h1 className={`t-h1 ${styles.heading}`}>{applyHeading(job.title)}</h1>
+            <h1 {...FOCUS_LANDING} className={`t-h1 ${styles.heading}`}>{applyHeading(job.title)}</h1>
             <p className={`t-body-lg ${styles.intro}`}>{APPLY.intro}</p>
           </div>
 

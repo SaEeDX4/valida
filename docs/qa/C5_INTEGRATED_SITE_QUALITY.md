@@ -4,7 +4,7 @@
 | --- | --- |
 | Milestone | Release C, **C5 — Integrated Site Quality** (Doc 18 §§168–172) |
 | Baseline | `389c421a72fb090dc2c08c8251b664bada73d9a0` (GitHub `main` = `c4-work`) |
-| Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227` and `777c1e6`. Test code only |
+| Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227`, `777c1e6` and `fffc252`. Test code only |
 | Fixes | `24a351d` F1, `22344eb` F2, `4807dda` F3, `72a9d52` F4. Frontend CSS and two data attributes; the backend is unchanged |
 | Status | **READY FOR REVIEW. Open: owner decisions OD-C5-1 to OD-C5-4 and OQ-C5-1, and the manual checklist M1–M12. C5 is not complete until those are settled**. Final acceptance belongs to the owner |
 | Constraints kept | Local work only. Nothing pushed, deployed or sent; no settings changed. Production candidate acknowledgements stay disabled. The first genuine Cybersecurity Specialist vacancy stays Draft, its eligible work countries OPEN. Approved copy, the social card, job eligibility and the publication rules are unchanged |
@@ -20,7 +20,7 @@ Everything below was observed in **Chromium**, through Playwright, on one Linux 
 | Tools | axe-core 4.13.0 (the frontend's own dev dependency); Lighthouse 13.6.0, installed **outside** the repository; MongoDB 8.0.23 (disposable `valida_test_c5`) |
 | Stack | One production build (`VITE_ALLOW_INDEXING=true`, `VITE_PUBLIC_SITE_URL=https://cybervalida.com`). Served by the C4 document server on 127.0.0.1:4203, and through the **lab-only** compression proxy on 127.0.0.1:4204. The real backend on 127.0.0.1:4120, with **no mail transport** and acknowledgements off |
 | Data | Synthetic Jobs only (`e2e/fixtures/c5-jobs`): a long-title open Job (eligible countries NZ, DE, CA; three screening questions; a long unbroken token), an open hybrid Job, and a retained closed Job. Synthetic candidates on `*.example.test`; the synthetic resume fixtures |
-| Runs | **Before**, at `06dd991` (the baseline frontend): 2026-11-10 12:08–12:38 UTC. **After**, at `72a9d52`: 2026-11-10 12:39–12:59 UTC. Then, at `777c1e6`: the targeted reruns (C5-06, C5-07, C5-15b) and the C3 and C4 regression suites |
+| Runs | **Before**, at `06dd991` (the baseline frontend): 2026-11-10 12:08–12:38 UTC. **After**, at `72a9d52`: 2026-11-10 12:39–12:59 UTC. Then, at `777c1e6`: the targeted reruns (C5-06, C5-07, C5-15b) and the C3 and C4 regression suites. At `fffc252`: C5-12 again, against this frontend and against the baseline frontend (`06dd991`, in a temporary worktree since removed) |
 
 How each state was produced is recorded with it:
 - **REAL**: an actual response or browser state;
@@ -51,7 +51,7 @@ How each state was produced is recorded with it:
 | ID | Severity | Finding | Requirement | Fix | Before → after |
 | --- | --- | --- | --- | --- | --- |
 | **F4** | **High** | Job Detail and Apply shift as they load: the short skeleton leaves the footer at the bottom of the first viewport, and the content pushes it down | PERF-004 (CLS ≤ 0.1), PERF-037 | Each loading skeleton is marked `data-content-pending`. The layout keeps its footer in place but unpainted (`:has()`) until the content is there | Lab CLS p75 (C5-17): Job Detail **0.271 → 0** (mobile) and **0.243 → 0.0007** (desktop); Apply 0.111 → 0 and 0.101 → 0.0007; missing Job 0.041 → 0. Lighthouse median (C5-19): Job Detail **77 → 94** (mobile) and **88 → 100** (desktop); Apply 91 → 96 and 97 → 100 |
-| **F3** | Medium | Text at 200% (doubled browser text size) at 360–390 CSS px: a heading word wider than its column widened the column past the viewport. The page's `overflow-x: clip` then cut off headings, paragraphs and buttons on Home, About, Careers, Job Detail and Apply. Page zoom 200% and reflow at 320 px already passed | A11Y-017; Doc 03 §79 | Headings may break an over-long word. Job Detail's mobile column is `minmax(0, 1fr)`, and its card call to action may wrap. The region selector is capped at its container. The Apply submit button is capped at its container and may wrap | C5-12 at 390: 5 views clipped (Home: three sections; Careers, Job Detail, Apply, Apply errors: one each) → **0**. Screenshots `text200-*` |
+| **F3** | Medium | Text at 200% (doubled browser text size) at 360–390 CSS px: a heading word wider than its column widened the column past the viewport. The page's `overflow-x: clip` then cut off headings, paragraphs and buttons on Home, About, Careers, Job Detail and Apply. Page zoom 200% and reflow at 320 px already passed | A11Y-017; Doc 03 §79 | Headings may break an over-long word. Job Detail's mobile column is `minmax(0, 1fr)`, and its card call to action may wrap. The region selector is capped at its container. The Apply submit button is capped at its container and may wrap | C5-12 at 390: 5 views clipped (Home: three sections; Careers, Job Detail, Apply, Apply errors: one each) → **0**. Screenshots `text200-*` from the `fffc252` runs, before and after. At 200% on a narrow phone, the largest headings now break inside long words ("syste|ms."), with no hyphen: nothing is lost, but it reads less smoothly (OD-C5-4) |
 | **F2** | Medium | Shift+Tab to a control above the viewport scrolled it entirely under the sticky header: the Job Detail breadcrumb at 1440 and 390, and the Careers region selector at 390 | A11Y-010 (WCAG 2.4.11); Doc 05 §23 | `html { scroll-padding-block-start: header + 16 px }` | C5-08: **3 of 330 stops fully hidden → 0**. Error-summary links now land with the field's label in view |
 | **F1** | Low | The Home operating-principles list kept the browser's default disc markers. They hung outside the column: in the page gutter at 360 px, and left of each item's hairline at 1440. Every other list in the design draws none | Doc 03 visual quality | `list-style: none` | Home screenshots at all 7 widths: markers gone, section 6–24 px shorter; everything above it is pixel-identical. Guarded by C5-07 |
 
@@ -59,7 +59,7 @@ How each state was produced is recorded with it:
 
 The 36 that differ are all expected:
 - Home: 7 widths, 14 breakpoint shots and the 200% zoom shot (F1);
-- the 200% text shots (F3);
+- the 200% text shots (F3). In those two full runs, the shots did not show the doubled text: Chromium's capture drops the CDP setting. C5-12 at `fffc252` captures with the equivalent root size, and its before/after pair is the F3 visual evidence;
 - Job Detail loading at 7 widths: the footer is not painted (F4);
 - the two keyboard error-summary shots, which come to rest lower (F2);
 - one recovered-state shot, where only the sticky header's captured position differs.
@@ -162,7 +162,11 @@ Accessibility and Best Practices are 100 everywhere. SEO is 100, except Apply at
     - **(b)** In C6, preload the Job API response from the document server for Job and Apply routes.
     - **(c)** Render the Job page body on the server.
   - **Recommendation: (a), with (b) evaluated in C6.**
-- **OD-C5-4 — Small design items.** The row separators (O6); aligning the browser's e-mail check with the server (O7); and 44 px heights for the compact controls (O10).
+- **OD-C5-4 — Small design items.**
+  - the row separators (O6);
+  - aligning the browser's e-mail check with the server (O7);
+  - 44 px heights for the compact controls (O10);
+  - whether the largest headings should get a smaller minimum size, so that at 200% text on narrow phones they break between words rather than inside them (F3).
 - **OQ-C5-1 — Focus after replaced content (O4).** Keep the current behaviour if NVDA (M1) announces success and recovery? Otherwise move focus to the new heading (`tabindex="-1"`).
 - **Visual acknowledgements.** F1 removes visible list markers on Home. F4 hides the footer only while a Job is loading.
 

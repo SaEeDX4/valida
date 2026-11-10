@@ -232,7 +232,7 @@ describe('region selector and navigation', () => {
     const user = userEvent.setup();
     renderRoute('/careers?region=DE');
     const list = await screen.findByTestId('careers-job-list');
-    const link = within(list).getByRole('link', { name: /View .* role/ });
+    const link = within(list).getByRole('link', { name: /^View Role: / });
     expect(link.getAttribute('href')).toContain('region=DE');
 
     await user.click(link);
@@ -253,7 +253,7 @@ describe('region selector and navigation', () => {
     await screen.findByRole('heading', { level: 1, name: /Apply for/ });
     expect(within(screen.getByTestId('apply-context-facts')).getByText('Germany')).toBeTruthy();
 
-    const back = screen.getByRole('link', { name: /Back to Cybersecurity Specialist/ });
+    const back = screen.getByRole('link', { name: 'Back to Role: Cybersecurity Specialist' });
     expect(back.getAttribute('href')).toContain('region=DE');
   });
 

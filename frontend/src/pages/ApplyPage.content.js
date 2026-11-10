@@ -82,5 +82,6 @@ export const APPLY = {
 /** s109 / s112 / s110 — populated from real runtime Job data only. */
 export const applyTitle = (jobTitle) => `Apply for ${jobTitle} | Valida`;
 export const applyHeading = (jobTitle) => `Apply for ${jobTitle}`;
-export const backToRoleLabel = (jobTitle) => `Back to ${jobTitle}`;
+// OD-2026-11-10-01: the accessible name contains the visible label "Back to Role" (WCAG 2.5.3).
+export const backToRoleLabel = (jobTitle) => `Back to Role: ${jobTitle}`;
 export const successBody = (jobTitle) => `Your application for ${jobTitle} has been received.`;

@@ -99,7 +99,7 @@ describe('ApplyLayout — simplified header', () => {
     renderRoute(APPLY);
     await screen.findByRole('heading', { level: 1 });
     const main = screen.getByRole('main');
-    expect(within(main).getByRole('link', { name: 'Back to Cybersecurity Specialist' })).toBeTruthy();
+    expect(within(main).getByRole('link', { name: 'Back to Role: Cybersecurity Specialist' })).toBeTruthy();
   });
 });
 
@@ -121,7 +121,7 @@ describe('ApplyLayout — region persistence', () => {
   it('keeps the region on the page Back to Role link as well', async () => {
     renderRoute(`${APPLY}?region=DE`);
     await screen.findByRole('heading', { level: 1 });
-    const back = within(screen.getByRole('main')).getByRole('link', { name: 'Back to Cybersecurity Specialist' });
+    const back = within(screen.getByRole('main')).getByRole('link', { name: 'Back to Role: Cybersecurity Specialist' });
     expect(back.getAttribute('href')).toBe('/careers/cybersecurity-specialist?region=DE');
   });
 

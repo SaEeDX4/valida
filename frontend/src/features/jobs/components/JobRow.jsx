@@ -14,9 +14,11 @@ import styles from './JobRow.module.css';
  * omitted — no placeholder, no "not specified", nothing invented.
  *
  * The row is a single real <Link>, never a clickable div. Its accessible name
- * follows the canonical pattern "View {job.title} role", so a screen-reader
- * user hearing a list of links can tell the roles apart. The metadata inside
- * is plain text and is not separately focusable.
+ * is "View Role: {job.title}" (OD-2026-11-10-01): it starts with the visible
+ * call to action, so a speech-input user can say what they see (WCAG 2.5.3),
+ * and it names the role, so a screen-reader user hearing a list of links can
+ * tell the roles apart. The metadata inside is plain text and is not
+ * separately focusable.
  */
 export default function JobRow({ job, region, toJobHref = jobRoute }) {
   /*
@@ -31,7 +33,7 @@ export default function JobRow({ job, region, toJobHref = jobRoute }) {
       <Link
         to={toJobHref(job.slug)}
         className={styles.link}
-        aria-label={`View ${job.title} role`}
+        aria-label={`View Role: ${job.title}`}
       >
         <div>
           <h3 className={`t-h4 ${styles.title}`}>{job.title}</h3>

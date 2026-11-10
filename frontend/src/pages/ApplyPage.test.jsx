@@ -105,7 +105,7 @@ describe('Apply — canonical structure and copy', () => {
   it('provides a Back to Role link with the canonical accessible name', async () => {
     renderRoute(PATH);
     await screen.findByRole('heading', { level: 1 });
-    const back = screen.getByRole('link', { name: 'Back to Cybersecurity Specialist' });
+    const back = screen.getByRole('link', { name: 'Back to Role: Cybersecurity Specialist' });
     expect(back.getAttribute('href')).toBe(`/careers/${SLUG}`);
   });
 

@@ -25,7 +25,8 @@ function renderMenu(initialPath = '/') {
   );
 }
 
-const trigger = () => screen.getByRole('button', { name: /navigation/i });
+// OD-2026-11-10-01: the toggle's accessible name is its visible label, "Menu", in both states.
+const trigger = () => screen.getByRole('button', { name: 'Menu' });
 
 beforeEach(() => {
   window.scrollTo = vi.fn();
@@ -39,17 +40,18 @@ describe('mobile navigation', () => {
     expect(screen.queryByRole('navigation', { name: 'Primary' })).toBeNull();
   });
 
-  it('uses the canonical trigger label (Doc 06 section 9)', () => {
+  it('is named by its visible label "Menu", with no separate aria-label (OD-2026-11-10-01, WCAG 2.5.3)', () => {
     renderMenu();
-    expect(trigger().getAttribute('aria-label')).toBe('Open navigation');
-    expect(trigger().textContent).toContain('Menu');
+    expect(trigger().hasAttribute('aria-label')).toBe(false);
+    expect(trigger().textContent.trim()).toBe('Menu');
   });
 
-  it('opens the panel and updates aria-expanded and the label', async () => {
+  it('opens the panel; aria-expanded carries the state and the name stays "Menu"', async () => {
     renderMenu();
     await userEvent.click(trigger());
     expect(trigger().getAttribute('aria-expanded')).toBe('true');
-    expect(trigger().getAttribute('aria-label')).toBe('Close navigation');
+    expect(trigger().hasAttribute('aria-label')).toBe(false);
+    expect(trigger().textContent.trim()).toBe('Menu');
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeTruthy();
   });
 

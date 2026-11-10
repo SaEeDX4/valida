@@ -19,8 +19,10 @@ import styles from './MobileNavigation.module.css';
  * are never reachable by Tab while invisible — a hidden-but-focusable menu is
  * a common keyboard trap.
  *
- * Copy is canonical: Document 06 section 9 supplies "Menu", "Open navigation"
- * and "Close navigation".
+ * Copy: Document 06 section 9 supplies "Menu". The toggle's accessible name is
+ * its visible label, "Menu", and aria-expanded carries the open/closed state
+ * (OD-2026-11-10-01: WCAG 2.5.3, the name contains the visible label; it
+ * replaces the earlier "Open navigation" / "Close navigation" names).
  */
 export default function MobileNavigation() {
   const [open, setOpen] = useState(false);
@@ -135,7 +137,6 @@ export default function MobileNavigation() {
         onClick={toggle}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={open ? 'Close navigation' : 'Open navigation'}
       >
         <Icon name={open ? 'close' : 'menu'} size="sm" />
         <span>Menu</span>

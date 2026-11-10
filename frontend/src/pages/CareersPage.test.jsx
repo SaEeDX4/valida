@@ -76,8 +76,8 @@ describe('Careers — data states', () => {
     const links = within(list).getAllByRole('link');
     expect(links).toHaveLength(2);
     expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([
-      'View Cybersecurity Specialist role',
-      'View Platform Engineer role',
+      'View Role: Cybersecurity Specialist',
+      'View Role: Platform Engineer',
     ]);
     expect(links.map((l) => l.getAttribute('href'))).toEqual([
       '/careers/cybersecurity-specialist',

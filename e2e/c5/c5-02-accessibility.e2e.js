@@ -85,7 +85,8 @@ test('C5-07 Structure on every route: lang, title, one main, landmarks, one h1, 
       })(),
       imagesWithoutAlt: [...document.images].filter((img) => !img.hasAttribute('alt')).length,
       // Every list in the design is drawn without default markers; a marker left on hangs outside its column (C5 F1).
-      listsWithDefaultMarkers: [...document.querySelectorAll('ul, ol')].filter((el) => getComputedStyle(el).display !== 'none' && getComputedStyle(el).listStyleType !== 'none').map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`),
+      // A marker is drawn only for an element displayed as a list-item (a grid or flex li draws none).
+      listsWithDefaultMarkers: [...new Set([...document.querySelectorAll('li')].filter((li) => getComputedStyle(li).display === 'list-item' && getComputedStyle(li).listStyleType !== 'none').map((li) => `${li.parentElement.tagName.toLowerCase()}.${String(li.parentElement.className).split(' ')[0]}`))],
     }));
     results[name] = { ...structure, ...counts, headingProblems: headingProblems(structure.headings) };
   }
@@ -480,6 +481,67 @@ test('C5-15 Non-text contrast of form controls, buttons and the focus ring (comp
   const identifying = apply.filter((r) => /border|ring|fill vs page/.test(r.label));
   expect(identifying.some((r) => r.label === 'focus ring (--color-focus)' && r.ratioToSurroundings >= 3)).toBe(true);
   expect(identifying.filter((r) => /input border|select border|textarea border/.test(r.label)).every((r) => r.ratioToSurroundings >= 3 || apply.find((x) => x.label === 'text input fill vs page').ratioToSurroundings >= 3)).toBe(true);
+});
+
+test('C5-15b Text contrast where axe needs review (text over the Home gradients): measured from rendered pixels', async ({ page }) => {
+  await ensureJobs();
+  const results = {};
+  for (const [width, height] of [[360, 800], [1440, 900]]) {
+    await page.setViewportSize({ width, height });
+    await openRoute(page, '/');
+    await page.addScriptTag({ path: AXE_PATH });
+    const targets = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'rule', values: ['color-contrast'] }, resultTypes: ['incomplete'] })).incomplete.flatMap((v) => v.nodes.map((n) => n.target.join(' '))));
+    const rows = [];
+    for (const target of targets) {
+      const el = page.locator(target).first();
+      await el.scrollIntoViewIfNeeded();
+      await waitForStill(page);
+      const info = await el.evaluate((node) => {
+        const r = node.getBoundingClientRect();
+        const s = getComputedStyle(node);
+        // The content box: the text's own background, without the element's border or padding edge.
+        const px = (v) => parseFloat(v) || 0;
+        const left = px(s.borderLeftWidth) + px(s.paddingLeft);
+        const top = px(s.borderTopWidth) + px(s.paddingTop);
+        const width = r.width - left - px(s.borderRightWidth) - px(s.paddingRight);
+        const height = r.height - top - px(s.borderBottomWidth) - px(s.paddingBottom);
+        return { x: r.left + left, y: r.top + top, width, height, color: s.color, fontSize: s.fontSize, fontWeight: s.fontWeight, text: node.textContent.trim().slice(0, 40) };
+      });
+      // The background alone: every glyph made transparent, then the box is captured.
+      const hide = await page.addStyleTag({ content: '* { color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' });
+      const png = await page.screenshot({ clip: { x: Math.max(0, info.x), y: Math.max(0, info.y), width: Math.max(1, Math.min(info.width, width - Math.max(0, info.x))), height: Math.max(1, info.height) } });
+      await hide.evaluate((tag) => tag.remove());
+      const ratio = await page.evaluate(async ({ b64, color }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${b64}`;
+        await img.decode();
+        const canvas = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height });
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, img.width, img.height).data;
+        const lin = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+        const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        const [r, g, b] = color.match(/[\d.]+/g).map(Number);
+        const fg = lum(r, g, b);
+        let worst = Infinity;
+        let lightest = 0;
+        let darkest = 1;
+        for (let i = 0; i < data.length; i += 4) {
+          const bg = lum(data[i], data[i + 1], data[i + 2]);
+          lightest = Math.max(lightest, bg);
+          darkest = Math.min(darkest, bg);
+          const [hi, lo] = fg > bg ? [fg, bg] : [bg, fg];
+          worst = Math.min(worst, (hi + 0.05) / (lo + 0.05));
+        }
+        return { worst: Math.round(worst * 100) / 100, backgroundLuminance: [Math.round(darkest * 1000) / 1000, Math.round(lightest * 1000) / 1000] };
+      }, { b64: png.toString('base64'), color: info.color });
+      const large = parseFloat(info.fontSize) >= 24 || (parseFloat(info.fontSize) >= 18.66 && Number(info.fontWeight) >= 700);
+      rows.push({ target, text: info.text, color: info.color, fontSize: info.fontSize, required: large ? 3 : 4.5, ...ratio });
+    }
+    results[width] = rows;
+  }
+  record('C5-15b', { observation: 'REAL rendered pixels in Chromium: the worst ratio between the text colour and every background pixel inside the element box, with the text hidden', results });
+  for (const [width, rows] of Object.entries(results)) for (const r of rows) expect.soft(r.worst, `${width} ${r.target}`).toBeGreaterThanOrEqual(r.required);
 });
 
 test('C5-16 Forced colours (EMULATED Windows contrast themes): focus indicator and form boundaries remain', async ({ page }) => {

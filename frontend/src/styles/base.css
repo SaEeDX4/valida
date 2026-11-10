@@ -16,6 +16,12 @@ html {
   /* Doc 03 section 112 — scroll hijacking is prohibited; this only smooths
      in-page anchor jumps and is disabled under reduced motion below. */
   scroll-behavior: smooth;
+  /* C5 — Doc 05 section 23 ("anchor navigation should respect sticky-header
+     offset"), Doc 16 section 27 (focus not obscured, WCAG 2.4.11): anything the
+     browser scrolls into view — a focused control (Shift+Tab), an anchor such
+     as an error-summary link — comes to rest below the sticky header instead
+     of underneath it. */
+  scroll-padding-block-start: calc(var(--header-block-size) + var(--space-4));
 }
 
 body {

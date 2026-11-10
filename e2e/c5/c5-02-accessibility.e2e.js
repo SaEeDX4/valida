@@ -54,17 +54,89 @@ test('C5-06 axe-core (WCAG 2.0/2.1/2.2 A and AA) on every public route at 360 an
   // The mobile navigation, open.
   await page.setViewportSize({ width: 390, height: 844 });
   await openRoute(page, '/');
-  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
   results['mobile-menu-open'] = { 390: await axe(page) };
-  // WCAG 2.5.3 Label in Name: axe's rule for it is "experimental" and outside the tags above, so it is run on its own and RECORDED.
+  // WCAG 2.5.3 Label in Name (OD-2026-11-10-01). axe's rule for it is "experimental" and outside the tags above,
+  // so it runs on its own, on every route at both widths and with the menu open, and it GATES the case.
+  // Each failing node is tagged careersRow when it is a Careers role link: the whole row is one link whose visible
+  // text is the title, its facts and "View Role", and axe's heuristic asks that ALL of it appear in the name.
+  // OD-2026-11-10-01 approved "View Role: {title}" for those links; they are checked explicitly below instead.
+  const runLabelInName = () => page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'rule', values: ['label-content-name-mismatch'] } })).violations.flatMap((v) => v.nodes.map((n) => ({
+    target: n.target.join(' '),
+    html: n.html.slice(0, 160),
+    careersRow: Boolean(document.querySelector(n.target.join(' '))?.closest('[data-testid="careers-job-list"]')),
+  }))));
   const labelInName = {};
-  for (const [name, pathname, width] of [['home', '/', 390], ['careers', '/careers', 390], ['careers', '/careers', 1440], ['apply-open', `/careers/${C5_SLUGS.open}/apply`, 1440]]) {
-    await page.setViewportSize({ width, height: 900 });
-    await openRoute(page, pathname);
-    await page.addScriptTag({ path: AXE_PATH });
-    labelInName[`${name}@${width}`] = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'rule', values: ['label-content-name-mismatch'] } })).violations.flatMap((v) => v.nodes.map((n) => ({ target: n.target.join(' '), html: n.html.slice(0, 160) }))));
+  for (const [name, pathname] of ROUTES) {
+    for (const width of [360, 1440]) {
+      await page.setViewportSize({ width, height: width === 360 ? 800 : 900 });
+      await openRoute(page, pathname);
+      await page.addScriptTag({ path: AXE_PATH });
+      labelInName[`${name}@${width}`] = await runLabelInName();
+    }
   }
-  record('C5-06', { observation: 'REAL (axe-core in Chromium)', axeVersion: results.home[360].version, tags: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'], results, labelInName: { rule: 'label-content-name-mismatch (axe experimental; WCAG 2.5.3, Level A)', gating: false, why: 'The accessible names involved are canonical Doc 06 copy; escalated under Doc 00 change control (C5 handoff). Recorded, not gated.', results: labelInName } });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openRoute(page, '/');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.addScriptTag({ path: AXE_PATH });
+  labelInName['mobile-menu-open@390'] = await runLabelInName();
+
+  // Negative control: the gate must catch a regression. The toggle's old name is put back in the DOM for one run.
+  await page.keyboard.press('Escape');
+  const negativeControl = await page.evaluate(async () => {
+    const toggle = document.querySelector('header button[aria-controls]');
+    toggle.setAttribute('aria-label', 'Open navigation');
+    const found = (await window.axe.run(document, { runOnly: { type: 'rule', values: ['label-content-name-mismatch'] } })).violations.flatMap((v) => v.nodes.map((n) => n.target.join(' ')));
+    toggle.removeAttribute('aria-label');
+    return found;
+  });
+
+  // The approved names themselves, as Chromium computes them (CDP Accessibility).
+  const cdp = await page.context().newCDPSession(page);
+  const computedName = async (locator) => {
+    await locator.evaluate((el) => el.setAttribute('data-c5-name-probe', ''));
+    const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: '[data-c5-name-probe]' });
+    const { node } = await cdp.send('DOM.describeNode', { nodeId });
+    const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { backendNodeId: node.backendNodeId, fetchRelatives: false });
+    await locator.evaluate((el) => el.removeAttribute('data-c5-name-probe'));
+    return nodes[0]?.name?.value ?? null;
+  };
+  const names = {};
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openRoute(page, '/');
+  const toggle = page.locator('header button[aria-controls]');
+  names.menuClosed = { name: await computedName(toggle), expanded: await toggle.getAttribute('aria-expanded'), visible: (await toggle.innerText()).trim() };
+  await toggle.click();
+  names.menuOpen = { name: await computedName(toggle), expanded: await toggle.getAttribute('aria-expanded'), visible: (await toggle.innerText()).trim() };
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRoute(page, '/careers');
+  const rows = page.locator('[data-testid="careers-job-list"] a');
+  names.careersRows = [];
+  for (let i = 0; i < (await rows.count()); i += 1) {
+    const row = rows.nth(i);
+    names.careersRows.push({ name: await computedName(row), title: (await row.locator('h3').innerText()).trim(), cta: (await row.locator('[aria-hidden="true"]').first().innerText()).trim() });
+  }
+  await openRoute(page, `/careers/${C5_SLUGS.open}/apply`);
+  const back = page.locator('main a[href^="/careers/"]').first();
+  names.applyBack = { name: await computedName(back), visible: (await back.innerText()).trim() };
+  record('C5-06', { observation: 'REAL (axe-core in Chromium; names from the Chromium accessibility tree)', axeVersion: results.home[360].version, tags: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'], results, labelInName: { rule: 'label-content-name-mismatch (axe experimental; WCAG 2.5.3, Level A)', gating: 'every node except Careers role links, which are gated by the explicit name checks (names.careersRows)', decision: 'OD-2026-11-10-01', results: labelInName, negativeControl: { injected: 'aria-label="Open navigation" on the Menu toggle', detected: negativeControl } }, names });
+  expect.soft(Object.entries(labelInName).map(([k, v]) => [k, v.filter((x) => !x.careersRow)]).filter(([, v]) => v.length).map(([k, v]) => `${k}: ${v.map((x) => x.target).join(', ')}`), 'WCAG 2.5.3 label in name (axe)').toEqual([]);
+  expect.soft(negativeControl.length, 'negative control: a reintroduced mismatch is detected').toBeGreaterThan(0);
+  expect.soft(names.menuClosed).toEqual({ name: 'Menu', expanded: 'false', visible: 'Menu' });
+  expect.soft(names.menuOpen).toEqual({ name: 'Menu', expanded: 'true', visible: 'Menu' });
+  expect.soft(names.careersRows.length, 'multiple jobs listed').toBeGreaterThanOrEqual(2);
+  for (const row of names.careersRows) {
+    // The approved name, which contains both visible parts of the row's label: the call to action and the title.
+    expect.soft(row.name).toBe(`View Role: ${row.title}`);
+    expect.soft(row.cta).toBe('View Role');
+    expect.soft(row.name.startsWith(row.cta), 'name starts with the visible call to action').toBe(true);
+    expect.soft(row.name.includes(row.title), 'name contains the visible title').toBe(true);
+  }
+  expect.soft(new Set(names.careersRows.map((r) => r.name)).size, 'unique row names').toBe(names.careersRows.length);
+  expect.soft(names.applyBack.visible).toBe('Back to Role');
+  expect.soft(names.applyBack.name).toBe(`Back to Role: ${OPEN_TITLE}`);
   const violations = Object.entries(results).flatMap(([name, byWidth]) => Object.entries(byWidth).flatMap(([w, r]) => r.violations.map((v) => `${name}@${w}: ${v.id} (${v.nodes})`)));
   expect(violations).toEqual([]);
 });
@@ -145,7 +217,7 @@ test('C5-08 Keyboard at 1440 and 390 CSS px: skip link, full Tab and Shift+Tab o
 test('C5-09 Mobile navigation by keyboard: expanded state, Escape, focus restoration, navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openRoute(page, '/');
-  const trigger = page.getByRole('button', { name: 'Open navigation' });
+  const trigger = page.getByRole('button', { name: 'Menu', exact: true });
   let stops = 0;
   while (!(await trigger.evaluate((el) => el === document.activeElement)) && stops < 10) {
     await page.keyboard.press('Tab');
@@ -153,7 +225,7 @@ test('C5-09 Mobile navigation by keyboard: expanded state, Escape, focus restora
   }
   const beforeOpen = { tabsToTrigger: stops, expanded: await trigger.getAttribute('aria-expanded') };
   await page.keyboard.press('Enter');
-  const close = page.getByRole('button', { name: 'Close navigation' });
+  const close = page.getByRole('button', { name: 'Menu', exact: true });
   await expect(close).toHaveAttribute('aria-expanded', 'true');
   const panelId = await close.getAttribute('aria-controls');
   const panelVisible = await page.locator(`#${panelId}`).isVisible();
@@ -165,7 +237,7 @@ test('C5-09 Mobile navigation by keyboard: expanded state, Escape, focus restora
     inPanel.push(await focusProbe(page));
   }
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: 'Menu', exact: true })).toHaveAttribute('aria-expanded', 'false');
   await waitForStill(page);
   const afterEscape = await focusProbe(page);
   await page.keyboard.press('Enter');
@@ -176,12 +248,12 @@ test('C5-09 Mobile navigation by keyboard: expanded state, Escape, focus restora
   await page.keyboard.press('Enter');
   await page.waitForURL((url) => url.pathname !== '/');
   await settle(page);
-  const afterNavigate = { url: new URL(page.url()).pathname, focus: await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName.toLowerCase()), menuExpanded: await page.getByRole('button', { name: /navigation/ }).getAttribute('aria-expanded') };
+  const afterNavigate = { url: new URL(page.url()).pathname, focus: await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName.toLowerCase()), menuExpanded: await page.getByRole('button', { name: 'Menu', exact: true }).getAttribute('aria-expanded', { timeout: 10_000 }) };
   record('C5-09', { observation: 'REAL (Chromium keyboard events)', beforeOpen, panelVisible, openShot, inPanel, afterEscape, target, afterNavigate });
   expect(beforeOpen.expanded).toBe('false');
   expect(panelVisible).toBe(true);
   expect(inPanel.every((s) => s.indicator && s.inViewport)).toBe(true);
-  expect(afterEscape.name).toBe('Open navigation');
+  expect(afterEscape.name).toBe('Menu');
   expect(afterNavigate.focus).toBe('main-content');
   expect(afterNavigate.menuExpanded).toBe('false');
 });
@@ -203,7 +275,7 @@ test('C5-10 Keyboard only: Careers -> Job Detail -> Apply, validation summary, e
     }
     throw new Error(`keyboard: never reached ${label}`);
   };
-  await tabTo((p) => p.tag === 'a' && `View ${OPEN_TITLE} role`.startsWith(p.name) && p.name.startsWith('View QA C5 Synthetic Principal'), 'Careers: the role row');
+  await tabTo((p) => p.tag === 'a' && `View Role: ${OPEN_TITLE}`.startsWith(p.name) && p.name.startsWith('View Role: QA C5 Synthetic Principal'), 'Careers: the role row');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/careers/${C5_SLUGS.open}$`));
   await settle(page);
@@ -351,11 +423,11 @@ test('C5-12 Text at 200% (browser font-size setting) and page zoom 200% (EMULATE
     }
     // Function at 200%: the mobile navigation opens, the Apply form validates.
     await openRoute(zpage, `${C5_SITE_ORIGIN}/`);
-    const menu = zpage.getByRole('button', { name: 'Open navigation' });
+    const menu = zpage.getByRole('button', { name: 'Menu', exact: true });
     results.zoom.menuButtonVisible = await menu.isVisible();
     if (results.zoom.menuButtonVisible) {
       await menu.click();
-      results.zoom.menuExpanded = await zpage.getByRole('button', { name: 'Close navigation' }).getAttribute('aria-expanded');
+      results.zoom.menuExpanded = await zpage.getByRole('button', { name: 'Menu', exact: true }).getAttribute('aria-expanded');
     }
     await openRoute(zpage, `${C5_SITE_ORIGIN}/careers/${C5_SLUGS.open}/apply`);
     await zpage.getByRole('button', { name: 'Submit Application' }).click();
@@ -422,7 +494,7 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no running
     await expect(page.getByText('Loading open roles…')).toHaveCount(1);
     results[mode]['careers-loading'] = await motionProbe(page);
     release();
-    await expect(page.getByRole('link', { name: /^View .+ role$/ }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /^View Role: / }).first()).toBeVisible();
     await page.unroute(matcher, { behavior: 'wait' });
   }
   await page.emulateMedia({ reducedMotion: null });

@@ -167,7 +167,7 @@ test('C5-04 Careers and Job Detail: loading (HOLD), error (FAULT) and recovery (
   await ensureJobs();
   const out = {};
   for (const [name, pathname, matcher, loadingText, errorHeading, readyLocator] of [
-    ['careers', '/careers', isJobsList, 'Loading open roles…', 'Open roles are temporarily unavailable.', (p) => p.getByRole('link', { name: /^View .+ role$/ }).first()],
+    ['careers', '/careers', isJobsList, 'Loading open roles…', 'Open roles are temporarily unavailable.', (p) => p.getByRole('link', { name: /^View Role: / }).first()],
     ['job', `/careers/${C5_SLUGS.open}`, isJob(C5_SLUGS.open), 'Loading role details…', null, (p) => p.getByRole('link', { name: 'Apply for This Role' }).first()],
   ]) {
     // Loading: the real request is held until every width has been captured, then continued unchanged.
@@ -217,7 +217,7 @@ test('C5-05 Careers -> Job Detail -> Apply end to end at 390 CSS px: validation,
   await page.setViewportSize({ width: 390, height: 844 });
   await openRoute(page, '/careers');
   const title = JSON.parse(readFileSync(path.join(FIXTURES_DIR, 'c5-jobs', `${slug}.json`), 'utf8')).title;
-  await page.getByRole('link', { name: `View ${title} role` }).click();
+  await page.getByRole('link', { name: `View Role: ${title}` }).click();
   await expect(page).toHaveURL(new RegExp(`/careers/${slug}$`));
   await expect(page.getByRole('heading', { level: 1 })).toContainText('QA C5 Synthetic Principal');
   await page.getByRole('link', { name: 'Apply for This Role' }).first().click();

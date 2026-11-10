@@ -115,19 +115,19 @@ async function interact(page, name, profile) {
   };
   if (name === 'home') {
     if (profile === 'mobile') {
-      await tap(page.getByRole('button', { name: 'Open navigation' }), 'open the mobile navigation');
-      await tap(page.getByRole('button', { name: 'Close navigation' }), 'close the mobile navigation');
+      await tap(page.getByRole('button', { name: 'Menu' }), 'open the mobile navigation');
+      await tap(page.getByRole('button', { name: 'Menu' }), 'close the mobile navigation');
     }
     await tap(page.getByRole('link', { name: 'Explore Careers' }).first(), 'Explore Careers (client-side navigation to Careers)');
   } else if (name === 'about') {
     if (profile === 'mobile') {
-      await tap(page.getByRole('button', { name: 'Open navigation' }), 'open the mobile navigation');
-      await tap(page.getByRole('button', { name: 'Close navigation' }), 'close the mobile navigation');
+      await tap(page.getByRole('button', { name: 'Menu' }), 'open the mobile navigation');
+      await tap(page.getByRole('button', { name: 'Menu' }), 'close the mobile navigation');
     } else {
       await tap(page.getByRole('link', { name: 'Careers' }).first(), 'Careers (client-side navigation)');
     }
   } else if (name === 'careers') {
-    await tap(page.getByRole('link', { name: /^View .+ role$/ }).first(), 'a role row (client-side navigation to Job Detail)');
+    await tap(page.getByRole('link', { name: /^View Role: / }).first(), 'a role row (client-side navigation to Job Detail)');
   } else if (name === 'job') {
     await tap(page.getByRole('link', { name: 'Apply for This Role' }).first(), 'Apply for This Role (client-side navigation to Apply)');
   } else if (name === 'apply') {

@@ -401,9 +401,9 @@ test('C4-05 client navigation: the canonical follows the route; no JobPosting an
   await note('Home (direct)');
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Careers', exact: true }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: /Work on technology/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: `View ${remote.title} role` })).toBeVisible();
+  await expect(page.getByRole('link', { name: `View Role: ${remote.title}` })).toBeVisible();
   await note('Careers (client navigation)');
-  await page.getByRole('link', { name: `View ${remote.title} role` }).click();
+  await page.getByRole('link', { name: `View Role: ${remote.title}` }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(remote.title);
   await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${remote.slug}`]);
   await note('Job Detail (client navigation)');
@@ -622,10 +622,10 @@ test('C4-12 social card (revision 2): og:image, its size and alt, and the route-
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await note('Home (direct)');
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Careers', exact: true }).first().click();
-  await expect(page.getByRole('link', { name: `View ${eligible.title} role` })).toBeVisible();
+  await expect(page.getByRole('link', { name: `View Role: ${eligible.title}` })).toBeVisible();
   await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers`]);
   await note('Careers (client navigation)');
-  await page.getByRole('link', { name: `View ${eligible.title} role` }).click();
+  await page.getByRole('link', { name: `View Role: ${eligible.title}` }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(eligible.title);
   await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${eligible.slug}`]);
   await note('Job Detail (client navigation)');
@@ -804,10 +804,10 @@ test('C4-14 the otherwise identical Job without the key: readable, no country cl
   await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(1);
   await note('eligible Job (direct)');
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Careers' }).click();
-  await expect(page.getByRole('link', { name: `View ${omitted.title} role` })).toBeVisible();
+  await expect(page.getByRole('link', { name: `View Role: ${omitted.title}` })).toBeVisible();
   await expect.poll(async () => (await browserHead(page)).jsonLd.length).toBe(0);
   steps.push({ label: 'Careers (breadcrumb)', url: new URL(page.url()).pathname, jsonLd: (await browserHead(page)).jsonLd.length });
-  await page.getByRole('link', { name: `View ${omitted.title} role` }).click();
+  await page.getByRole('link', { name: `View Role: ${omitted.title}` }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(omitted.title);
   await expect.poll(async () => (await browserHead(page)).canonical).toEqual([`${SITE}/careers/${omitted.slug}`]);
   await note('unlisted Job (client navigation)');

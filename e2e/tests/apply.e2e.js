@@ -137,7 +137,7 @@ test('C3-01 QA-P1-E2E-001..004 — Home → Careers → Job → Apply → resume
   await page.goto('/');
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Careers' }).click();
   await expect(page).toHaveURL(/\/careers$/);
-  await page.getByRole('link', { name: `View ${job.title} role` }).click();
+  await page.getByRole('link', { name: `View Role: ${job.title}` }).click();
   await expect(page).toHaveURL(new RegExp(`/careers/${job.slug}$`));
   await expect(page.getByRole('heading', { level: 1, name: job.title })).toBeVisible();
   await page.getByRole('link', { name: 'Apply for This Role' }).first().click();

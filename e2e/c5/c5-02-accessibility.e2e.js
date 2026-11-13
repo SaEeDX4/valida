@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 import { BACKEND_DIR, FIXTURES_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { C5_SITE_ORIGIN, C5_SLUGS } from '../support/c5Stack.js';
 import {
-  ROUTES, axe, ensureJobs, openRoute, waitForStill, focusProbe, headingProblems, layoutProbe, motionProbe, record, settle, shot, structureProbe, writeText,
+  ROUTES, axe, ensureJobs, openRoute, publishedJobs, waitForStill, focusProbe, headingProblems, layoutProbe, motionProbe, record, settle, shot, structureProbe, writeText,
 } from './c5Support.js';
 
 /**
@@ -56,42 +56,26 @@ test('C5-06 axe-core (WCAG 2.0/2.1/2.2 A and AA) on every public route at 360 an
   await openRoute(page, '/');
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   results['mobile-menu-open'] = { 390: await axe(page) };
-  // WCAG 2.5.3 Label in Name (OD-2026-11-10-01). axe's rule for it is "experimental" and outside the tags above,
-  // so it runs on its own, on every route at both widths and with the menu open, and it GATES the case.
-  // Each failing node is tagged careersRow when it is a Careers role link: the whole row is one link whose visible
-  // text is the title, its facts and "View Role", and axe's heuristic asks that ALL of it appear in the name.
-  // OD-2026-11-10-01 approved "View Role: {title}" for those links; they are checked explicitly below instead.
-  const runLabelInName = () => page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'rule', values: ['label-content-name-mismatch'] } })).violations.flatMap((v) => v.nodes.map((n) => ({
-    target: n.target.join(' '),
-    html: n.html.slice(0, 160),
-    careersRow: Boolean(document.querySelector(n.target.join(' '))?.closest('[data-testid="careers-job-list"]')),
-  }))));
-  const labelInName = {};
-  for (const [name, pathname] of ROUTES) {
-    for (const width of [360, 1440]) {
-      await page.setViewportSize({ width, height: width === 360 ? 800 : 900 });
-      await openRoute(page, pathname);
-      await page.addScriptTag({ path: AXE_PATH });
-      labelInName[`${name}@${width}`] = await runLabelInName();
-    }
-  }
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openRoute(page, '/');
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.addScriptTag({ path: AXE_PATH });
-  labelInName['mobile-menu-open@390'] = await runLabelInName();
-
-  // Negative control: the gate must catch a regression. The toggle's old name is put back in the DOM for one run.
-  await page.keyboard.press('Escape');
-  const negativeControl = await page.evaluate(async () => {
-    const toggle = document.querySelector('header button[aria-controls]');
-    toggle.setAttribute('aria-label', 'Open navigation');
-    const found = (await window.axe.run(document, { runOnly: { type: 'rule', values: ['label-content-name-mismatch'] } })).violations.flatMap((v) => v.nodes.map((n) => n.target.join(' ')));
-    toggle.removeAttribute('aria-label');
-    return found;
-  });
-
-  // The approved names themselves, as Chromium computes them (CDP Accessibility).
+  // ---------------------------------------------------------------- WCAG 2.5.3 Label in Name (OD-2026-11-10-01)
+  // axe's rule for it (label-content-name-mismatch) is "experimental" and outside the tags above, so it runs on its
+  // own, on every route at both widths and with the menu open, and it GATES the case. Every raw finding is kept.
+  //
+  // ONE documented exception, and only for the exact reviewed nodes. A Careers role is one whole-row link
+  // (JobRow.jsx: ul[data-testid="careers-job-list"] > li > a). Its visible text is the title, the role's facts and
+  // "View Role"; axe's heuristic asks for ALL of that text in the accessible name, and reports the link. The owner
+  // approved the name "View Role: {title}" (OD-2026-11-10-01). A finding is set aside ONLY when the reported node
+  //   - is itself that link (not a descendant of it, not another control in the list), and
+  //   - links to a Job the public API lists, and its name AS CHROMIUM COMPUTES IT is exactly "View Role: " + that
+  //     Job's title from the API, and its one visible heading is that title, and its one visible call to action is
+  //     "View Role", and it contains no focusable descendant.
+  // Any other finding - a row whose name or label drifted, any other control inside the list, anything inside a row -
+  // stays a gate failure. The negative controls below prove each of those.
+  //
+  // WHAT THIS IS NOT. Setting the finding aside records that the row carries the APPROVED COPY; it is not a WCAG
+  // 2.5.3 conformance determination, and an automated rule passing or being set aside proves no conformance. The
+  // manual reading (the name starts with the visible call to action and contains the visible title; the facts are
+  // supplementary text of the same link) and the speech-input and screen-reader checks are in the C5 record and
+  // remain OPEN until a person performs them.
   const cdp = await page.context().newCDPSession(page);
   const computedName = async (locator) => {
     await locator.evaluate((el) => el.setAttribute('data-c5-name-probe', ''));
@@ -102,6 +86,128 @@ test('C5-06 axe-core (WCAG 2.0/2.1/2.2 A and AA) on every public route at 360 an
     await locator.evaluate((el) => el.removeAttribute('data-c5-name-probe'));
     return nodes[0]?.name?.value ?? null;
   };
+  const listedJobs = (await publishedJobs()).jobs.map((j) => ({ slug: j.slug, title: j.title }));
+  /** The rule's raw findings in the current page, each with the DOM facts the exception is judged on. */
+  const rawLabelFindings = () => page.evaluate(async () => {
+    const result = await window.axe.run(document, { runOnly: { type: 'rule', values: ['label-content-name-mismatch'] } });
+    const text = (el) => el.innerText.replace(/\s+/g, ' ').trim();
+    let index = 0;
+    return result.violations.flatMap((v) => v.nodes.map((n) => {
+      const el = n.target.length === 1 && typeof n.target[0] === 'string' ? document.querySelector(n.target[0]) : null;
+      const isRowLink = Boolean(el) && el.matches('ul[data-testid="careers-job-list"] > li > a[href]');
+      const probe = el ? String(index += 1) : null;
+      if (el) el.setAttribute('data-c5-label-node', probe);
+      return {
+        rule: v.id,
+        impact: n.impact,
+        target: n.target.map(String).join(' '),
+        html: n.html.slice(0, 400),
+        failureSummary: n.failureSummary,
+        checks: [...n.any, ...n.all, ...n.none].map((c) => ({ id: c.id, message: c.message, data: c.data ?? null })),
+        probe,
+        row: isRowLink ? {
+          href: el.getAttribute('href'),
+          headings: [...el.querySelectorAll('h1, h2, h3, h4, h5, h6')].map(text),
+          callsToAction: [...el.querySelectorAll(':scope > [aria-hidden="true"]')].map(text),
+          focusableDescendants: el.querySelectorAll('a, button, input, select, textarea, summary, [tabindex], [role="button"], [role="link"]').length,
+        } : null,
+      };
+    }));
+  });
+  /** Judges each raw finding: `approved` is true only for an exact reviewed JobRow link (see above). */
+  const labelFindings = async () => {
+    const found = await rawLabelFindings();
+    for (const n of found) {
+      const reasons = [];
+      if (!n.row) reasons.push('the reported node is not a Careers JobRow link (ul[data-testid="careers-job-list"] > li > a)');
+      else {
+        const job = listedJobs.find((j) => n.row.href === `/careers/${j.slug}`);
+        n.row.computedName = await computedName(page.locator(`[data-c5-label-node="${n.probe}"]`));
+        if (!job) reasons.push(`its href ${n.row.href} is not a Job the public API lists`);
+        else {
+          n.row.apiTitle = job.title;
+          if (n.row.computedName !== `View Role: ${job.title}`) reasons.push(`its computed name is ${JSON.stringify(n.row.computedName)}, not "View Role: " + the Job's title`);
+          if (n.row.headings.length !== 1 || n.row.headings[0] !== job.title) reasons.push(`its visible heading is ${JSON.stringify(n.row.headings)}, not the Job's title`);
+        }
+        if (n.row.callsToAction.length !== 1 || n.row.callsToAction[0] !== 'View Role') reasons.push(`its visible call to action is ${JSON.stringify(n.row.callsToAction)}, not "View Role"`);
+        if (n.row.focusableDescendants !== 0) reasons.push('it contains a focusable descendant');
+      }
+      n.approved = reasons.length === 0;
+      n.notApprovedBecause = reasons;
+    }
+    await page.evaluate(() => document.querySelectorAll('[data-c5-label-node]').forEach((el) => el.removeAttribute('data-c5-label-node')));
+    return found;
+  };
+  const gating = (found) => found.filter((n) => !n.approved);
+
+  const labelInName = {};
+  for (const [name, pathname] of ROUTES) {
+    for (const width of [360, 1440]) {
+      await page.setViewportSize({ width, height: width === 360 ? 800 : 900 });
+      await openRoute(page, pathname);
+      await page.addScriptTag({ path: AXE_PATH });
+      labelInName[`${name}@${width}`] = await labelFindings();
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openRoute(page, '/');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.addScriptTag({ path: AXE_PATH });
+  labelInName['mobile-menu-open@390'] = await labelFindings();
+
+  // ------------------------------------------------------------------------------------------ negative controls
+  // Each puts ONE regression into the live DOM, runs the same rule and the same judgement, and restores the DOM.
+  // `gating` must then contain the injected node: the gate would fail. None is ever left in place.
+  const controls = {};
+  const control = async (id, description, inject, expectTarget) => {
+    await page.evaluate(inject.fn, inject.arg);
+    const found = await labelFindings();
+    await page.evaluate(() => {
+      document.querySelectorAll('[data-c5-injected]').forEach((el) => el.remove());
+      document.querySelectorAll('[data-c5-restore-label]').forEach((el) => {
+        const old = el.getAttribute('data-c5-restore-label');
+        if (old === '__c5_none__') el.removeAttribute('aria-label');
+        else el.setAttribute('aria-label', old);
+        el.removeAttribute('data-c5-restore-label');
+      });
+    });
+    const failing = gating(found);
+    controls[id] = { description, injected: inject.arg ?? null, gateWouldFail: failing.length > 0, caught: failing.filter(expectTarget).map((n) => ({ target: n.target, html: n.html.slice(0, 200), isJobRowLink: Boolean(n.row), computedName: n.row?.computedName ?? null, notApprovedBecause: n.notApprovedBecause })), allGating: failing.map((n) => n.target), approvedCount: found.length - failing.length };
+  };
+  // (c) the Menu toggle's old name is put back (the round-2 control, now through the same judgement).
+  await page.keyboard.press('Escape');
+  await control('menu-name-regression', 'aria-label="Open navigation" on the Menu toggle (visible label "Menu")', {
+    fn: () => { const t = document.querySelector('header button[aria-controls]'); t.setAttribute('data-c5-restore-label', t.getAttribute('aria-label') ?? '__c5_none__'); t.setAttribute('aria-label', 'Open navigation'); },
+  }, (n) => /button/.test(n.html) && n.html.includes('Open navigation'));
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRoute(page, '/careers');
+  await page.addScriptTag({ path: AXE_PATH });
+  const careersBaseline = await labelFindings();
+  const relabelFirstRow = (label) => { const a = document.querySelector('ul[data-testid="careers-job-list"] > li > a'); a.setAttribute('data-c5-restore-label', a.getAttribute('aria-label') ?? '__c5_none__'); a.setAttribute('aria-label', label); };
+  // (a) a regression in a JobRow's name: unrelated wording, the title dropped, another role's title, the name removed.
+  await control('jobrow-name-unrelated', 'the first JobRow link named "Open role" (neither the call to action nor the title)', { fn: relabelFirstRow, arg: 'Open role' }, (n) => Boolean(n.row) && n.row.computedName === 'Open role');
+  await control('jobrow-name-without-title', 'the first JobRow link named "View Role" only', { fn: relabelFirstRow, arg: 'View Role' }, (n) => Boolean(n.row) && n.row.computedName === 'View Role');
+  const otherTitle = listedJobs.at(-1).title;
+  await control('jobrow-name-other-role', "the first JobRow link named with ANOTHER role's title", { fn: relabelFirstRow, arg: `View Role: ${otherTitle} (QA wrong)` }, (n) => Boolean(n.row) && n.row.computedName === `View Role: ${otherTitle} (QA wrong)`);
+  await control('jobrow-visible-cta-changed', 'the first JobRow\'s visible call to action changed to "View Role now" (name unchanged)', {
+    fn: () => { const cta = document.querySelector('ul[data-testid="careers-job-list"] > li > a > [aria-hidden="true"]'); const marker = document.createElement('span'); marker.setAttribute('data-c5-injected', ''); marker.textContent = ' now'; cta.append(marker); },
+  }, (n) => Boolean(n.row) && n.notApprovedBecause.some((r) => r.includes('call to action')));
+  // (b) an unrelated mismatched control INSIDE the Careers list is not exempted: a button in a list item, a link that
+  // is not a role, and a control inside a row link (which also withdraws that row's own exception).
+  await control('unrelated-button-in-list', 'a button "Save role" named "Dismiss" inside a Careers list item', {
+    fn: () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-c5-injected', ''); b.setAttribute('aria-label', 'Dismiss'); b.textContent = 'Save role'; document.querySelector('ul[data-testid="careers-job-list"] > li').append(b); },
+  }, (n) => !n.row && n.html.includes('Dismiss'));
+  await control('non-role-link-in-list', 'a list item > link to /about named "Elsewhere" with the visible text "About Valida" appended to the Careers list', {
+    fn: () => { const li = document.createElement('li'); li.setAttribute('data-c5-injected', ''); const a = document.createElement('a'); a.href = '/about'; a.setAttribute('aria-label', 'Elsewhere'); a.textContent = 'About Valida'; li.append(a); document.querySelector('ul[data-testid="careers-job-list"]').append(li); },
+  }, (n) => Boolean(n.row) && n.row.href === '/about');
+  await control('control-inside-row', 'a focusable role="button" "Details" named "Close" inside the first JobRow link', {
+    fn: () => { const s = document.createElement('span'); s.setAttribute('data-c5-injected', ''); s.setAttribute('role', 'button'); s.tabIndex = 0; s.setAttribute('aria-label', 'Close'); s.textContent = 'Details'; document.querySelector('ul[data-testid="careers-job-list"] > li > a > div').append(s); },
+  }, (n) => (!n.row && n.html.includes('Close')) || (Boolean(n.row) && n.notApprovedBecause.includes('it contains a focusable descendant')));
+  // The DOM is as it was: the same findings, all approved, as before the controls.
+  const careersAfterControls = await labelFindings();
+
+  // The approved names themselves, as Chromium computes them (CDP Accessibility).
   const names = {};
   await page.setViewportSize({ width: 390, height: 844 });
   await openRoute(page, '/');
@@ -121,9 +227,38 @@ test('C5-06 axe-core (WCAG 2.0/2.1/2.2 A and AA) on every public route at 360 an
   await openRoute(page, `/careers/${C5_SLUGS.open}/apply`);
   const back = page.locator('main a[href^="/careers/"]').first();
   names.applyBack = { name: await computedName(back), visible: (await back.innerText()).trim() };
-  record('C5-06', { observation: 'REAL (axe-core in Chromium; names from the Chromium accessibility tree)', axeVersion: results.home[360].version, tags: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'], results, labelInName: { rule: 'label-content-name-mismatch (axe experimental; WCAG 2.5.3, Level A)', gating: 'every node except Careers role links, which are gated by the explicit name checks (names.careersRows)', decision: 'OD-2026-11-10-01', results: labelInName, negativeControl: { injected: 'aria-label="Open navigation" on the Menu toggle', detected: negativeControl } }, names });
-  expect.soft(Object.entries(labelInName).map(([k, v]) => [k, v.filter((x) => !x.careersRow)]).filter(([, v]) => v.length).map(([k, v]) => `${k}: ${v.map((x) => x.target).join(', ')}`), 'WCAG 2.5.3 label in name (axe)').toEqual([]);
-  expect.soft(negativeControl.length, 'negative control: a reintroduced mismatch is detected').toBeGreaterThan(0);
+  const summariseFindings = (found) => ({ reported: found.length, approvedJobRowLinks: found.filter((n) => n.approved).length, gating: gating(found).length });
+  record('C5-06', {
+    observation: 'REAL (axe-core in Chromium; names from the Chromium accessibility tree)',
+    axeVersion: results.home[360].version,
+    tags: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
+    results,
+    labelInName: {
+      rule: 'label-content-name-mismatch (axe experimental; WCAG 2.5.3, Level A)',
+      decision: 'OD-2026-11-10-01',
+      gating: 'every finding gates EXCEPT a finding on an exact reviewed Careers JobRow link: the reported node is ul[data-testid="careers-job-list"] > li > a, it links to a Job the public API lists, Chromium computes its name as "View Role: " + that Job\'s API title, its one visible heading is that title, its one visible call to action is "View Role", and it has no focusable descendant',
+      interpretation: 'Setting those findings aside records that the row carries the copy the owner approved (OD-2026-11-10-01). It is NOT a WCAG 2.5.3 conformance determination and proves no conformance: the rule is a heuristic, the manual reading is in docs/qa/C5_INTEGRATED_SITE_QUALITY.md, and speech-input and screen-reader verification remain OPEN.',
+      listedJobs,
+      summary: Object.fromEntries(Object.entries(labelInName).map(([k, v]) => [k, summariseFindings(v)])),
+      rawFindings: labelInName,
+      negativeControls: { baselineOnCareers: summariseFindings(careersBaseline), afterControlsOnCareers: summariseFindings(careersAfterControls), controls },
+    },
+    names,
+  });
+  expect.soft(Object.entries(labelInName).map(([k, v]) => [k, gating(v)]).filter(([, v]) => v.length).map(([k, v]) => `${k}: ${v.map((x) => `${x.target} (${x.notApprovedBecause.join('; ')})`).join(', ')}`), 'WCAG 2.5.3 label in name (axe): findings that are not exact reviewed JobRow links').toEqual([]);
+  // The exception is used only where the reviewed rows are: on Careers, at most once per listed Job.
+  for (const [key, found] of Object.entries(labelInName)) {
+    const approved = found.filter((n) => n.approved);
+    if (!key.startsWith('careers@')) expect.soft(approved.map((n) => n.target), `${key}: no exception outside Careers`).toEqual([]);
+    else expect.soft(new Set(approved.map((n) => n.row.href)).size === approved.length && approved.length <= listedJobs.length, `${key}: at most one exception per listed Job`).toBe(true);
+  }
+  for (const [id, c] of Object.entries(controls)) {
+    expect.soft(c.gateWouldFail, `negative control ${id}: the gate fails`).toBe(true);
+    expect.soft(c.caught.length, `negative control ${id}: the injected node is among the gate failures`).toBeGreaterThan(0);
+  }
+  expect.soft(Object.keys(controls).sort()).toEqual(['control-inside-row', 'jobrow-name-other-role', 'jobrow-name-unrelated', 'jobrow-name-without-title', 'jobrow-visible-cta-changed', 'menu-name-regression', 'non-role-link-in-list', 'unrelated-button-in-list']);
+  expect.soft(summariseFindings(careersAfterControls), 'the controls left nothing behind').toEqual(summariseFindings(careersBaseline));
+  expect.soft(gating(careersBaseline), 'Careers before the controls').toEqual([]);
   expect.soft(names.menuClosed).toEqual({ name: 'Menu', expanded: 'false', visible: 'Menu' });
   expect.soft(names.menuOpen).toEqual({ name: 'Menu', expanded: 'true', visible: 'Menu' });
   expect.soft(names.careersRows.length, 'multiple jobs listed').toBeGreaterThanOrEqual(2);

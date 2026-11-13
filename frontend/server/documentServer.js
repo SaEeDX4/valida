@@ -100,9 +100,11 @@ function send(res, method, status, headers, body = '') {
 
 /**
  * The request handler. `config` is the build's SEO configuration
- * ({ indexing, siteOrigin }); `jobs` the server-side Jobs client.
+ * ({ indexing, siteOrigin }); `jobs` the server-side Jobs client;
+ * `jobApiPreloadBase` the browser-facing API base for the Job preload hint
+ * (renderDocument.js jobApiPreloadTag), null for none.
  */
-export async function createDocumentHandler({ distDir, config, jobs, log = () => {} }) {
+export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, log = () => {} }) {
   const distRoot = await realpath(distDir);
   const template = await loadTemplate(distRoot);
 
@@ -190,7 +192,7 @@ export async function createDocumentHandler({ distDir, config, jobs, log = () =>
         return;
       }
 
-      const document = await renderDocument(pathname, { template, config, jobs });
+      const document = await renderDocument(pathname, { template, config, jobs, jobApiPreloadBase });
       routeKind = document.route.kind;
       send(res, method, document.status, document.headers, document.body);
     } catch {
@@ -201,8 +203,8 @@ export async function createDocumentHandler({ distDir, config, jobs, log = () =>
   };
 }
 
-export async function startDocumentServer({ distDir, config, jobs, host = '127.0.0.1', port = 4173, log }) {
-  const handle = await createDocumentHandler({ distDir, config, jobs, log });
+export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, host = '127.0.0.1', port = 4173, log }) {
+  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, log });
   const server = createServer((req, res) => {
     handle(req, res);
   });

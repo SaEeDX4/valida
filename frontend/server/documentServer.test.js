@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveSeoConfig } from '../src/seo/siteConfig.js';
 import { startDocumentServer } from './documentServer.js';
 import { createJobsClient, normalizeApiOrigin } from './jobsClient.js';
-import { canonicalRedirect, checkTemplate, matchRoute } from './renderDocument.js';
+import { canonicalRedirect, checkTemplate, jobApiPreloadTag, matchRoute, resolveJobApiPreloadBase } from './renderDocument.js';
 
 /**
  * C4 — the document server over real HTTP: a temporary build directory, a
@@ -70,12 +70,13 @@ let tmp;
 let dist;
 const servers = [];
 
-async function documentServer(seo) {
+async function documentServer(seo, extra = {}) {
   const server = await startDocumentServer({
     distDir: dist,
     config: resolveSeoConfig(seo),
     jobs: createJobsClient({ apiOrigin, timeoutMs: 2_000 }),
     port: 0,
+    ...extra,
   });
   servers.push(server);
   return `http://127.0.0.1:${server.address().port}`;
@@ -284,6 +285,123 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
       expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
       expect(headOf(html)).not.toMatch(/rel="canonical"|og:|application\/ld\+json/);
     }
+  });
+});
+
+/**
+ * C5 — the Job API preload hint (renderDocument.js jobApiPreloadTag). The servers above run without it
+ * (jobApiPreloadBase null, the default), so every test above is also the "hint off" behaviour, unchanged.
+ */
+describe('C5: Job API preload hint on Job Detail and Apply documents', () => {
+  const BROWSER_API = 'https://api.qa-browser.example';
+  const PRELOADS = /<link rel="preload"[^>]*>/g;
+  let hinted;
+  let hintedReview;
+  let sameOrigin;
+  beforeAll(async () => {
+    hinted = await documentServer({ siteUrl: SITE, allowIndexing: 'true' }, { jobApiPreloadBase: BROWSER_API });
+    hintedReview = await documentServer({ siteUrl: SITE }, { jobApiPreloadBase: BROWSER_API });
+    sameOrigin = await documentServer({ siteUrl: SITE, allowIndexing: 'true' }, { jobApiPreloadBase: '' });
+  });
+  const preloadsOf = (html) => html.match(PRELOADS) ?? [];
+  const tagFor = (base, slug) => `<link rel="preload" as="fetch" crossorigin="anonymous" href="${base}/api/v1/jobs/${slug}">`;
+
+  it('an open or closed Job, Detail and Apply: exactly one hint, in the head, for that Job\'s public GET on the BROWSER-facing API base', async () => {
+    for (const [pathname, slug] of [['/careers/qa-open', 'qa-open'], ['/careers/qa-open/apply', 'qa-open'], ['/careers/qa-closed', 'qa-closed'], ['/careers/qa-closed/apply', 'qa-closed']]) {
+      const html = await (await get(hinted, pathname)).text();
+      expect(preloadsOf(html), pathname).toEqual([tagFor(BROWSER_API, slug)]);
+      expect(preloadsOf(headOf(html)), pathname).toHaveLength(1);
+      // Never the server's own API origin (which may be an internal address).
+      expect(html, pathname).not.toContain(apiOrigin);
+    }
+    const relative = await (await get(sameOrigin, '/careers/qa-open')).text();
+    expect(preloadsOf(relative)).toEqual([tagFor('', 'qa-open')]);
+  });
+
+  it('an unknown Job (the API answered "not found"), Detail and Apply: 404 with the same single hint - identical whatever the reason', async () => {
+    for (const pathname of ['/careers/qa-no-such-role', '/careers/qa-no-such-role/apply']) {
+      const response = await get(hinted, pathname);
+      const html = await response.text();
+      expect(response.status, pathname).toBe(404);
+      expect(preloadsOf(html), pathname).toEqual([tagFor(BROWSER_API, 'qa-no-such-role')]);
+      expect(headOf(html), pathname).toContain('<meta name="robots" content="noindex, follow">');
+    }
+  });
+
+  it('no hint anywhere else: static routes, the 404 page, a slug outside the contract (API not asked), malformed data and API failure (503)', async () => {
+    for (const [pathname, status] of [
+      ['/', 200], ['/about', 200], ['/careers', 200], ['/privacy', 200], ['/legal', 200],
+      ['/careers/not%20a%20slug', 404], ['/careers/not%20a%20slug/apply', 404], ['/careers/qa-open/apply/extra', 404], ['/qa-no-such-page', 404],
+      ['/careers/qa-malformed', 503], ['/careers/qa-bad-eligibility', 503],
+    ]) {
+      const before = apiRequests.length;
+      const response = await get(hinted, pathname);
+      expect(response.status, pathname).toBe(status);
+      expect(preloadsOf(await response.text()), pathname).toEqual([]);
+      if (pathname.includes('%20')) expect(apiRequests.length, `${pathname}: the API was not asked`).toBe(before);
+    }
+    apiMode = 'down';
+    try {
+      for (const pathname of ['/careers/qa-open', '/careers/qa-open/apply', '/careers/qa-no-such-role']) {
+        const response = await get(hinted, pathname);
+        expect(response.status, pathname).toBe(503);
+        expect(preloadsOf(await response.text()), pathname).toEqual([]);
+      }
+    } finally {
+      apiMode = 'ok';
+    }
+  });
+
+  it('the hint changes nothing else: status, headers and every other byte of the document equal the unhinted server\'s', async () => {
+    for (const [withHint, without] of [[hinted, indexed], [hintedReview, review]]) {
+      for (const pathname of ['/', '/careers', '/careers/qa-open', '/careers/qa-open/apply', '/careers/qa-closed', '/careers/qa-eligible', '/careers/qa-no-such-role', '/careers/qa-no-such-role/apply', '/careers/qa-malformed', '/qa-no-such-page']) {
+        const a = await get(withHint, pathname);
+        const b = await get(without, pathname);
+        const [htmlA, htmlB] = await Promise.all([a.text(), b.text()]);
+        expect(a.status, pathname).toBe(b.status);
+        for (const header of ['content-type', 'cache-control', 'x-robots-tag', 'retry-after', 'x-content-type-options']) expect(a.headers.get(header), `${pathname} ${header}`).toBe(b.headers.get(header));
+        expect(htmlA.replace(PRELOADS, ''), pathname).toBe(htmlB);
+      }
+    }
+    // A review build keeps "noindex, nofollow" with the hint present.
+    const reviewJob = await get(hintedReview, '/careers/qa-open');
+    const html = await reviewJob.text();
+    expect(preloadsOf(html)).toEqual([tagFor(BROWSER_API, 'qa-open')]);
+    expect(headOf(html)).toContain('<meta name="robots" content="noindex, nofollow">');
+    expect(reviewJob.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
+  it('an encoded spelling of a valid slug is hinted by its decoded slug (the URL the page requests); HEAD carries no body', async () => {
+    const encoded = await rawGet(hinted, '/careers/qa-%6fpen');
+    expect(encoded.status).toBe(200);
+    expect(preloadsOf(encoded.body)).toEqual([tagFor(BROWSER_API, 'qa-open')]);
+    const head = await get(hinted, '/careers/qa-open', { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe('');
+  });
+
+  it('pure helpers: when the hint is written, and with which base', () => {
+    const ok = { status: 200, job: JOBS['qa-open'] };
+    const jobRoute = { kind: 'job', slug: 'qa-open' };
+    expect(jobApiPreloadTag({ route: jobRoute, resolved: ok, base: BROWSER_API })).toBe(tagFor(BROWSER_API, 'qa-open'));
+    expect(jobApiPreloadTag({ route: { kind: 'apply', slug: 'qa-open' }, resolved: ok, base: '' })).toBe(tagFor('', 'qa-open'));
+    // Off by default and for anything that is not a plain origin (nothing from a base can reach the markup unchecked).
+    for (const base of [null, undefined, 0, 'api.example', 'javascript:alert(1)', 'https://api.example/"><script>', 'https://api.example/path', 'https://user:pw@api.example', 'https://api.example/', ' https://api.example']) {
+      expect(jobApiPreloadTag({ route: jobRoute, resolved: ok, base }), String(base)).toBe('');
+    }
+    // Only an answered read (the Job, or "not found"), on the two Job routes, with a slug of the public contract.
+    expect(jobApiPreloadTag({ route: jobRoute, resolved: { status: 404 }, base: BROWSER_API })).toBe(tagFor(BROWSER_API, 'qa-open'));
+    expect(jobApiPreloadTag({ route: jobRoute, resolved: { status: 503 }, base: BROWSER_API })).toBe('');
+    expect(jobApiPreloadTag({ route: jobRoute, resolved: { status: 200 }, base: BROWSER_API })).toBe('');
+    expect(jobApiPreloadTag({ route: { kind: 'static', path: '/careers' }, resolved: ok, base: BROWSER_API })).toBe('');
+    expect(jobApiPreloadTag({ route: { kind: 'notFound' }, resolved: ok, base: BROWSER_API })).toBe('');
+    for (const slug of ['QA-Open', 'qa open', '../admin', 'qa-open%2F..%2Fapplications', '%E0%A4%A', 'a"b', '']) {
+      expect(jobApiPreloadTag({ route: { kind: 'job', slug }, resolved: ok, base: BROWSER_API }), slug).toBe('');
+    }
+    expect(resolveJobApiPreloadBase('')).toBe('');
+    expect(resolveJobApiPreloadBase('https://api.example')).toBe('https://api.example');
+    expect(resolveJobApiPreloadBase('http://127.0.0.1:4000/api/v1')).toBe('http://127.0.0.1:4000');
+    for (const bad of [undefined, null, 'nonsense', 'ftp://api.example', 'https://api.example/x', 'https://api.example?x=1']) expect(resolveJobApiPreloadBase(bad), String(bad)).toBeNull();
   });
 });
 

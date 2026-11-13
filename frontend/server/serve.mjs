@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { CANONICAL_ORIGIN, resolveSeoConfig } from '../src/seo/siteConfig.js';
 import { startDocumentServer } from './documentServer.js';
 import { createJobsClient } from './jobsClient.js';
+import { resolveJobApiPreloadBase } from './renderDocument.js';
 
 /**
  * Serves a production build with the C4 document behaviour (documentServer.js).
@@ -20,6 +21,10 @@ import { createJobsClient } from './jobsClient.js';
  *   --api-origin <url>    origin of the Valida API for the server's own reads;
  *                         default: the origin compiled into the build
  *                         (VITE_API_BASE_URL). Required when that is empty.
+ *   --no-job-preload      do not write the Job API preload hint into Job
+ *                         Detail and Apply documents (renderDocument.js
+ *                         jobApiPreloadTag). The hint always uses the API
+ *                         base compiled into the build, never --api-origin.
  *
  * The SEO configuration (canonical origin, indexable or not) is NOT taken from
  * this process's environment: it is read from the build's valida-seo.json, so
@@ -37,6 +42,7 @@ const { values } = parseArgs({
     host: { type: 'string', default: '127.0.0.1' },
     port: { type: 'string', default: '4173' },
     'api-origin': { type: 'string' },
+    'no-job-preload': { type: 'boolean', default: false },
     quiet: { type: 'boolean', default: false },
   },
 });
@@ -70,7 +76,8 @@ const port = Number(values.port);
 if (!Number.isInteger(port) || port < 0 || port > 65535) fail('--port must be a port number');
 
 const log = values.quiet ? () => {} : (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`);
-const server = await startDocumentServer({ distDir, config, jobs, host: values.host, port, log });
+const jobApiPreloadBase = values['no-job-preload'] ? null : resolveJobApiPreloadBase(manifest.apiBaseUrl);
+const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, host: values.host, port, log });
 const address = server.address();
 process.stdout.write(
   `READY ${JSON.stringify({
@@ -80,6 +87,7 @@ process.stdout.write(
     indexing: config.indexing,
     siteOrigin: config.siteOrigin,
     apiOrigin: jobs.origin,
+    jobApiPreload: jobApiPreloadBase === null ? null : `${jobApiPreloadBase}/api/v1/jobs/{slug}`,
   })}\n`,
 );
 

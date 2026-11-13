@@ -6,7 +6,7 @@
 | Baseline | `389c421a72fb090dc2c08c8251b664bada73d9a0` (GitHub `main` = `c4-work`) |
 | Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227`, `777c1e6` and `fffc252`. Test code only |
 | Fixes | `24a351d` F1, `22344eb` F2, `4807dda` F3, `72a9d52` F4. Frontend CSS and two data attributes; the backend is unchanged |
-| Status | **READY FOR REVIEW (round 2, §8).** Open: mobile LCP on Job Detail and Apply (O2, OD-C5-3), OD-C5-2 and OD-C5-4, the Doc 06 synchronisation, and the manual checklist. C5 is not accepted: acceptance is pending independent review and the owner's approval |
+| Status | **READY FOR REVIEW (round 3, §9), with one automated gate failing: C5-14 in complete runs (§9.7).** Round 3 narrowed the Careers label-in-name exception and added the Job API preload hint; mobile lab LCP on Job Detail, Apply and the missing Job is now inside 2.5 s (O2). Open: C5-14, OD-C5-2 and OD-C5-4, the Doc 06 synchronisation, and the manual checklist. The round-2 status was: READY FOR REVIEW (round 2, §8), with mobile LCP open. C5 is not accepted: acceptance is pending independent review and the owner's approval |
 | Constraints kept | Local work only. Nothing pushed, deployed or sent; no settings changed. Production candidate acknowledgements stay disabled. The first genuine Cybersecurity Specialist vacancy stays Draft, its eligible work countries OPEN. Approved copy, the social card, job eligibility and the publication rules are unchanged |
 
 Everything below was observed in **Chromium**, through Playwright, on one Linux machine. Nothing here is a claim about other browsers, real devices, real screen readers or production field data. Those are in §6, the manual checklist, and stay open until a person runs them.
@@ -381,3 +381,230 @@ npx playwright test --config playwright.c5.config.js c5/c5-99-hold.e2e.js
 | 6 | **Text size.** Windows Text size 200% in Edge; Android font size at maximum | Nothing clipped; large headings may break inside a word |
 
 The full list, including the other browsers, contrast themes, reduced motion and the C6/C7 items, is §6 (M1–M12). All of it stays **OPEN** until performed. In §6, M3 is now expected to pass, and the set-up there drops its database in the same way.
+
+## 9. Round 3 — focused corrections and remaining-gate evidence (2026-11-13)
+
+From `725cb53` (tree `48a510b`), on Astra's instruction "C5 Round 3: focused corrections and remaining-gate evidence". The 22 earlier C5 commits and the round-1 and round-2 evidence are unchanged. Sections 1–8 are kept as written; where round 3 changes a statement, it says so here.
+
+**Status, kept separate:**
+
+| | |
+| --- | --- |
+| Implementation | **Complete** for the two round-3 corrections (§9.1, §9.2) |
+| Verification | **Passed, with one exception.** Everything automated and local passed except **C5-14 (reduced motion), which failed in both complete runs** (§9.7, open). **Not performed:** every manual check in §9.6 and §6 |
+| Independent review, owner acceptance | **Pending.** C5 is not accepted |
+
+| Commit | Kind | Subject |
+| --- | --- | --- |
+| `788e0a6` | test | The label-in-name exception covers only exact reviewed JobRow links; negative controls |
+| `5af9893` | **product (C4 document server)** | The document server hints the Job API read on Job Detail and Apply documents |
+| `f50e7f8` | test | C5-22 observes the hint in a browser; a no-preload comparison run |
+| `98a8000` | docs | The hint in the READMEs and the C4 SEO implementation record |
+| `8049060` | test | A preloaded Job read is listed as an API request in the critical path |
+| `b5ec779`, `ade4f36` | test | The motion probe records what is running and where (the gate is unchanged) |
+
+### 9.1 The Careers exception in C5-06, narrowed
+
+**The finding.** C5-06 set aside every `label-content-name-mismatch` finding whose node was anywhere inside `[data-testid="careers-job-list"]`. A mismatched button, a second link or anything nested in a row would have been excused with the rows.
+
+**The correction.** A finding is set aside only when **all** of these hold for the reported node:
+
+1. it is itself a JobRow link: `ul[data-testid="careers-job-list"] > li > a`, not a descendant of one and not another control in the list;
+2. its `href` is `/careers/{slug}` of a Job the public API lists at that moment;
+3. the name Chromium computes for it is exactly `View Role: ` + that Job's title **from the API** (not from the page);
+4. its one visible heading is that title, and its one visible call to action is `View Role`;
+5. it contains no focusable descendant.
+
+Everything else gates. The exception may be used only on Careers and at most once per listed Job; the case asserts both.
+
+**Result at `8049060` and `b5ec779`.** The rule reported 2 nodes on Careers at 360 and at 1440 (the two listed Jobs' rows) and none on the other 11 routes or with the menu open. All 4 findings met the five conditions. Gate failures: 0.
+
+**Negative controls.** Each puts one regression into the live page, runs the same rule and the same judgement, and restores the page. Each must produce a gate failure that names the injected node.
+
+| Control | Injected | Gate fails | Why it is not excused |
+| --- | --- | --- | --- |
+| JobRow name, unrelated | first row named "Open role" | yes | computed name is not "View Role: " + the title |
+| JobRow name, title dropped | first row named "View Role" | yes | the same |
+| JobRow name, another role's title | first row named with the other Job's title | yes | the same |
+| JobRow visible label changed | the visible call to action reads "View Role now" | yes | the visible call to action is not "View Role" |
+| Unrelated button in the list | `<button aria-label="Dismiss">Save role</button>` in a list item | yes | not a JobRow link |
+| Non-role link in the list | a list item > link to `/about`, named "Elsewhere", showing "About Valida" | yes | its `href` is not a listed Job |
+| Control inside a row | a focusable `role="button"` named "Close", showing "Details", inside the first row | yes | not a JobRow link; the row itself also loses its exception |
+| Menu toggle (round 2's control) | `aria-label="Open navigation"` | yes | not a JobRow link |
+
+After the controls the page reports the same 2 findings, both excused, as before them.
+
+**Raw findings retained.** `C5-06.json` → `labelInName.rawFindings` keeps every node axe reported on every route: target, HTML, impact, failure summary, the rule's checks with their data, the row facts and the computed name. `negativeControls` keeps what each control caught.
+
+**How the whole-row link is read, and what this is not.**
+
+- *What axe says.* The rule compares the link's whole visible text (title, the role's facts, "View Role") with its name, and reports the link because the facts are not in the name. Lighthouse's audit uses the same heuristic and reports the same two links.
+- *The manual reading.* The name is "View Role: {title}". It begins with the visible call to action and contains the visible title. The role's facts (location, arrangement, hours, pay) are visible text of the same link and are **not** in its name. The name is meant to let a speech-input user say "View Role" or the title; whether speech input reaches the link that way, and whether a screen reader exposes the facts inside the link, has not been observed by anyone.
+- *What is approved.* The owner approved that **copy** in OD-2026-11-10-01.
+- *What is not established.* Whether that satisfies WCAG 2.5.3 (Level A) is a conformance judgement. It is **not made here**. An automated rule passing, or one of its findings being set aside, proves no conformance. The checks that would inform it — speech input (M3) and a screen reader (M1) on the Careers list — are **open** (§9.6).
+
+### 9.2 Mobile LCP: the Job API read is hinted by the document server
+
+**The cause (unchanged from §8.3).** The LCP element on Job Detail, Apply and the missing Job is the page's `h1`. It is rendered only after `GET /api/v1/jobs/{slug}` answers, and that request started only after the script had downloaded and run: about 0.7 s on the mobile profile.
+
+**The change (`5af9893`).** On those documents the server writes one line after the head metadata:
+
+`<link rel="preload" as="fetch" crossorigin="anonymous" href="{API}/api/v1/jobs/{slug}">`
+
+The browser makes the request while the script is still downloading; the page's own `fetch` is then handed that response. Nothing in the page's code changed: `frontend/src` is untouched, and the page still decides its state from that request's own outcome.
+
+| Question in the instruction | Answer | Evidence |
+| --- | --- | --- |
+| The correct public GET endpoint, safely encoded | Exactly the URL `jobsApi.js` requests: the same path and `encodeURIComponent`. Written only for a slug that passes the public slug contract (`[a-z0-9-]`, at most 120 characters), and HTML-escaped. The base must be empty or a plain origin (scheme, host, port); anything else writes no hint | Unit tests: 10 rejected bases (among them a `javascript:` URL, a base carrying markup, a path, credentials) and 7 rejected slugs |
+| Which origin | The **browser-facing** API base compiled into the build (`valida-seo.json` → `apiBaseUrl`), never the server's own `--api-origin`, which may be an internal address | Unit test: the server's origin does not appear in the document |
+| Fetch mode, CORS, credentials | The page's request is a CORS `GET` with `credentials: 'same-origin'` and no custom header; `crossorigin="anonymous"` requests the same mode. No preflight. The API allows the site's origin and sets no credentials | C5-22: `sec-fetch-mode: cors`; a cookie set for the API's host is **not sent**; no `Authorization` |
+| Reused, not duplicated | **One** network request for the Job per document load, initiated by the parser; Resource Timing shows one entry, initiator `link`; no "preloaded but not used" warning after 6 s | C5-22, on both origins, for Job Detail, Apply and a closed Job. C5-17: the request count per page is unchanged (11, 10, 10) |
+| Nothing stale afterwards | A client-side navigation (Job → Apply, Careers → a role) makes its own request. The API answers `no-store` | C5-22: 1, then 2, then 3 Job requests |
+| No preload of submissions, private data or other routes | Only `GET /api/v1/jobs/{slug}`, public data, on the two Job routes. No hint on Home, About, Careers, Privacy, Legal, the 404 page, a slug outside the contract, or any 503 | Unit tests; C5-22 lists every route's preloads on both origins |
+| Status codes, metadata, noindex, failure behaviour preserved | Status, `content-type`, `cache-control`, `x-robots-tag`, `retry-after` and every other byte of each document equal the unhinted server's, for indexable and review builds | Unit test comparing 10 paths on 2 pairs of servers; C4 SEO suite |
+| Correct when the hint is ignored | With the link removed before the browser sees it, the page makes its ordinary request and shows the same heading | C5-22 (Job Detail, Apply, missing Job); the whole comparison run with `--no-job-preload` |
+| Correct when the hinted request fails | The API unreachable from the browser, or answering 503: the error state, never the role and never "not found"; Try Again makes a new request and recovers | C5-22 |
+
+Chromium only. A browser that does not support or cannot match the hint makes the page's ordinary request; other engines are part of the open manual checks.
+
+### 9.3 The missing-Job page, investigated separately
+
+**Round 2's statement is corrected.** §8.3 says "a 404 preload is not reused, so the page asks again". That was an inference, and it was wrong. The round-2 experiment added the link in the lab proxy, and the proxy rewrote only status-200 documents; the missing-Job document is a 404 and passed through untouched. The experiment never placed a hint on that page, so its unchanged 2768 ms showed nothing about a preloaded 404. (§8.3 is kept as written; the proxy's source now states this limit.)
+
+**What the page waits for.** Request timing, mobile, without the hint (a typical run at `98a8000`):
+
+| Step | Start | End |
+| --- | --- | --- |
+| Document (404) | 0 | 583 |
+| Script and stylesheet | 610 | 1762 |
+| First paint: the loading state | — | 2028 (FCP) |
+| **Job API request (404)** | **2031** | **2633** |
+| `h1` "This role isn't available." painted (LCP) | — | 2668 |
+
+The LCP element is that `h1`. The whole delay after first paint is the one API round trip, which pays the profile's 562.5 ms latency. There is no other late resource.
+
+**What was tested.** With the hint also written on a document whose Job read the API answered with "not found", Chromium made **one** request for it (parser-initiated, 404) and handed that response to the page's `fetch`: the same not-found state, no second request, no unused-preload warning (C5-22, Detail and Apply).
+
+**What was done.** The hint's condition is "the server's own read of this URL was answered by the API": the Job (200) or "not found" (404). It is the same line, the same endpoint and the same rules; no rendering change, nothing concealed, and the page is still measured against the same threshold. Unknown, Draft and Archived Jobs all get the identical hint, so it tells them apart no more than the API does. A 503 gets none, so a struggling API receives no extra request.
+
+This was a one-condition extension of §9.2, not an architecture change, so no decision was needed to proceed. It is separable: restricting the condition to status 200 in `jobApiPreloadTag` removes it, at the cost of the missing-Job result below.
+
+### 9.4 Measurements (LAB) and verification
+
+**Conditions, identical for both columns.** One production build per run (`VITE_ALLOW_INDEXING=true`), the real backend, the lab proxy with immutable assets precompressed (Brotli), Playwright Chromium, a new browser context per sample (cold cache), mobile: 412×823, DPR 1.75, 4× CPU, Slow 4G (562.5 ms, 1474.56 kbit/s down); desktop: 1350×940, 40 ms, 10240 kbit/s. 5 samples per page, run back to back on the same machine on 2026-11-13. The only difference is `--no-job-preload`. The two runs' code is identical (`f50e7f8` and `98a8000` differ in three documentation files).
+
+These are **lab** figures. They are not field Core Web Vitals: Doc 16's p75 targets are field targets and need production traffic (M11, open).
+
+| LCP, ms (5 of 5 valid in every cell) | Without the hint: median / p75 / range | **With the hint**: median / p75 / range | Target |
+| --- | --- | --- | --- |
+| Job Detail, mobile | 2808 / 2812 / 2756–2840 — FAIL | **2160 / 2176 / 2100–2196 — PASS** | 2500 |
+| Apply, mobile | 2744 / 2760 / 2744–2768 — FAIL | **2172 / 2188 / 2092–2192 — PASS** | 2500 |
+| Missing Job, mobile | 2692 / 2716 / 2668–2792 — FAIL | **2116 / 2128 / 2092–2128 — PASS** | 2500 |
+| Home, mobile (no hint on this page) | 2100 / 2116 / 2056–2120 | 2052 / 2060 / 2000–2140 | 2500 |
+| About, mobile (no hint) | 2072 / 2084 / 2052–2084 | 2096 / 2096 / 2060–2128 | 2500 |
+| Careers, mobile (no hint) | 2100 / 2104 / 2080–2112 | 2068 / 2076 / 2024–2104 | 2500 |
+| Job Detail, desktop | 380 / 380 / 328–388 | 328 / 348 / 296–348 | 2500 |
+| Apply, desktop | 340 / 352 / 316–364 | 308 / 312 / 276–332 | 2500 |
+| Missing Job, desktop | 340 / 352 / 328–360 | 316 / 320 / 288–324 | 2500 |
+
+- The three failing pages improve by 0.57–0.64 s at p75 and now sit 0.31–0.37 s inside the target. The three pages without a hint moved by 8–56 ms in either direction, which is the run-to-run spread.
+- With the hint, LCP follows first paint by about 0.1 s: the Job's answer is already there when the script runs.
+- CLS and INP: PASS on every page in both runs (CLS p75 at most 0.0266; INP p75 24–80 ms, 5 of 5 valid on every interactive page; the missing Job has no scripted interaction).
+- Requests per page are the same in both runs.
+
+**No Chrome trace file was recorded** in any round. What is kept per sample is FCP, LCP and its element, CLS, long tasks, transfer by type and the start and end of each critical request.
+
+**Verification**, 2026-11-13 (the last commit that changes product code is `5af9893`; the last that changes a test's judgement is `8049060`):
+
+| Check | Result |
+| --- | --- |
+| Full C5 suite, run 1 at `8049060` (23 cases, Lighthouse included) | **21 passed, 1 skipped (the hold case), 1 FAILED: C5-14** (§9.7) |
+| Full C5 suite, run 2 at `b5ec779` (the motion probe records detail; nothing else differs) | **21 passed, 1 skipped, 1 FAILED: C5-14** again |
+| C5-17 in those two runs (hint on) | Every LCP, CLS and INP verdict PASS. Mobile LCP p75: Job Detail 2224 and 2148 ms, Apply 2128 and 2196 ms, missing Job 2096 and 2120 ms |
+| C5-06 | 0 axe violations on 12 routes × 2 widths and the open menu; label in name: 4 findings, all exact reviewed JobRow links; 8 of 8 negative controls fail the gate |
+| C5-22 | Passed in both runs (§9.2, §9.3) |
+| C5-19 Lighthouse 13.6.0, median Performance (run 1; run 2) | Home and Careers 100/100. Job Detail mobile **94; 92**, desktop 100. Apply mobile **95; 96**, desktop 100. Accessibility 100 on every page |
+| C4 SEO suite at `8049060` | **16 passed** |
+| `npm run verify:quality` at `8049060` | Budgets PASS: JS 111.6 KiB, CSS 8.8 KiB, fonts 109.7 KiB, Home 329.0 KiB. **1140 / 1140** unit tests in 43 files (6 new server tests) |
+| `npm run test:guards` at `8049060` | 36 / 36 |
+
+`b5ec779` and `ade4f36` change only `e2e/c5/c5Support.js` (what the motion probe records), so the SEO suite, the quality gate and the guards at `8049060` apply to the final commit.
+
+**Lighthouse's simulated LCP did not improve as the applied-throttling runs did, and this is not hidden.** Lighthouse estimates mobile LCP by simulation from an unthrottled load. Its figures in round 3: Job Detail 3.1–3.5 s (round 2: about 3.5 s), Apply 2.5–3.0 s. The Performance score passes its gate (at least 90) and rose slightly on Job Detail (91 → 92–94). The 2.1–2.2 s figures above come from C5-17, where the throttling is really applied to the network and CPU. The two methods disagree on these two pages; neither is field data. Only field p75 (M11) settles it.
+
+**Reused, and why it still applies.**
+
+| Evidence | From | Why unaffected |
+| --- | --- | --- |
+| C3 critical browser suite, 9 passed | `b354744` (round 2) | It serves the build with `vite preview`, not the document server, and round 3 changed nothing in `frontend/src` or `backend/` |
+| `npm run test:c5:stats`, 16 passed | `b354744` | `perfStats.js` and its tests are unchanged |
+| INP aggregation recomputation (§8.2) | round 2 | Not repeated, as instructed; no change affects it. INP was still measured in the runs above because C5-17 measures it with LCP |
+| Before/after screenshots for F1–F4, the C5-12 baseline pair | round 1 | No style or component changed |
+
+### 9.5 Documents
+
+- **Updated in this repository:** this record; `docs/seo/C4_SEO_IMPLEMENTATION.md` (the hint, marked as a C5 addition outside the C4 acceptance); `README.md` and `e2e/README.md`.
+- **Doc 06 is not synchronised.** §9, §87 and §110 of the canonical Doc 06 still carry the three old accessible names. The replacement text is in OD-2026-11-10-01 §3. **No external canonical document was updated in any C5 round**; that revision is made outside this repository under Doc 00 change control.
+- **OD-C5-3** (§5) asked whether to preload the Job from the document server. Round 3's instruction permitted "a narrowly scoped, regression-tested change to the shared C4 server", and the change was made under it. It is **implemented and unaccepted**: its acceptance is part of C5's review, and it changes a server accepted in C4 at `2193433`.
+- **Still open, unchanged and not acted on:** OD-C5-2 (brand image derivatives; O3) and OD-C5-4 (row separators, the browser's e-mail check, 44 px compact controls, heading minimum size). No redesign was added.
+- **Noticed, not changed (outside this assignment):** `injectHead` in `frontend/server/renderDocument.js` passes the page title to `String.replace` as a replacement string, so a `$&`, `` $` ``, `$'` or `$$` sequence in a Job title would be interpreted rather than written literally. The title is HTML-escaped, so this is a display defect for an unusual title, not an injection. A one-line fix (a replacer function) is available when authorised.
+
+### 9.6 Remaining gates and the owner checklist
+
+**Acceptance blockers that remain:**
+
+0. **C5-14 fails in complete runs with the hint (§9.7).** Astra's decision is needed on how to resolve it.
+1. Astra's independent review of round 3, then the owner's acceptance.
+2. The manual checks below. None has been performed by anyone; none is claimed.
+3. Doc 06 synchronisation (§9.5).
+4. Decisions OD-C5-2 and OD-C5-4, or their explicit deferral.
+
+**Not blockers for C5, and not claimed:** field Core Web Vitals at p75 (M11; production traffic), compression and caching at the production host and the hint reproduced there (C6), other browser engines and real devices on the production host.
+
+**The shortest practical owner checklist.** No action on the owner's machine is authorised by this record; this is what to do once it is.
+
+*Before set-up:* **the set-up DROPS the database named in `MONGODB_TEST_URI` every time it starts.** Use a new, disposable name (`valida_test_c5_manual`). The suite refuses any name that is not `valida_test` or `valida_test_<suffix>`. Use a new folder, never the owner's working copy. The set-up commands are in §8.6, with the round-3 SHA from the handoff.
+
+| # | Do (about 25 minutes in all) | Pass when |
+| --- | --- | --- |
+| 1 | **NVDA + Chrome**, Careers: move through the role links with Tab and with the links list (Insert+F7) | Each role is announced as "View Role: {title}", the roles are distinguishable, and the facts are reachable by reading the row |
+| 2 | **NVDA + Chrome**, Apply: submit the empty form, fix it, submit a complete one | Errors are understandable and not repeated; "Thank you for applying." and the received message are read once each |
+| 3 | **Speech input** (Windows Voice Access): "click Menu" in a narrow window; "click View Role" on Careers; "click Back to Role" on Apply | Each control is reached; with two roles, "View Role" offers a numbered choice |
+| 4 | **Real keyboard and OS file dialog**: on Apply, Tab to Choose File, Enter, pick a PDF by keyboard | The dialog opens, the file is chosen, focus returns to the page |
+| 5 | **Browser zoom 200% and 400%** in Chrome or Edge, and **Windows text size 200%** | Nothing clipped or overlapping; no horizontal scrolling at 400% on a 1280 px window |
+| 6 | **A real phone** (Android Chrome through `adb reverse tcp:4203 tcp:4203` and `tcp:4120`) | Menu, Careers, a role, Apply and success work by touch, portrait and landscape |
+| 7 | **Firefox or Safari**, one load of a role and of Apply | The role appears; the browser's network panel shows the Job request once or twice, never an error (the hint is optional there) |
+
+The full list is §6 (M1–M12). Everything in it stays **OPEN** until performed.
+
+### 9.7 Open: C5-14 (reduced motion) fails in complete runs
+
+**What happened.** C5-14 asserts that, under emulated `prefers-reduced-motion: reduce`, no animation or transition is running on four pages. On Job Detail it counted **4**, expected 0.
+
+| Run | Hint | Scope | C5-14 on Job Detail |
+| --- | --- | --- | --- |
+| Full suite, `8049060` | on | all 23 cases | **4 — FAIL** |
+| Full suite, `b5ec779` | on | all 23 cases | **4 — FAIL** |
+| Full suite, `ade4f36`, stopped after case 17 | **off** | cases 1–17 | 0 — pass |
+| C5-14 alone, 2 runs and 25 repeats | on | 1 case | 0 in all 27 |
+| C5-12 to C5-14; C5-08 with C5-14; C5-01 to C5-14 | on | partial | 0 in all 3 |
+| Round 2 full suite, `b354744` | (no hint existed) | all 22 cases | 0 — pass |
+
+**What the 4 are** (recorded in run 2): four `CSSTransition`s on `li` elements, property `visibility`, duration **0.01 ms**, at `currentTime` 0. No element on the page declares an animation or transition longer than 0.01 s (the probe's `moving` list is empty). 0.01 ms is the site's reduced-motion rule itself (`base.css`: every transition is shortened to 0.01 ms so that it completes at once).
+
+**What is and is not established.**
+- Established: nothing perceptible moves; the count comes from 0.01 ms `visibility` transitions; it appears with the hint in complete runs and did not appear in the one complete run without it.
+- **Not established:** which list the four items belong to (the later probe detail that records it never reproduced the count), why the transitions are still at time 0 when probed, and why only a complete run shows it. The likely trigger is the footer's return (F4: the footer is `visibility: hidden` while a Job is pending) happening earlier now that the Job's answer arrives with the script, but that is a hypothesis, not a finding.
+- One complete run without the hint is a single sample; it does not prove the hint is the cause.
+
+**Not done.** The gate was not changed, the case was not removed, and the failing runs are kept. C5-14's result is reported as it is.
+
+**Smallest options, for Astra's decision:**
+
+| Option | What | Trade-off |
+| --- | --- | --- |
+| A | Count as running only an animation or transition longer than 10 ms, the threshold the same probe already uses for declared motion; keep recording all of them | Matches what reduced motion is about (perceptible motion) and the site's own 0.01 ms rule. It is a change to a gate's criterion made after a failure, so it needs agreement first |
+| B | Keep the gate; spend a further diagnostic pass on the complete-run condition (each attempt is a 20-minute run) | No gate change. Cost unknown; the result may be the same 0.01 ms transitions |
+| C | Restrict the hint to status-200 documents or switch it off | Does not address this (Job Detail is a 200 page); switching the hint off restores the three LCP failures |
+
+Recommendation: A, with the two failing runs kept as the record of why.

@@ -6,7 +6,7 @@
 | Baseline | `389c421a72fb090dc2c08c8251b664bada73d9a0` (GitHub `main` = `c4-work`) |
 | Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227`, `777c1e6` and `fffc252`. Test code only |
 | Fixes | `24a351d` F1, `22344eb` F2, `4807dda` F3, `72a9d52` F4. Frontend CSS and two data attributes; the backend is unchanged |
-| Status | **READY FOR REVIEW (round 3, §9), with one automated gate failing: C5-14 in complete runs (§9.7).** Round 3 narrowed the Careers label-in-name exception and added the Job API preload hint; mobile lab LCP on Job Detail, Apply and the missing Job is now inside 2.5 s (O2). Open: C5-14, OD-C5-2 and OD-C5-4, the Doc 06 synchronisation, and the manual checklist. The round-2 status was: READY FOR REVIEW (round 2, §8), with mobile LCP open. C5 is not accepted: acceptance is pending independent review and the owner's approval |
+| Status | **READY FOR REVIEW (round 3, §9), with one automated gate failing intermittently: C5-14, in both complete runs (§9.7).** Round 3 narrowed the Careers label-in-name exception and added the Job API preload hint; mobile lab LCP on Job Detail, Apply and the missing Job is now inside 2.5 s (O2). Open: C5-14, OD-C5-2 and OD-C5-4, the Doc 06 synchronisation, and the manual checklist. The round-2 status was: READY FOR REVIEW (round 2, §8), with mobile LCP open. C5 is not accepted: acceptance is pending independent review and the owner's approval |
 | Constraints kept | Local work only. Nothing pushed, deployed or sent; no settings changed. Production candidate acknowledgements stay disabled. The first genuine Cybersecurity Specialist vacancy stays Draft, its eligible work countries OPEN. Approved copy, the social card, job eligibility and the publication rules are unchanged |
 
 Everything below was observed in **Chromium**, through Playwright, on one Linux machine. Nothing here is a claim about other browsers, real devices, real screen readers or production field data. Those are in §6, the manual checklist, and stay open until a person runs them.
@@ -391,7 +391,7 @@ From `725cb53` (tree `48a510b`), on Astra's instruction "C5 Round 3: focused cor
 | | |
 | --- | --- |
 | Implementation | **Complete** for the two round-3 corrections (§9.1, §9.2) |
-| Verification | **Passed, with one exception.** Everything automated and local passed except **C5-14 (reduced motion), which failed in both complete runs** (§9.7, open). **Not performed:** every manual check in §9.6 and §6 |
+| Verification | **Passed, with one exception.** Everything automated and local passed except **C5-14 (reduced motion), which failed in both complete runs and is intermittent** (§9.7, open). **Not performed:** every manual check in §9.6 and §6 |
 | Independent review, owner acceptance | **Pending.** C5 is not accepted |
 
 | Commit | Kind | Subject |
@@ -553,7 +553,7 @@ These are **lab** figures. They are not field Core Web Vitals: Doc 16's p75 targ
 
 **Acceptance blockers that remain:**
 
-0. **C5-14 fails in complete runs with the hint (§9.7).** Astra's decision is needed on how to resolve it.
+0. **C5-14 failed in both complete runs and is intermittent (§9.7).** Astra's decision is needed on how to resolve it.
 1. Astra's independent review of round 3, then the owner's acceptance.
 2. The manual checks below. None has been performed by anyone; none is claimed.
 3. Doc 06 synchronisation (§9.5).
@@ -577,7 +577,7 @@ These are **lab** figures. They are not field Core Web Vitals: Doc 16's p75 targ
 
 The full list is §6 (M1–M12). Everything in it stays **OPEN** until performed.
 
-### 9.7 Open: C5-14 (reduced motion) fails in complete runs
+### 9.7 Open: C5-14 (reduced motion) failed in both complete runs
 
 **What happened.** C5-14 asserts that, under emulated `prefers-reduced-motion: reduce`, no animation or transition is running on four pages. On Job Detail it counted **4**, expected 0.
 
@@ -587,15 +587,16 @@ The full list is §6 (M1–M12). Everything in it stays **OPEN** until performed
 | Full suite, `b5ec779` | on | all 23 cases | **4 — FAIL** |
 | Full suite, `ade4f36`, stopped after case 17 | **off** | cases 1–17 | 0 — pass |
 | C5-14 alone, 2 runs and 25 repeats | on | 1 case | 0 in all 27 |
-| C5-12 to C5-14; C5-08 with C5-14; C5-01 to C5-16 without C5-08; C5-01 to C5-14 | on | partial | 0 in all 4 |
+| Cases 1–17 in the same order, `ade4f36` (stopped by a time limit during C5-17) | on | cases 1–17 | 0 — pass |
+| C5-12 to C5-14; C5-08 with C5-14; C5-01 to C5-16 without C5-08 | on | partial | 0 in all 3 |
 | Round 2 full suite, `b354744` | (no hint existed) | all 22 cases | 0 — pass |
 
 **What the 4 are** (recorded in run 2): four `CSSTransition`s on `li` elements, property `visibility`, duration **0.01 ms**, at `currentTime` 0. No element on the page declares an animation or transition longer than 0.01 s (the probe's `moving` list is empty). 0.01 ms is the site's reduced-motion rule itself (`base.css`: every transition is shortened to 0.01 ms so that it completes at once).
 
 **What is and is not established.**
-- Established: nothing perceptible moves; the count comes from 0.01 ms `visibility` transitions; it appears with the hint in complete runs and did not appear in the one complete run without it.
-- **Not established:** which list the four items belong to (the later probe detail that records it never reproduced the count), why the transitions are still at time 0 when probed, and why only a complete run shows it. The likely trigger is the footer's return (F4: the footer is `visibility: hidden` while a Job is pending) happening earlier now that the Job's answer arrives with the script, but that is a hypothesis, not a finding.
-- One complete run without the hint is a single sample; it does not prove the hint is the cause.
+- Established: nothing perceptible moves; the count comes from 0.01 ms `visibility` transitions; it is **intermittent**: with the hint, 2 of 3 runs that reached C5-14 in the full order counted 4 and 1 counted 0; the one such run without the hint counted 0.
+- **Not established:** which list the four items belong to (the later probe detail that records it never reproduced the count), why the transitions are still at time 0 when probed, and what makes one same-order run differ from another. The likely trigger is the footer's return (F4: the footer is `visibility: hidden` while a Job is pending) happening earlier now that the Job's answer arrives with the script, but that is a hypothesis, not a finding.
+- **Whether the hint is the cause is not established.** One run without it is a single sample, and one same-order run with it also passed.
 
 **Not done.** The gate was not changed, the case was not removed, and the failing runs are kept. C5-14's result is reported as it is.
 
@@ -605,6 +606,6 @@ The full list is §6 (M1–M12). Everything in it stays **OPEN** until performed
 | --- | --- | --- |
 | A | Count as running only an animation or transition longer than 10 ms, the threshold the same probe already uses for declared motion; keep recording all of them | Matches what reduced motion is about (perceptible motion) and the site's own 0.01 ms rule. It is a change to a gate's criterion made after a failure, so it needs agreement first |
 | B | Keep the gate; spend a further diagnostic pass on the complete-run condition (each attempt is a 20-minute run) | No gate change. Cost unknown; the result may be the same 0.01 ms transitions |
-| C | Restrict the hint to status-200 documents or switch it off | Does not address this (Job Detail is a 200 page); switching the hint off restores the three LCP failures |
+| C | Switch the hint off | Not shown to remove the count, and it restores the three LCP failures |
 
 Recommendation: A, with the two failing runs kept as the record of why.

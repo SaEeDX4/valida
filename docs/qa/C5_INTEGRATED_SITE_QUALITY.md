@@ -587,7 +587,7 @@ The full list is §6 (M1–M12). Everything in it stays **OPEN** until performed
 | Full suite, `b5ec779` | on | all 23 cases | **4 — FAIL** |
 | Full suite, `ade4f36`, stopped after case 17 | **off** | cases 1–17 | 0 — pass |
 | C5-14 alone, 2 runs and 25 repeats | on | 1 case | 0 in all 27 |
-| C5-12 to C5-14; C5-08 with C5-14; C5-01 to C5-14 | on | partial | 0 in all 3 |
+| C5-12 to C5-14; C5-08 with C5-14; C5-01 to C5-16 without C5-08; C5-01 to C5-14 | on | partial | 0 in all 4 |
 | Round 2 full suite, `b354744` | (no hint existed) | all 22 cases | 0 — pass |
 
 **What the 4 are** (recorded in run 2): four `CSSTransition`s on `li` elements, property `visibility`, duration **0.01 ms**, at `currentTime` 0. No element on the page declares an animation or transition longer than 0.01 s (the probe's `moving` list is empty). 0.01 ms is the site's reduced-motion rule itself (`base.css`: every transition is shortened to 0.01 ms so that it completes at once).

@@ -307,7 +307,7 @@ when you finish.
 | `npm run dev`        | Vite dev server on <http://localhost:5173>              |
 | `npm run build`      | Production build into `frontend/dist/`                  |
 | `npm run preview`    | Serve the built output on <http://localhost:4173>       |
-| `npm run serve:documents -- --api-origin http://127.0.0.1:4000` | Serve the built output with the C4 document behaviour (real statuses, metadata in the initial HTML, `/sitemap.xml`, `/robots.txt`) on <http://127.0.0.1:4173> |
+| `npm run serve:documents -- --api-origin http://127.0.0.1:4000` | Serve the built output with the C4 document behaviour (real statuses, metadata in the initial HTML, `/sitemap.xml`, `/robots.txt`; a Job API preload hint on Job Detail and Apply documents, `--no-job-preload` to omit it) on <http://127.0.0.1:4173> |
 | `npm test`           | Run the Vitest suite once (components + axe + contrast) |
 | `npm run test:watch` | Run the suite in watch mode                             |
 | `npm run verify:budgets` | Measure `dist/` against the Doc 16 budgets, fixture isolation and third-party loading (run after `build`) |

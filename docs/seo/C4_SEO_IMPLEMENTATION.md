@@ -19,6 +19,14 @@ Because both sides use the same function on the same inputs, a direct load, a re
 
 `frontend/server/` is the **host-independent reference implementation**, not a hosting decision. Doc 16 §101 and Doc 15 §63 choose the production mechanism at C6: managed static/CDN hosting is preferred. At C6 this server is either deployed as it is, or the same `src/seo` modules run in the chosen host's edge or HTML-transformation step. The production checks in §6 are then run there.
 
+**C5 addition (round 3; not part of the C4 acceptance at `2193433`).** On Job Detail and Apply documents the server also writes one resource hint after the head metadata: `<link rel="preload" as="fetch" crossorigin="anonymous" href="{API}/api/v1/jobs/{slug}">`. It lets the browser request the Job while the script is still loading; the page's own request then uses that response.
+- **When:** only on those two routes, for a slug of the public slug contract, when the server's own read of that URL was answered by the API with the Job (page 200) or with "not found" (page 404). Never on a 503, a static route, the 404 page or a slug outside the contract.
+- **Which URL:** the browser-facing API base compiled into the build (`valida-seo.json` → `apiBaseUrl`, from `VITE_API_BASE_URL`), never the server's own `--api-origin`. The base must be empty (same origin) or a plain origin; otherwise no hint is written.
+- **What it does not change:** statuses, headers, titles, robots directives, canonical links, Open Graph, JobPosting and every other byte of the document. The server's tests compare the documents with and without it.
+- **Off switch:** `npm run serve:documents -- --no-job-preload`.
+- **At C6:** a host that reproduces this server's behaviour by its own means must reproduce the hint (a tag or a `Link` header) to keep the measured benefit, and its Content-Security-Policy `connect-src` must allow the API origin, which the page's own request needs in any case.
+- The measurements and the browser evidence are in [`../qa/C5_INTEGRATED_SITE_QUALITY.md`](../qa/C5_INTEGRATED_SITE_QUALITY.md) §9.
+
 ## 2. Configuration
 
 | Variable (frontend build) | Meaning | Default |

@@ -358,7 +358,8 @@ export function motionProbe(page) {
     const runningDetail = document.getAnimations().map((a) => {
       const target = a.effect?.target;
       const timing = a.effect?.getComputedTiming?.() ?? {};
-      return { el: target ? `${target.tagName.toLowerCase()}${typeof target.className === 'string' && target.className ? `.${target.className.split(' ')[0]}` : ''}` : null, pseudo: a.effect?.pseudoElement ?? null, kind: a.constructor.name, name: a.animationName ?? a.transitionProperty ?? null, playState: a.playState, pending: a.pending, duration: timing.duration ?? null, delay: timing.delay ?? null, iterations: timing.iterations ?? null, fill: timing.fill ?? null, currentTime: a.currentTime };
+      const within = target?.closest?.('header, footer, main, nav');
+      return { el: target ? `${target.tagName.toLowerCase()}${typeof target.className === 'string' && target.className ? `.${target.className.split(' ')[0]}` : ''}` : null, within: within ? within.tagName.toLowerCase() : null, text: target ? (target.textContent || '').trim().slice(0, 40) : null, pseudo: a.effect?.pseudoElement ?? null, kind: a.constructor.name, name: a.animationName ?? a.transitionProperty ?? null, playState: a.playState, pending: a.pending, duration: timing.duration ?? null, delay: timing.delay ?? null, iterations: timing.iterations ?? null, fill: timing.fill ?? null, currentTime: a.currentTime };
     });
     return { scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior, running: runningDetail.length, runningDetail, moving };
   });

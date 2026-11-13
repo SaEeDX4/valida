@@ -33,6 +33,11 @@
  *   API URL to the head, so the browser requests the Job while the script is
  *   still downloading. It measures a PROPOSED product change (the document
  *   server would emit this link); the product itself does not do this.
+ *   Round 3: the product now writes the link itself (frontend/server/
+ *   renderDocument.js jobApiPreloadTag). This experiment is kept as it ran. It
+ *   rewrote ONLY status-200 documents (see below: a non-200 response is passed
+ *   through untouched), so it never added the link to the missing-Job document:
+ *   its "no improvement" there showed nothing about a preloaded 404.
  *
  * It is NOT the production host, proves nothing about the host's compression
  * or caching, and is never part of the product. It listens on 127.0.0.1 only

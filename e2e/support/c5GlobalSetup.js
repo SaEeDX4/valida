@@ -94,7 +94,10 @@ export default async function c5GlobalSetup() {
     run.backendListening = { ...listening, otherInterfaces: await reachFromOtherInterfaces(C5_BACKEND_PORT) };
 
     const serve = path.join(FRONTEND_DIR, 'server', 'serve.mjs');
-    const site = startNode([serve, '--dist', dirs.dist, '--host', '127.0.0.1', '--port', String(C5_SITE_PORT), '--api-origin', C5_BACKEND_ORIGIN], {
+    const site = startNode([serve, '--dist', dirs.dist, '--host', '127.0.0.1', '--port', String(C5_SITE_PORT), '--api-origin', C5_BACKEND_ORIGIN,
+      // C5_NO_JOB_PRELOAD=1: the comparison run without the Job API preload hint. The lab experiment that injected
+      // the link in the proxy (round 2) also runs without the product's own hint, so the two are never doubled.
+      ...(process.env.C5_NO_JOB_PRELOAD === '1' || process.env.C5_EXPERIMENT_PRELOAD_JOB_API === '1' ? ['--no-job-preload'] : [])], {
       cwd: FRONTEND_DIR,
       env: baseEnvironment(),
       logFile: path.join(dirs.logs, 'documents.log'),

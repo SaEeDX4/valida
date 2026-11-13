@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { BACKEND_DIR, FIXTURES_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { C5_SITE_ORIGIN, C5_SLUGS } from '../support/c5Stack.js';
+import { judgeReducedMotion } from './motionJudge.js';
 import {
-  ROUTES, axe, ensureJobs, openRoute, publishedJobs, waitForStill, focusProbe, headingProblems, layoutProbe, motionProbe, record, settle, shot, structureProbe, writeText,
+  ROUTES, axe, ensureJobs, openRoute, publishedJobs, waitForStill, focusProbe, headingProblems, layoutProbe, motionObserve, motionProbe, MOTION_RECORDER, record, settle, shot, structureProbe, writeText,
 } from './c5Support.js';
 
 /**
@@ -609,36 +610,204 @@ test('C5-13 Reflow at 320 CSS px (400% zoom of 1280 px, EMULATED): no two-dimens
   expect(problems).toEqual([]);
 });
 
-test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no running animation or transition, instant scrolling', async ({ page }) => {
+test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no perceptible or persistent motion, instant scrolling, content available', async ({ page }, testInfo) => {
+  // Doc 16 sections 58-59, Doc 17 section 255, Doc 18 section 170. What is judged, and why, is in motionJudge.js.
+  // OLD criterion (rounds 1-3): at one instant after the page settled, document.getAnimations().length === 0,
+  //   html scroll-behavior "auto", and no element DECLARING AN ANIMATION longer than 10 ms (declared transitions
+  //   were recorded but not asserted).
+  // NEW criterion: every effect seen on any frame since the document started, and through a bounded frame-by-frame
+  //   watch, must be the reduced-motion rule's own instantaneous completion (a CSS transition/animation of exactly
+  //   the rule's declared duration, no delay, one iteration, not filling) AND must be gone when the watch ends with
+  //   the page quiet; no element may declare an animation OR a transition beyond the rule; scrolling is instant;
+  //   the heading, footer and its links are visible afterwards. The old instant reading is still recorded.
   await ensureJobs();
+  await page.addInitScript(MOTION_RECORDER);
   const results = {};
+  const frameNow = () => page.evaluate(() => window.__c5motion.frame);
+  const look = async (options) => {
+    const legacy = await motionProbe(page);
+    const observation = await motionObserve(page, options);
+    return { legacyInstant: { running: legacy.running, runningDetail: legacy.runningDetail, declaredOver10ms: legacy.moving }, observation, verdict: judgeReducedMotion(observation) };
+  };
+  const jobApi = (url) => new URL(url).pathname === `/api/v1/jobs/${C5_SLUGS.open}`;
   for (const mode of ['no-preference', 'reduce']) {
     await page.emulateMedia({ reducedMotion: mode });
     results[mode] = {};
     for (const [name, pathname] of [['home', '/'], ['careers', '/careers'], ['job-open', `/careers/${C5_SLUGS.open}`], ['apply-open', `/careers/${C5_SLUGS.open}/apply`]]) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await openRoute(page, pathname);
-      results[mode][name] = await motionProbe(page);
+      results[mode][name] = await look();
     }
-    // The loading skeleton, held.
-    let release;
-    const released = new Promise((resolve) => { release = resolve; });
-    const matcher = (url) => new URL(url).pathname === '/api/v1/jobs';
-    await page.route(matcher, async (route) => { await released; await route.continue(); });
-    await page.goto('/careers', { waitUntil: 'load' });
-    await expect(page.getByText('Loading open roles…')).toHaveCount(1);
-    results[mode]['careers-loading'] = await motionProbe(page);
-    release();
-    await expect(page.getByRole('link', { name: /^View Role: / }).first()).toBeVisible();
-    await page.unroute(matcher, { behavior: 'wait' });
+    // Job Detail read the moment its content is there, without waiting for the page to settle first: everything
+    // since the document started is in the recorder (with the preload hint the Job arrives as the script runs).
+    await page.goto(`/careers/${C5_SLUGS.open}`, { waitUntil: 'commit' });
+    await expect(page.getByRole('link', { name: 'Apply for This Role' }).first()).toBeVisible();
+    results[mode]['job-open-at-content'] = await look();
+    // The Careers loading skeleton, held (HOLD), then its content.
+    {
+      let release;
+      const released = new Promise((resolve) => { release = resolve; });
+      const matcher = (url) => new URL(url).pathname === '/api/v1/jobs';
+      await page.route(matcher, async (route) => { await released; await route.continue(); });
+      await page.goto('/careers', { waitUntil: 'load' });
+      await expect(page.getByText('Loading open roles…')).toHaveCount(1);
+      results[mode]['careers-loading'] = await look();
+      const mark = await frameNow();
+      release();
+      await expect(page.getByRole('link', { name: /^View Role: / }).first()).toBeVisible();
+      results[mode]['careers-content-after-loading'] = await look({ sinceFrame: mark });
+      await page.unroute(matcher, { behavior: 'wait' });
+    }
+    // Job Detail, loading held (HOLD), then its content: the footer is unpainted while the Job is pending (F4) and
+    // returns when it arrives - the loading-to-content change the r3 failures coincided with, made deterministic.
+    {
+      let release;
+      const released = new Promise((resolve) => { release = resolve; });
+      await page.route(jobApi, async (route) => { await released; await route.continue(); });
+      await page.goto(`/careers/${C5_SLUGS.open}`, { waitUntil: 'load' });
+      await expect(page.getByText('Loading role details…')).toHaveCount(1);
+      results[mode]['job-loading'] = await look();
+      const mark = await frameNow();
+      release();
+      await expect(page.getByRole('link', { name: 'Apply for This Role' }).first()).toBeVisible();
+      results[mode]['job-content-after-loading'] = await look({ sinceFrame: mark });
+      await page.unroute(jobApi, { behavior: 'wait' });
+    }
+  }
+
+  // --------------------------------------------------------------------------------------------- controls
+  // On Job Detail under reduced motion. Each control puts ONE effect into the live page and is observed and judged
+  // exactly as the page is. Nothing is cancelled before it is judged; the injected node is removed afterwards.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRoute(page, `/careers/${C5_SLUGS.open}`);
+  await page.addStyleTag({ content: '@keyframes c5blink { from { opacity: 1; } to { opacity: 0.4; } }' });
+  const controls = {};
+  const control = async (id, description, inject, { mustFail, reason }) => {
+    const mark = (await frameNow()) + 1;
+    await page.evaluate((controlId) => {
+      const el = document.createElement('div');
+      el.id = `c5-injected-${controlId}`;
+      el.textContent = 'QA C5 control';
+      document.querySelector('main').append(el);
+    }, id);
+    await page.locator(`#c5-injected-${id}`).evaluate(inject);
+    const observation = await motionObserve(page, { sinceFrame: mark });
+    const verdict = judgeReducedMotion(observation);
+    const mine = (text) => text.includes(`div#c5-injected-${id}`);
+    controls[id] = {
+      description, expected: mustFail ? 'FAIL' : 'PASS', verdict: verdict.pass ? 'PASS' : 'FAIL',
+      failuresNamingTheInjectedEffect: verdict.failures.filter((f) => mine(f) && !f.startsWith('declared motion')),
+      declaredFindingsNamingIt: verdict.failures.filter((f) => mine(f) && f.startsWith('declared motion')),
+      otherFailures: verdict.failures.filter((f) => !mine(f)),
+      permittedNamingIt: verdict.permitted.filter((e) => mine(e.where)),
+      effects: observation.effects.filter((e) => mine(e.where)), finalStillPresent: observation.final.filter((e) => mine(e.where)).length,
+      framesObserved: observation.framesObserved, quiet: observation.quiet, reasonExpected: reason ? String(reason) : null,
+    };
+    await page.evaluate((controlId) => document.getElementById(`c5-injected-${controlId}`)?.remove(), id);
+  };
+  // Sustained motion.
+  await control('sustained-transform', 'a script animation moving an element (transform) for 2 s, repeating without end',
+    (el) => { el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(40px)' }], { duration: 2000, iterations: Infinity }); },
+    { mustFail: true, reason: /not a CSS transition or animation/ });
+  await control('sustained-opacity', 'a CSS transition of opacity over 3 s (declared !important, so it overrides the reduced-motion rule)',
+    (el) => { el.style.setProperty('transition', 'opacity 3s linear', 'important'); getComputedStyle(el).opacity; el.style.opacity = '0.2'; },
+    { mustFail: true, reason: /duration is 3000 ms/ });
+  // A short effect, repeated.
+  await control('short-repeated-indefinitely', 'a 0.01 ms CSS animation repeated without end',
+    (el) => { el.style.setProperty('animation', 'c5blink 0.01ms linear infinite', 'important'); },
+    { mustFail: true, reason: /Infinity iterations/ });
+  await control('short-repeated-meaningful-total', 'a 5 ms CSS animation repeated 400 times (2 s in all)',
+    (el) => { el.style.setProperty('animation', 'c5blink 5ms linear 400', 'important'); },
+    { mustFail: true, reason: /400 iterations/ });
+  // Delayed, and persistent.
+  await control('delayed', 'a 0.01 ms CSS transition that starts after a 2 s delay',
+    (el) => { el.style.setProperty('transition', 'opacity 0.01ms linear 2s', 'important'); getComputedStyle(el).opacity; el.style.opacity = '0.2'; },
+    { mustFail: true, reason: /delay of 2000 ms/ });
+  await control('persistent', 'a 0.01 ms CSS animation that keeps its end state applied (fill forwards) and so never goes away',
+    (el) => { el.style.setProperty('animation', 'c5blink 0.01ms linear 1 forwards', 'important'); },
+    { mustFail: true, reason: /keeps filling|still present/ });
+  // The intended behaviour: an ordinary style change under the site's rule is a 0.01 ms transition that completes.
+  await control('intended-instant-transition', 'an ordinary element whose opacity changes: the reduced-motion rule makes it a 0.01 ms transition',
+    (el) => { getComputedStyle(el).opacity; el.style.opacity = '0.5'; },
+    { mustFail: false });
+  // The site's own controls: hovering and focusing the primary action (it declares colour and transform transitions).
+  const hoverMark = (await frameNow()) + 1;
+  const apply = page.getByRole('link', { name: 'Apply for This Role' }).first();
+  await apply.hover();
+  await apply.focus();
+  const hover = await motionObserve(page, { sinceFrame: hoverMark });
+  const hoverVerdict = judgeReducedMotion(hover);
+  controls['site-hover-and-focus'] = { description: 'hover and focus on "Apply for This Role"', expected: 'PASS', verdict: hoverVerdict.pass ? 'PASS' : 'FAIL', failures: hoverVerdict.failures, permitted: hoverVerdict.permitted, effects: hover.effects, actionStillVisible: await apply.isVisible(), actionEnabled: await apply.isEnabled() };
+  await page.mouse.move(0, 0);
+  // After the controls the page is as it was.
+  const afterControls = await look({ sinceFrame: (await frameNow()) + 1 });
+
+  // The one effect the site produces: when the Job arrives, the footer's visibility change is inherited one DOM level
+  // per frame, each level a 0.01 ms transition. It is recorded as a cascade and bounded by its own mechanism: it may
+  // not take more frames than the nesting levels it passes through (no repetition, nothing drawn out).
+  const cascade = (r) => {
+    const seen = r.observation.effects;
+    if (!seen.length) return null;
+    const first = Math.min(...seen.map((e) => e.firstFrame)); const last = Math.max(...seen.map((e) => e.lastFrame));
+    const depths = seen.map((e) => e.depth);
+    return { effects: seen.length, outsideTheFooter: seen.filter((e) => !e.where.startsWith('footer')).map((e) => e.where), properties: [...new Set(seen.map((e) => `${e.kind} ${e.name}`))], firstFrame: first, lastFrame: last, frames: last - first + 1, nestingLevels: Math.max(...depths) - Math.min(...depths) + 1, repeated: seen.filter((e) => e.runs > 1).map((e) => ({ where: e.where, startedInFrames: e.runFrames })) };
+  };
+  for (const name of ['job-open-at-content', 'job-content-after-loading']) {
+    const c = cascade(results.reduce[name]);
+    results.reduce[name].cascade = c;
+    // Held, the footer's return always happens after a painted pending state. On a direct load with the preload hint
+    // the Job can be there before the first frame, and then the footer is never hidden at all: no cascade to see.
+    if (name === 'job-content-after-loading') expect.soft(c, `${name}: the footer's return was observed`).not.toBeNull();
+    if (!c) continue;
+    expect.soft(c.outsideTheFooter, `${name}: only the footer`).toEqual([]);
+    expect.soft(c.properties, `${name}: only visibility transitions`).toEqual(['CSSTransition visibility']);
+    expect.soft(c.frames, `${name}: no more frames than nesting levels`).toBeLessThanOrEqual(c.nestingLevels);
   }
   await page.emulateMedia({ reducedMotion: null });
-  record('C5-14', { observation: 'EMULATED (Chromium media emulation)', results });
+  record(testInfo.repeatEachIndex ? `C5-14-repeat-${testInfo.repeatEachIndex}` : 'C5-14', {
+    observation: 'EMULATED (Chromium media emulation); effects recorded on every animation frame from the start of each document',
+    criterion: {
+      old: 'at one instant after settling: document.getAnimations().length === 0; html scroll-behavior "auto"; no element declaring an ANIMATION longer than 10 ms (declared transitions recorded, not asserted)',
+      new: 'every effect seen on any frame, and through a bounded frame-by-frame watch (at most 90 frames, ending after 3 consecutive frames with no effect), must be the reduced-motion rule\'s own instantaneous completion - a CSS transition or animation of exactly the duration that rule declares, no delay, no end delay, one iteration, not filling - and must be gone when the watch ends with the page quiet; no element may declare an animation OR a transition beyond the rule; scroll-behavior is "auto"; the heading, the footer and its links are visible afterwards',
+      notAStandard: 'The permitted duration is the value the site\'s own rule declares (base.css), read from the page. No numeric threshold is chosen here and none is an accessibility standard. The 90-frame bound limits the observation; it is not a tolerance for motion.',
+    },
+    results, controls, afterControls,
+  });
+
+  // The observation itself must be real under both settings.
+  for (const [mode, byPage] of Object.entries(results)) for (const [name, r] of Object.entries(byPage)) expect.soft(r.observation, `${mode} ${name}: observed`).not.toBeNull();
+  // Positive control on the site itself: with no preference, Home's decorative motion is seen and would fail.
+  expect.soft(results['no-preference'].home.verdict.pass, 'no-preference Home: the decorative motion is detected').toBe(false);
+  expect.soft(results['no-preference'].home.observation.reducedMotionApplies).toBe(false);
+  // The gate.
   for (const [name, r] of Object.entries(results.reduce)) {
-    expect.soft(r.scrollBehavior, name).toBe('auto');
-    expect.soft(r.running, name).toBe(0);
-    expect.soft(r.moving.filter((m) => m.animation), name).toEqual([]);
+    expect.soft(r.observation.reducedMotionApplies, name).toBe(true);
+    expect.soft(r.verdict.failures, `reduce ${name}`).toEqual([]);
+    // The former assertions, kept: instant scrolling, and nothing declared (now transitions as well as animations).
+    expect.soft(r.observation.scrollBehavior, name).toBe('auto');
+    expect.soft(r.observation.declaredBeyondRule, name).toEqual([]);
+    expect.soft(r.legacyInstant.declaredOver10ms, `${name}: nothing declared over 10 ms, animation or transition`).toEqual([]);
   }
+  // The loading states are what they claim to be.
+  expect.soft(results.reduce['job-loading'].observation.pending, 'Job Detail held: pending').toBe(true);
+  expect.soft(results.reduce['job-loading'].observation.availability.footer, 'the footer is unpainted while the Job is pending (F4)').toBe(false);
+  expect.soft(results.reduce['job-content-after-loading'].observation.pending).toBe(false);
+  expect.soft(results.reduce['job-content-after-loading'].observation.availability, 'after loading: heading, footer and links visible').toMatchObject({ h1: true, footer: true });
+  expect.soft(results.reduce['job-content-after-loading'].observation.availability.footerLinksShown).toBe(results.reduce['job-content-after-loading'].observation.availability.footerLinks);
+  // The controls.
+  for (const [id, c] of Object.entries(controls)) {
+    expect.soft(c.verdict, `control ${id}`).toBe(c.expected);
+    if (c.expected === 'FAIL') {
+      expect.soft(c.failuresNamingTheInjectedEffect.length, `control ${id}: the injected effect itself is named, from observation`).toBeGreaterThan(0);
+      expect.soft(c.failuresNamingTheInjectedEffect.join(' | '), `control ${id}: for the expected reason`).toMatch(new RegExp(c.reasonExpected.slice(1, -1)));
+    }
+  }
+  expect.soft(controls['intended-instant-transition'].permittedNamingIt.length, 'the intended 0.01 ms transition was seen, permitted and finished').toBeGreaterThan(0);
+  expect.soft(controls['intended-instant-transition'].finalStillPresent).toBe(0);
+  expect.soft(controls['site-hover-and-focus']).toMatchObject({ actionStillVisible: true, actionEnabled: true });
+  expect.soft(Object.keys(controls).sort()).toEqual(['delayed', 'intended-instant-transition', 'persistent', 'short-repeated-indefinitely', 'short-repeated-meaningful-total', 'site-hover-and-focus', 'sustained-opacity', 'sustained-transform']);
+  expect.soft(afterControls.verdict.failures, 'after the controls the page passes again').toEqual([]);
 });
 
 test('C5-15 Non-text contrast of form controls, buttons and the focus ring (computed colours)', async ({ page }) => {

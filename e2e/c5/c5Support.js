@@ -366,6 +366,199 @@ export function motionProbe(page) {
 }
 
 /** Document structure: language, title, landmarks, headings in order. */
+// ----------------------------------------------------- motion observation --
+/**
+ * C5-14. Installed before any page script (context.addInitScript): on every
+ * animation frame it lists document.getAnimations() and keeps, per effect, the
+ * first and the last description and the frames it was seen in. It never
+ * cancels, finishes or alters an effect, and it waits for nothing.
+ *
+ * Each effect is identified by a stable path to its target (tag and position
+ * from the nearest landmark or id), its kind and its animation name or
+ * transitioned property - not by an index into a list.
+ *
+ * Note: getAnimations() brings the document's style up to date, so the
+ * recorder makes a pending style change take effect in the frame it is seen
+ * rather than a later one. It can move WHEN a transition starts by a frame; it
+ * cannot create, remove or shorten one.
+ */
+export const MOTION_RECORDER = () => {
+  const MAX_EFFECTS = 400;
+  const rec = { frame: 0, effects: new Map(), lastCount: 0, quietFrames: 0, truncated: false, marks: [] };
+  const where = (el, pseudo) => {
+    if (!el || !el.tagName) return 'unknown target';
+    const parts = [];
+    let node = el;
+    while (node && node.tagName && parts.length < 12) {
+      const tag = node.tagName.toLowerCase();
+      if (node.id) { parts.unshift(`${tag}#${node.id}`); break; }
+      const landmark = ['header', 'footer', 'main', 'nav', 'body'].includes(tag);
+      const same = node.parentElement ? [...node.parentElement.children].filter((c) => c.tagName === node.tagName) : [];
+      parts.unshift(same.length > 1 ? `${tag}:nth-of-type(${same.indexOf(node) + 1})` : tag);
+      if (landmark && tag !== 'nav') break;
+      node = node.parentElement;
+    }
+    return `${parts.join(' > ')}${pseudo ?? ''}`;
+  };
+  const describe = (a) => {
+    const target = a.effect?.target ?? null;
+    const pseudo = a.effect?.pseudoElement ?? null;
+    let timing = {};
+    try { timing = a.effect?.getComputedTiming?.() ?? {}; } catch { timing = {}; }
+    const num = (v) => (typeof v === 'number' ? v : null);
+    let cs = null;
+    try { cs = target ? getComputedStyle(target, pseudo) : null; } catch { cs = null; }
+    const kind = a.constructor?.name ?? null;
+    const name = a.animationName ?? a.transitionProperty ?? null;
+    const place = where(target, pseudo);
+    return {
+      key: `${place}|${kind}|${name}`,
+      where: place,
+      landmark: target?.closest?.('header, footer, main, nav')?.tagName.toLowerCase() ?? null,
+      depth: (() => { let n = 0; for (let node = target; node && node.parentElement; node = node.parentElement) n += 1; return target ? n : null; })(),
+      text: target ? (target.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40) : null,
+      kind,
+      name,
+      playState: a.playState,
+      pending: a.pending,
+      currentTime: num(a.currentTime),
+      startTime: num(a.startTime),
+      duration: num(timing.duration),
+      delay: num(timing.delay),
+      endDelay: num(timing.endDelay),
+      iterations: num(timing.iterations),
+      activeDuration: num(timing.activeDuration),
+      endTime: num(timing.endTime),
+      fill: timing.fill ?? null,
+      progress: num(timing.progress),
+      computed: cs ? { transitionProperty: cs.transitionProperty, transitionDuration: cs.transitionDuration, transitionDelay: cs.transitionDelay, animationName: cs.animationName, animationDuration: cs.animationDuration, animationDelay: cs.animationDelay, animationIterationCount: cs.animationIterationCount, visibility: cs.visibility, opacity: cs.opacity, transform: cs.transform, display: cs.display } : null,
+    };
+  };
+  rec.describe = describe;
+  rec.snapshot = () => { try { return document.getAnimations().map(describe); } catch { return null; } };
+  const tick = () => {
+    rec.frame += 1;
+    const now = rec.snapshot() ?? [];
+    const seen = new Set();
+    for (const d of now) {
+      seen.add(d.key);
+      const known = rec.effects.get(d.key);
+      if (known) {
+        known.framesSeen += 1;
+        if (known.lastFrame !== rec.frame - 1) { known.runs += 1; if (known.runFrames.length < 12) known.runFrames.push(rec.frame); }
+        known.lastFrame = rec.frame;
+        known.last = d;
+      } else if (rec.effects.size < MAX_EFFECTS) {
+        rec.effects.set(d.key, { ...d, firstFrame: rec.frame, lastFrame: rec.frame, framesSeen: 1, runs: 1, runFrames: [rec.frame], firstAt: Math.round(performance.now() * 10) / 10, last: d });
+      } else {
+        rec.truncated = true;
+      }
+    }
+    rec.lastCount = now.length;
+    rec.quietFrames = now.length === 0 ? rec.quietFrames + 1 : 0;
+    requestAnimationFrame(tick);
+  };
+  window.__c5motion = rec;
+  requestAnimationFrame(tick);
+};
+
+/**
+ * Observes the page's motion from its current state (C5-14; judged by
+ * motionJudge.js):
+ *   initial   what document.getAnimations() lists at this instant - the moment
+ *             the old criterion read, kept so the two can be compared;
+ *   effects   every effect the frame recorder has seen since `sinceFrame`
+ *             (default: since the document started), each with its first and
+ *             last description and the frames it was seen in;
+ *   then it WATCHES, frame by frame, until `quietFrames` consecutive frames
+ *   list no effect, or `maxFrames` frames have passed - a bound on the
+ *   observation, counted in frames, not a sleep: nothing is retried and no
+ *   effect is cancelled or finished;
+ *   final     what is listed when the watching ends;
+ *   rule      the durations the page's own reduced-motion rule declares;
+ *   declaredBeyondRule  every element (and ::before / ::after) whose computed
+ *             style declares an animation, or a transition, longer than the
+ *             rule's, delayed, or repeated;
+ *   unavailable  what a visitor would be missing afterwards.
+ * The watch always covers at least `quietFrames` frames.
+ */
+export function motionObserve(page, { maxFrames = 90, quietFrames = 3, sinceFrame = 0 } = {}) {
+  return page.evaluate(async ({ maxFrames, quietFrames, sinceFrame }) => {
+    const rec = window.__c5motion;
+    if (!rec) return null;
+    const ms = (value) => value.split(',').map((part) => { const v = part.trim(); return v.endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000; });
+    // The reduced-motion rule, read from the page's own stylesheets.
+    let rule = null;
+    const walk = (rules, inReduce) => {
+      for (const r of rules) {
+        if (r.cssRules && r.conditionText !== undefined) walk(r.cssRules, inReduce || /prefers-reduced-motion:\s*reduce/.test(r.conditionText));
+        else if (inReduce && r.style && /(^|,)\s*\*\s*(,|$)/.test(r.selectorText ?? '') && r.style.transitionDuration) {
+          rule = { selector: r.selectorText, transitionMs: ms(r.style.transitionDuration)[0], animationMs: r.style.animationDuration ? ms(r.style.animationDuration)[0] : null, iterationCount: r.style.animationIterationCount || null, declared: { transitionDuration: r.style.transitionDuration, animationDuration: r.style.animationDuration, animationIterationCount: r.style.animationIterationCount, scrollBehavior: r.style.scrollBehavior } };
+        }
+      }
+    };
+    for (const sheet of document.styleSheets) { try { walk(sheet.cssRules, false); } catch { /* a sheet that cannot be read declares nothing we can rely on */ } }
+    const applies = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const limit = { transition: applies && rule ? rule.transitionMs : 0, animation: applies && rule && rule.animationMs !== null ? rule.animationMs : 0 };
+
+    const startFrame = rec.frame;
+    const initial = rec.snapshot();
+    const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    // The closing quiet frames are counted within THIS watch: frames before it started do not count.
+    let framesObserved = 0;
+    let quietRun = 0;
+    while (framesObserved < maxFrames && quietRun < quietFrames) { await frame(); framesObserved += 1; quietRun = rec.lastCount === 0 ? quietRun + 1 : 0; }
+    const final = rec.snapshot();
+    const quiet = quietRun >= quietFrames && Array.isArray(final) && final.length === 0;
+
+    const place = (el, pseudo) => rec.describe({ effect: { target: el, pseudoElement: pseudo, getComputedTiming: () => ({}) }, constructor: {} }).where;
+    const declaredBeyondRule = [];
+    for (const el of [document.documentElement, ...document.querySelectorAll('*')]) {
+      for (const pseudo of [null, '::before', '::after']) {
+        const s = getComputedStyle(el, pseudo);
+        if (s.animationName !== 'none') {
+          const durations = ms(s.animationDuration); const delays = ms(s.animationDelay); const counts = s.animationIterationCount.split(',').map((c) => c.trim());
+          if (durations.some((d) => d > limit.animation + 1e-9) || delays.some((d) => d !== 0) || counts.some((c) => c !== '1')) declaredBeyondRule.push({ where: place(el, pseudo), what: `animation ${s.animationName} ${s.animationDuration} delay ${s.animationDelay} x${s.animationIterationCount}` });
+        }
+        if (s.transitionProperty !== 'none') {
+          const durations = ms(s.transitionDuration); const delays = ms(s.transitionDelay);
+          const moves = durations.some((d) => d > 0) || delays.some((d) => d > 0);
+          if (moves && (durations.some((d) => d > limit.transition + 1e-9) || delays.some((d) => d !== 0))) declaredBeyondRule.push({ where: place(el, pseudo), what: `transition ${s.transitionProperty} ${s.transitionDuration} delay ${s.transitionDelay}` });
+        }
+      }
+    }
+
+    // What a visitor needs afterwards: the heading, and - unless the route's content is still pending - the footer and its links.
+    const shown = (el) => { if (!el) return false; const s = getComputedStyle(el); const r = el.getBoundingClientRect(); return s.visibility === 'visible' && s.display !== 'none' && Number(s.opacity) > 0 && r.width > 0 && r.height > 0; };
+    const unavailable = [];
+    const pending = Boolean(document.querySelector('[data-content-pending]'));
+    // While the route's content is pending there is no heading yet: the loading indication stands in for it.
+    if (!pending && !shown(document.querySelector('h1'))) unavailable.push('the page heading (h1) is not visible');
+    if (pending && !shown(document.querySelector('[data-content-pending]'))) unavailable.push('the loading indication is not visible while the content is pending');
+    const footer = document.querySelector('footer');
+    const footerLinks = footer ? [...footer.querySelectorAll('a[href]')] : [];
+    if (!pending) {
+      if (!shown(footer)) unavailable.push('the footer is not visible');
+      if (footerLinks.length === 0 || !footerLinks.every(shown)) unavailable.push(`footer links visible: ${footerLinks.filter(shown).length} of ${footerLinks.length}`);
+    }
+    const effects = [...rec.effects.values()].filter((e) => e.lastFrame >= sinceFrame);
+    for (const e of effects) {
+      // The end state of a permitted transient: its target must not be left hidden.
+      const selector = e.where.replace(/::(before|after)$/, '');
+      let target = null;
+      try { target = document.querySelector(selector); } catch { target = null; }
+      e.targetShownAfter = target ? shown(target) : null;
+      if (!pending && target && e.name === 'visibility' && !shown(target)) unavailable.push(`${e.where} is not visible after its visibility transition`);
+    }
+    return {
+      reducedMotionApplies: applies, scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior, rule, pending,
+      startFrame, endFrame: rec.frame, framesObserved, quiet, quietFramesAtEnd: quietRun, truncated: rec.truncated,
+      initial, effects, final, declaredBeyondRule, unavailable,
+      availability: { h1: shown(document.querySelector('h1')), footer: shown(footer), footerLinks: footerLinks.length, footerLinksShown: footerLinks.filter(shown).length },
+    };
+  }, { maxFrames, quietFrames, sinceFrame });
+}
+
 export function structureProbe(page) {
   return page.evaluate(() => ({
     lang: document.documentElement.lang,

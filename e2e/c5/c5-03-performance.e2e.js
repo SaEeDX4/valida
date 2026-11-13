@@ -105,6 +105,9 @@ function cumulativeLayoutShift(shifts) {
 
 const TYPE = (resourceType) => ({ Document: 'document', Script: 'js', Stylesheet: 'css', Font: 'font', Image: 'image', Fetch: 'api', XHR: 'api' }[resourceType] ?? 'other');
 
+/** An API response is 'api' however it was requested: a preloaded Job read is reported by CDP as type "Other". */
+const IS_API = /^https?:\/\/[^/]+\/api\/v\d+\//;
+
 async function interact(page, name, profile) {
   const pause = () => page.waitForTimeout(600);
   const steps = [];
@@ -157,7 +160,7 @@ async function measure(browser, { origin, profile, name, pathname, interactions 
   const started = new Map();
   cdp.on('Network.requestWillBeSent', (e) => started.set(e.requestId, e.timestamp));
   cdp.on('Network.responseReceived', (e) => requests.set(e.requestId, {
-    url: e.response.url, type: TYPE(e.type), status: e.response.status, encoding: e.response.headers['content-encoding'] ?? e.response.headers['Content-Encoding'] ?? null, fromCache: e.response.fromDiskCache || e.response.fromServiceWorker || false,
+    url: e.response.url, type: IS_API.test(e.response.url) ? 'api' : TYPE(e.type), status: e.response.status, encoding: e.response.headers['content-encoding'] ?? e.response.headers['Content-Encoding'] ?? null, fromCache: e.response.fromDiskCache || e.response.fromServiceWorker || false,
   }));
   cdp.on('Network.loadingFinished', (e) => {
     const r = requests.get(e.requestId);

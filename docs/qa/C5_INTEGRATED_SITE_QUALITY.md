@@ -844,7 +844,7 @@ Keep the stack from step 0 running. On the PC: `adb reverse tcp:4203 tcp:4203` a
 | --- | --- | --- | --- | --- | --- |
 | C1 | iPhone Safari; Safari on macOS (M4, M5, M6) | Doc 18 §169 | A preview host (C6); loopback cannot be reached from iOS | As B1, B2 and A10 | Device, iOS and Safari versions; screenshots |
 | C2 | **Field Core Web Vitals (M11)** | PERF-001 to PERF-005 | Production traffic (C6/C7): CrUX or RUM, 28 days, mobile and desktop separately | p75 LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1. **No field measurement exists. Every LCP, INP and CLS figure in this record is a lab figure** | The CrUX or RUM export |
-| C3 | Host delivery (M12) | PERF-006; the C4 contract | The production host (C6) | Brotli or gzip on text; immutable caching on hashed `/assets/`; `no-cache` on HTML; the Job preload hint present on Job and Apply documents; `connect-src` allows the API origin | Response headers of one HTML, JS, CSS and font |
+| C3 | Host delivery (M12) | Doc 18 §171; the C4 document contract | The production host (C6) | Brotli or gzip on text; immutable caching on hashed `/assets/`; `no-cache` on HTML; the Job preload hint present on Job and Apply documents; `connect-src` allows the API origin | Response headers of one HTML, JS, CSS and font |
 
 #### Part D — documents and decisions (no machine needed)
 
@@ -853,6 +853,6 @@ Keep the stack from step 0 running. On the PC: `adb reverse tcp:4203 tcp:4203` a
 | D1 | **Doc 06 synchronisation** | Doc 00 change control; OD-2026-11-10-01 §3 | Replace the three accessible names in the canonical Doc 06 §9, §87 and §110 with the approved text | The canonical document carries the text and its revision is recorded. **Not done: no external canonical document was updated in any C5 round** |
 | D2 | Accept or reject the C4 document-server change | Doc 18 §171; OD-C5-3 | Review `git/c5-r3-product-only.diff` in `c5-r3/` | A dated owner decision |
 | D3 | Accept or reject the C5-14 criterion (§10.3, §11.1) | Doc 17 §255 | Review `motionJudge.js` | A dated decision |
-| D4 | C5 acceptance | Doc 18 Milestone Review Rule | After A–B are recorded and D1–D3 decided | The owner's acceptance record. **Claude does not declare it** |
+| D4 | C5 acceptance | The milestone review rule | After A–B are recorded and D1–D3 decided | The owner's acceptance record. **Claude does not declare it** |
 
 **Shortest acceptable subset, if time is short:** A1, A2, A3, A4, A6 at 400% in one browser, A9, B1 — about 40 minutes. The rest stay recorded as OPEN.

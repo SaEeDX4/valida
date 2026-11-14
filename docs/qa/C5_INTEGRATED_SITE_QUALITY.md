@@ -6,7 +6,7 @@
 | Baseline | `389c421a72fb090dc2c08c8251b664bada73d9a0` (GitHub `main` = `c4-work`) |
 | Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227`, `777c1e6` and `fffc252`. Test code only |
 | Fixes | `24a351d` F1, `22344eb` F2, `4807dda` F3, `72a9d52` F4. Frontend CSS and two data attributes; the backend is unchanged |
-| Status | **READY FOR REVIEW (round 3 and its follow-up, §9 and §10).** The follow-up diagnosed C5-14 and corrected the test: a justified test correction, not a retroactive pass; the two failed round-3 runs stay failed. One complete C5 suite at `c7bf09d`: 22 passed, 1 skipped by design. Open: the manual checklist, the Doc 06 synchronisation, OD-C5-2 and OD-C5-4, field Core Web Vitals. The round-3 status was: READY FOR REVIEW with one automated gate failing intermittently (C5-14, §9.7). C5 is not accepted: acceptance is pending independent review and the owner's approval |
+| Status | **READY FOR REVIEW (round 3 and its two follow-ups, §9–§11).** §11 corrects two defects in the C5-14 recorder and judge (every distinct timing is judged; an unreadable frame is incomplete, not quiet) and gives the one ordered manual checklist (§11.4). Verified at `79b1b7b`: unit 15/15, C5-14 8/8; the complete suite at `c7bf09d` (22 passed, 1 skipped by design) is reused for the other cases. Open: every manual check, the Doc 06 synchronisation, OD-C5-2 and OD-C5-4, field Core Web Vitals. C5 is not accepted: acceptance is the owner's |
 | Constraints kept | Local work only. Nothing pushed, deployed or sent; no settings changed. Production candidate acknowledgements stay disabled. The first genuine Cybersecurity Specialist vacancy stays Draft, its eligible work countries OPEN. Approved copy, the social card, job eligibility and the publication rules are unchanged |
 
 Everything below was observed in **Chromium**, through Playwright, on one Linux machine. Nothing here is a claim about other browsers, real devices, real screen readers or production field data. Those are in §6, the manual checklist, and stay open until a person runs them.
@@ -742,3 +742,117 @@ None of these was a product failure. The judgement of motion itself (`motionJudg
 **For Astra's decision, not blocking this test:** whether the footer's six-frame return under reduced motion (§10.2) should be removed in product CSS.
 
 **Not blockers for C5, and not claimed:** field Core Web Vitals; host compression, caching and the hint at the production host (C6). C6 has not been started.
+
+## 11. Round 3 follow-up 2 — motion-recorder correction and the manual handoff (2026-11-13)
+
+From `5fc7fae` (tree `03c6fdf`), on Astra's instruction "focused motion-recorder correction and manual handoff". Sections 1–10 are kept as written. Astra's review decisions are applied: **product CSS is unchanged, the completion criterion of §10.3 is unchanged, and a second start of the footer's brand paragraph is not a separate failure.**
+
+| | |
+| --- | --- |
+| Implementation | **Complete**: two test-harness corrections (`79b1b7b`). Product code unchanged |
+| Verification | **Passed**: unit checks and C5-14 in the browser at `79b1b7b` (§11.3). Manual checks: none performed |
+| Owner acceptance | **Pending.** C5 is not accepted |
+
+### 11.1 The two defects
+
+**1. Only the first timing on a key was judged.** The recorder groups effects by target, kind and name. It kept the first description of each key, and the judge read the timing from that. If the same target, kind and name was later seen with a different timing — a valid 0.01 ms transition, then a 300 ms one, then a valid one again — the later timings were never judged, and with nothing left at the end the observation passed.
+
+*Correction.* The recorder keeps one entry per **distinct timing** seen on a key (kind, duration, delay, end delay, iterations, active duration, fill), each with its first and last frame, its frame count, its play state and the target's computed styles. A return to an earlier timing opens a new entry, so the order is kept. The judge holds **every** entry to the criterion of §10.3 — the first, any in between and the last. A failure names the target, the frames and the timing, and the verdict carries an `offenders` list with the full offending timing. More than 24 timings on one key marks the observation truncated, which fails.
+
+**2. An unreadable frame counted as quiet.** If `document.getAnimations()` threw in a frame, the recorder treated the frame as an empty list. It counted toward the three quiet frames that end the watch, and could produce a pass.
+
+*Correction.* Such a frame is recorded as **unreadable** with its frame number. It never counts as quiet and it resets the quiet run. Any unreadable frame, or an unreadable initial or final snapshot, makes the observation **incomplete**, which fails. An observation that does not say whether its frames were readable fails too.
+
+**A limit of the recorder, found while writing the control and stated rather than hidden.** The recorder reads once per frame, in the frame's callbacks. An effect shorter than one frame that starts *after* that reading, in the same frame's rendering step, has ended before the next reading and is never listed. Anything that lasts into the next frame is listed. The declared-motion check does not depend on frames. Closing this would need a second source (the browser's `transitionrun` and `animationstart` events); that is outside this assignment and is not implemented.
+
+### 11.2 Controls
+
+| Control | What it does | Expected | Result |
+| --- | --- | --- | --- |
+| Timing changes on one key (browser) | One element's opacity transition: 0.01 ms under the rule; then 300 ms, left to finish; then 0.01 ms again with the 300 ms declaration removed | FAIL on the 300 ms observation | **FAIL**: "in frames N–M: its duration is 300 ms, not the reduced-motion rule's 0.01 ms". Timings recorded in order: 0.01, 300, 0.01. Judging the first timing alone finds nothing; nothing is left at the end; nothing is declared |
+| Unreadable snapshot (browser) | `getAnimations()` throws for two frames between readable frames, then works again | FAIL as incomplete | **FAIL**: "incomplete observation: the effects of 2 frame(s) could not be read (frames …)". The page is otherwise quiet and effect-free, and the snapshot works again afterwards |
+| The recorded footer cascade (browser) | Job Detail held in loading, then released | PASS | **PASS**: 18 `visibility` transitions, 6 frames, 6 nesting levels, one timing each, every frame readable |
+| The eight earlier controls | §10.4 | 6 FAIL, 2 PASS | unchanged: 6 FAIL, 2 PASS |
+| Unit tests (`npm run test:c5:motion`) | 15 tests: the 10 of §10 and 5 new | pass | **15 / 15**. New: valid–invalid–valid fails and names the invalid frames and timing; an invalid timing first, last or in between fails; starting again with the same permitted timing passes; an effect with no recorded timing fails; an unreadable frame, initial or final snapshot fails |
+
+### 11.3 Verification, with the commit of each check
+
+| Check | Commit | Result |
+| --- | --- | --- |
+| `npm run test:c5:motion` | `79b1b7b` | 15 / 15 |
+| `npm run test:c5:stats` (same folder, unchanged files) | `79b1b7b` | 16 / 16 |
+| C5-14 in the browser, 8 repeats, clean worktree | `79b1b7b` | **8 / 8 passed**. In every repeat: all nine reduced-motion scenarios pass, 0 unreadable frames on the site, footer cascade 18 / 6 / 6, both new controls fail as expected, the eight earlier controls unchanged |
+| Development runs before the commit | uncommitted drafts | 2 failed, 1 passed (`logs/dev1.log`–`dev3.log`). Both failures were the new control's third step not being seen (the limit in §11.1), not the judge; the control was corrected to change the style between frames |
+
+**Reused, unchanged: the complete C5 suite at `c7bf09d`** (22 passed, 1 skipped by design; evidence `c5-r4/`, checksums verified). It still applies to the other 21 cases: this round changed only `motionJudge.js`, its tests, the motion recorder and observer in `c5Support.js`, and the C5-14 case. No other case uses the recorder or the judge. Its C5-14 result is superseded for the judgement by the runs above; its original record is not altered. Product code is unchanged since `5af9893`, so the SEO, quality, guard and C3 results cited in §9.4 and §10.5 still apply.
+
+**Still stated:** directly measured lab LCP is 2.1–2.2 s on Job Detail and Apply; Lighthouse's simulated mobile LCP is 3.1–3.5 s and 2.5–3.0 s. Neither is field evidence.
+
+### 11.4 The manual checklist — one ordered list for the remaining C5 requirements
+
+**Nothing in this list has been performed by anyone. No action on the owner's machine is authorised by this record.** It replaces, for use, the shorter lists in §8.6 and §9.6 and covers every row of §6 (M1–M12).
+
+**For every row record:** date, tester, device, OS version, browser version, assistive-technology version, PASS / FAIL / N/A, and one screenshot or a two-line note. Keep the evidence outside the repository. Use only the synthetic Jobs and a made-up applicant (`qa.manual@example.test`, any small PDF with no personal content). A FAIL is reported, not fixed silently.
+
+#### Step 0 — read before any command
+
+> **WARNING: the set-up DELETES the database named in `MONGODB_TEST_URI` every time it starts.** Use a new, disposable name (`valida_test_c5_manual`). The suite refuses any name that is not `valida_test` or `valida_test_<suffix>`. Never point it at a database you want to keep. Use a **new folder**, never the working copy.
+
+```powershell
+git clone https://github.com/SaEeDX4/valida.git C:\Temp\valida-c5-review
+cd C:\Temp\valida-c5-review
+git fetch C:\path\to\c5-work-389c421..<final>.bundle c5-work      # the cumulative bundle in the handoff
+git checkout --detach <final SHA from the handoff>
+git rev-parse HEAD                                                 # must print that SHA
+npm ci --prefix backend; npm ci --prefix frontend; npm ci --prefix e2e
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c5_manual"   # DELETED at every start
+$env:C5_HOLD_MINUTES = "90"
+npx playwright test --config playwright.c5.config.js c5/c5-99-hold.e2e.js
+```
+
+The site is then at `http://127.0.0.1:4203` until Ctrl+C or the time runs out. Nothing leaves 127.0.0.1 and no e-mail is sent. Routes: `/`, `/about`, `/careers`, `/careers/qa-c5-open-long`, `/careers/qa-c5-closed`, `/careers/qa-c5-open-long/apply`, `/privacy`, `/legal`, and any unknown path.
+
+#### Part A — on the Windows machine, in this order (about 60 minutes)
+
+| # | Check (§6 row) | Requirement | Do | Expected result | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| A1 | Keyboard on the real OS (M10) | Doc 18 §170; A11Y-008, -009, -010, -012, -029, -039 | Edge, physical keyboard. Tab and Shift+Tab through every route. Open the menu in a narrow window; Escape. On Apply: Tab to Choose File, Enter, choose a PDF in the Windows dialog by keyboard | No trap. Focus always visible and never fully under the header. Escape closes the menu and focus returns to "Menu". The dialog opens, the file name appears, focus returns to the page | Note per route; screenshot of the chosen file |
+| A2 | Screen reader, Chrome (M1) | Doc 18 §170; A11Y-005, -007, -022, -026, -027, -028, -040 | NVDA + Chrome. H, D, K through Home, Careers, Job Detail. On Careers also the links list (Insert+F7). On Apply: submit empty; follow one error-summary link; complete and submit. Then: disconnect the network, load `/careers`, reconnect, Try Again | Headings and landmarks announced. Each role link is read "View Role: {title}" and the roles are distinguishable. Each field has a name, required state and help. Errors are read once and understandable. "Thank you for applying." is read once. After Try Again, "Open Roles" is read | NVDA version; a note of what was spoken for the role links, the error summary, success and recovery |
+| A3 | Role facts inside the row (M1, label in name) | WCAG 2.5.3; OD-2026-11-10-01; A11Y-002 | NVDA + Chrome on Careers: read one role row with the arrow keys | State what is spoken: whether location, arrangement, hours and pay are reachable. **This informs the conformance judgement the automated test does not make** | Verbatim note of what NVDA read |
+| A4 | Speech input (M3) | WCAG 2.5.3; OD-2026-11-10-01 | Windows Voice Access. "Click Menu" (narrow window). "Click View Role" on Careers. "Click Back to Role" on Apply | Each control is activated. With two roles, "View Role" offers numbered choices | Note per command |
+| A5 | Screen reader, Firefox (M2) | A11Y-040 | NVDA + Firefox: the Apply steps of A2 | As A2 | Firefox version; note |
+| A6 | Browser zoom (M7) | Doc 18 §170; A11Y-017, -018, -019 | Chrome, Edge and Firefox, 1280 px window, 200% then 400%; Firefox "Zoom Text Only" 200%. Every route and the Apply validation state | One column, no two-dimensional scrolling, nothing clipped or overlapping, the header does not cover the focused control | Screenshot of Apply validation at 400% per browser |
+| A7 | Windows text size (M6) | A11Y-017 | Settings > Accessibility > Text size 200%, Edge. Every route and Apply validation | Nothing clipped or overlapping; no horizontal scroll. Large headings may break inside a word (F3, OD-C5-4) | Screenshot of Home and Apply |
+| A8 | Contrast themes (M8) | Doc 18 §170; A11Y-015, -016 | Settings > Accessibility > Contrast themes: "Night sky", then "Desert". Home, Careers, Job Detail, Apply validation | Focus indicator, input borders, buttons and error text all visible | One screenshot per theme |
+| A9 | Reduced motion on the real setting (M9) | Doc 16 §§58–59; A11Y-032, -033 | Settings > Accessibility > Visual effects > Animation effects **Off**. Home hero; an error-summary link on Apply; load a Job and watch the footer | No ambient or decorative motion. The jump to the field is instant. The footer appears without visible staging; say so if any staging is seen (§10.2) | Note; the Windows setting screenshot |
+| A10 | Other desktop engine (M4) | Doc 18 §169, §172 | Edge and Firefox on Windows: every route wide and narrow; one empty and one complete Apply. In Firefox, open the network panel on a Job | Same layout and behaviour as Chromium; no horizontal scroll; focus visible. The Job request appears once or twice and never as an error (the preload hint is optional there) | Note; network-panel screenshot |
+| A11 | Visual pass | Doc 18 §172; OD-C5-2, OD-C5-4 | Look at the header logo and footer mark on a high-density screen; the Careers row separators; the compact controls | Record what you see. **Decide or explicitly defer OD-C5-2 and OD-C5-4** | The decision, dated |
+
+#### Part B — a real Android phone (about 15 minutes; needs USB debugging)
+
+Keep the stack from step 0 running. On the PC: `adb reverse tcp:4203 tcp:4203` and `adb reverse tcp:4120 tcp:4120`. On the phone, Chrome: `http://127.0.0.1:4203`.
+
+| # | Check (§6 row) | Requirement | Do | Expected result | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| B1 | Touch, portrait and landscape (M5) | Doc 18 §169; A11Y-020, -021 | Menu, Careers, a role, Apply with a real file pick, success | Usable by touch; nothing clipped; the file picker opens; the keyboard does not hide the focused field | Device and Chrome version; two screenshots |
+| B2 | Largest font size (M6) | A11Y-017 | Android font size at maximum; every route and Apply validation | Nothing clipped or overlapping; no horizontal scroll | Screenshot of Apply |
+
+#### Part C — cannot be done locally; they stay OPEN and are not C5 blockers
+
+| # | Check (§6 row) | Requirement | Needs | Expected result | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| C1 | iPhone Safari; Safari on macOS (M4, M5, M6) | Doc 18 §169 | A preview host (C6); loopback cannot be reached from iOS | As B1, B2 and A10 | Device, iOS and Safari versions; screenshots |
+| C2 | **Field Core Web Vitals (M11)** | PERF-001 to PERF-005 | Production traffic (C6/C7): CrUX or RUM, 28 days, mobile and desktop separately | p75 LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1. **No field measurement exists. Every LCP, INP and CLS figure in this record is a lab figure** | The CrUX or RUM export |
+| C3 | Host delivery (M12) | PERF-006; the C4 contract | The production host (C6) | Brotli or gzip on text; immutable caching on hashed `/assets/`; `no-cache` on HTML; the Job preload hint present on Job and Apply documents; `connect-src` allows the API origin | Response headers of one HTML, JS, CSS and font |
+
+#### Part D — documents and decisions (no machine needed)
+
+| # | Item | Requirement | Do | Done when |
+| --- | --- | --- | --- | --- |
+| D1 | **Doc 06 synchronisation** | Doc 00 change control; OD-2026-11-10-01 §3 | Replace the three accessible names in the canonical Doc 06 §9, §87 and §110 with the approved text | The canonical document carries the text and its revision is recorded. **Not done: no external canonical document was updated in any C5 round** |
+| D2 | Accept or reject the C4 document-server change | Doc 18 §171; OD-C5-3 | Review `git/c5-r3-product-only.diff` in `c5-r3/` | A dated owner decision |
+| D3 | Accept or reject the C5-14 criterion (§10.3, §11.1) | Doc 17 §255 | Review `motionJudge.js` | A dated decision |
+| D4 | C5 acceptance | Doc 18 Milestone Review Rule | After A–B are recorded and D1–D3 decided | The owner's acceptance record. **Claude does not declare it** |
+
+**Shortest acceptable subset, if time is short:** A1, A2, A3, A4, A6 at 400% in one browser, A9, B1 — about 40 minutes. The rest stay recorded as OPEN.

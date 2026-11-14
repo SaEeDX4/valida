@@ -30,7 +30,8 @@
  * present when the observation ends, an effect whose timing cannot be read, a
  * declared animation or transition beyond the rule, scrolling that is not
  * instant, content that is not available afterwards. A truncated or missing
- * observation fails too: unknown is never a pass.
+ * observation fails too, and so does one in which any frame's effects could
+ * not be read: such a frame is not a quiet frame. Unknown is never a pass.
  *
  * Pure functions: no browser, no clock. The observation is made by
  * c5Support.js (motionObserve).
@@ -55,30 +56,59 @@ export function effectProblems(effect, rule) {
 }
 
 /**
- * Judges one observation (motionObserve). Returns { pass, failures[], permitted[] }:
- * `permitted` lists the effects accepted as the rule's instantaneous completion.
+ * Judges one observation (motionObserve). Returns { pass, failures[], permitted[], offenders[] }:
+ * `permitted` lists the effects accepted as the rule's instantaneous completion;
+ * `offenders` lists, per target, each observed timing that was not, with its frames.
+ *
+ * An effect is identified by target, kind and name, and may be seen with more
+ * than one timing over its life. EVERY distinct timing recorded for it is held
+ * to the criterion above. Starting again with the same permitted timing is not
+ * a failure of its own (reviewed: the footer's brand paragraph does).
  */
 export function judgeReducedMotion(observation) {
   const failures = [];
   const permitted = [];
+  const offenders = [];
   const o = observation ?? {};
-  if (!observation) return { pass: false, failures: ['there is no observation'], permitted };
+  if (!observation) return { pass: false, failures: ['there is no observation'], permitted, offenders };
   if (o.scrollBehavior !== 'auto') failures.push(`scrolling is "${o.scrollBehavior}", not instant`);
   if (!o.rule) failures.push('no reduced-motion rule was found in the page\'s stylesheets');
   if (o.truncated) failures.push('the observation was truncated: more effects than were recorded');
   if (!Array.isArray(o.effects) || !Array.isArray(o.final) || !Array.isArray(o.declaredBeyondRule)) failures.push('the observation is incomplete');
   for (const d of o.declaredBeyondRule ?? []) failures.push(`declared motion beyond the rule on ${d.where}: ${d.what}`);
+  // A frame that could not be read is not a quiet frame and not a pass: the observation is incomplete.
+  const u = o.unreadable;
+  if (!u || typeof u.count !== 'number' || !Array.isArray(u.frames)) failures.push('the observation does not say whether every frame could be read');
+  else {
+    if (u.count > 0) failures.push(`incomplete observation: the effects of ${u.count} frame(s) could not be read (frames ${u.frames.join(', ')})`);
+    if (u.initialSnapshotReadable !== true) failures.push('incomplete observation: the initial snapshot could not be read');
+    if (u.finalSnapshotReadable !== true) failures.push('incomplete observation: the final snapshot could not be read');
+  }
   const stillThere = new Set((o.final ?? []).map((e) => e.key));
+  const frames = (t) => (t.firstFrame === t.lastFrame ? `frame ${t.firstFrame}` : `frames ${t.firstFrame}-${t.lastFrame}`);
   for (const effect of o.effects ?? []) {
-    const problems = effectProblems(effect, o.rule);
+    const problems = [];
+    // EVERY distinct timing seen on this target/kind/name is judged - the first, any in between and the last - so a
+    // valid observation before or after an invalid one cannot stand in for it.
+    const timings = effect.timings;
+    const offending = [];
+    if (!Array.isArray(timings) || timings.length === 0) problems.push('no timing was recorded for it');
+    else {
+      for (const t of timings) {
+        const why = effectProblems({ ...t, kind: t.kind ?? effect.kind }, o.rule);
+        if (why.length) { problems.push(`in ${frames(t)}: ${why.join('; ')}`); offending.push({ firstFrame: t.firstFrame, lastFrame: t.lastFrame, frames: t.frames, kind: t.kind ?? effect.kind, duration: t.duration, delay: t.delay, endDelay: t.endDelay, iterations: t.iterations, activeDuration: t.activeDuration, fill: t.fill, problems: why }); }
+      }
+    }
     if (stillThere.has(effect.key)) problems.push(`it is still present when the observation ends (${effect.playState ?? 'state unknown'})`);
-    if (problems.length) failures.push(`${effect.kind ?? 'effect'} "${effect.name}" on ${effect.where}: ${problems.join('; ')}`);
-    else permitted.push({ where: effect.where, kind: effect.kind, name: effect.name, duration: effect.duration, framesSeen: effect.framesSeen, firstFrame: effect.firstFrame, lastFrame: effect.lastFrame });
+    if (problems.length) {
+      failures.push(`${effect.kind ?? 'effect'} "${effect.name}" on ${effect.where}: ${problems.join('; ')}`);
+      if (offending.length) offenders.push({ where: effect.where, key: effect.key, kind: effect.kind, name: effect.name, timingsSeen: timings.length, offending });
+    } else permitted.push({ where: effect.where, kind: effect.kind, name: effect.name, duration: effect.duration, timingsSeen: timings.length, framesSeen: effect.framesSeen, firstFrame: effect.firstFrame, lastFrame: effect.lastFrame });
   }
   // An effect present at the end that the frame recorder never listed is still a failure.
   const recorded = new Set((o.effects ?? []).map((e) => e.key));
   for (const e of o.final ?? []) if (!recorded.has(e.key)) failures.push(`${e.kind ?? 'effect'} "${e.name}" on ${e.where}: present when the observation ends and never recorded`);
   if (o.quiet !== true) failures.push(`the page was not quiet after ${o.framesObserved} observed frames`);
   for (const a of o.unavailable ?? []) failures.push(`not available after the observation: ${a}`);
-  return { pass: failures.length === 0, failures, permitted };
+  return { pass: failures.length === 0, failures, permitted, offenders };
 }

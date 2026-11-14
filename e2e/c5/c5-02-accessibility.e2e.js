@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { BACKEND_DIR, FIXTURES_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { C5_SITE_ORIGIN, C5_SLUGS } from '../support/c5Stack.js';
-import { judgeReducedMotion } from './motionJudge.js';
+import { effectProblems, judgeReducedMotion } from './motionJudge.js';
 import {
   ROUTES, axe, ensureJobs, openRoute, publishedJobs, waitForStill, focusProbe, headingProblems, layoutProbe, motionObserve, motionProbe, MOTION_RECORDER, record, settle, shot, structureProbe, writeText,
 } from './c5Support.js';
@@ -703,6 +703,9 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
       permittedNamingIt: verdict.permitted.filter((e) => mine(e.where)),
       effects: observation.effects.filter((e) => mine(e.where)), finalStillPresent: observation.final.filter((e) => mine(e.where)).length,
       framesObserved: observation.framesObserved, quiet: observation.quiet, reasonExpected: reason ? String(reason) : null,
+      offenders: verdict.offenders.filter((x) => mine(x.where)), unreadable: observation.unreadable,
+      // What judging only the FIRST timing seen on each key would have said (the defect corrected in this round).
+      firstTimingOnlyWouldSay: observation.effects.filter((e) => mine(e.where)).map((e) => effectProblems(e, observation.rule)),
     };
     await page.evaluate((controlId) => document.getElementById(`c5-injected-${controlId}`)?.remove(), id);
   };
@@ -731,6 +734,44 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   await control('intended-instant-transition', 'an ordinary element whose opacity changes: the reduced-motion rule makes it a 0.01 ms transition',
     (el) => { getComputedStyle(el).opacity; el.style.opacity = '0.5'; },
     { mustFail: false });
+  // The recorder itself. (1) One target/kind/name seen with a permitted timing, then a different one, then the
+  // permitted one again: every distinct timing is judged, so the one in between fails although the first and the
+  // last are valid, nothing is left at the end and nothing is declared any more.
+  await control('timing-changes-on-one-key', 'one element\'s opacity transition: 0.01 ms (the rule), then 300 ms (declared !important, left to finish), then 0.01 ms again with the 300 ms declaration removed',
+    async (el) => {
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      getComputedStyle(el).opacity; el.style.opacity = '0.9';
+      await frame(); await frame();
+      el.style.setProperty('transition', 'opacity 300ms linear', 'important'); getComputedStyle(el).opacity; el.style.opacity = '0.5';
+      // The 300 ms transition is left to run to its end (nothing is cancelled), then the declaration is removed
+      // and the opacity changes once more under the rule alone.
+      for (let i = 0; i < 60 && el.getAnimations().length > 0; i += 1) await frame();
+      // Changed between frames, as the first step was: a 0.01 ms transition that starts in a frame's own rendering
+      // step, after its callbacks, is over before the next frame's reading (see the recorder's note on what it can see).
+      await new Promise((resolve) => { setTimeout(resolve, 0); });
+      el.style.removeProperty('transition'); getComputedStyle(el).opacity; el.style.opacity = '0.8';
+      await frame(); await frame();
+    },
+    { mustFail: true, reason: /in frames? [\d-]+: its duration is 300 ms, not the reduced-motion rule's 0\.01 ms/ });
+  // (2) A frame whose effects cannot be listed, between frames that can: it is not a quiet frame and not a pass.
+  {
+    const mark = (await frameNow()) + 1;
+    await page.evaluate(async () => {
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      await frame();
+      document.getAnimations = () => { throw new Error('QA C5 control: the snapshot cannot be read'); };
+      await frame(); await frame();
+      delete document.getAnimations;
+      await frame();
+    });
+    const observation = await motionObserve(page, { sinceFrame: mark });
+    const verdict = judgeReducedMotion(observation);
+    controls['unreadable-snapshot'] = {
+      description: 'document.getAnimations() throws for two frames between readable frames, then works again', expected: 'FAIL', verdict: verdict.pass ? 'PASS' : 'FAIL',
+      failures: verdict.failures, unreadable: observation.unreadable, framesBefore: mark - 1, framesObserved: observation.framesObserved, quietAfterwards: observation.quiet, effectsSeen: observation.effects.length, finalStillPresent: observation.final.length,
+      snapshotWorksAgain: await page.evaluate(() => Array.isArray(document.getAnimations())),
+    };
+  }
   // The site's own controls: hovering and focusing the primary action (it declares colour and transform transitions).
   const hoverMark = (await frameNow()) + 1;
   const apply = page.getByRole('link', { name: 'Apply for This Role' }).first();
@@ -769,7 +810,7 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
     observation: 'EMULATED (Chromium media emulation); effects recorded on every animation frame from the start of each document',
     criterion: {
       old: 'at one instant after settling: document.getAnimations().length === 0; html scroll-behavior "auto"; no element declaring an ANIMATION longer than 10 ms (declared transitions recorded, not asserted)',
-      new: 'every effect seen on any frame, and through a bounded frame-by-frame watch (at most 90 frames, ending after 3 consecutive frames with no effect), must be the reduced-motion rule\'s own instantaneous completion - a CSS transition or animation of exactly the duration that rule declares, no delay, no end delay, one iteration, not filling - and must be gone when the watch ends with the page quiet; no element may declare an animation OR a transition beyond the rule; scroll-behavior is "auto"; the heading, the footer and its links are visible afterwards',
+      new: 'every effect seen on any frame, and through a bounded frame-by-frame watch (at most 90 frames, ending after 3 consecutive frames with no effect), must be the reduced-motion rule\'s own instantaneous completion - a CSS transition or animation of exactly the duration that rule declares, no delay, no end delay, one iteration, not filling - and must be gone when the watch ends with the page quiet; no element may declare an animation OR a transition beyond the rule; scroll-behavior is "auto"; the heading, the footer and its links are visible afterwards. Round 3 follow-up 2: EVERY distinct timing seen on a target/kind/name is held to that (not only the first), and a frame whose effects could not be read makes the observation incomplete - it is never a quiet frame and never a pass',
       notAStandard: 'The permitted duration is the value the site\'s own rule declares (base.css), read from the page. No numeric threshold is chosen here and none is an accessibility standard. The 90-frame bound limits the observation; it is not a tolerance for motion.',
     },
     results, controls, afterControls,
@@ -798,7 +839,7 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   // The controls.
   for (const [id, c] of Object.entries(controls)) {
     expect.soft(c.verdict, `control ${id}`).toBe(c.expected);
-    if (c.expected === 'FAIL') {
+    if (c.expected === 'FAIL' && id !== 'unreadable-snapshot') {
       expect.soft(c.failuresNamingTheInjectedEffect.length, `control ${id}: the injected effect itself is named, from observation`).toBeGreaterThan(0);
       expect.soft(c.failuresNamingTheInjectedEffect.join(' | '), `control ${id}: for the expected reason`).toMatch(new RegExp(c.reasonExpected.slice(1, -1)));
     }
@@ -806,7 +847,29 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   expect.soft(controls['intended-instant-transition'].permittedNamingIt.length, 'the intended 0.01 ms transition was seen, permitted and finished').toBeGreaterThan(0);
   expect.soft(controls['intended-instant-transition'].finalStillPresent).toBe(0);
   expect.soft(controls['site-hover-and-focus']).toMatchObject({ actionStillVisible: true, actionEnabled: true });
-  expect.soft(Object.keys(controls).sort()).toEqual(['delayed', 'intended-instant-transition', 'persistent', 'short-repeated-indefinitely', 'short-repeated-meaningful-total', 'site-hover-and-focus', 'sustained-opacity', 'sustained-transform']);
+  // The timing that changed on one key: three timings were seen in order, only the middle one offends, the first
+  // alone would have passed, and nothing is left or declared.
+  {
+    const c = controls['timing-changes-on-one-key'];
+    expect.soft(c.effects.length, 'one key').toBe(1);
+    expect.soft((c.effects[0]?.timings ?? []).map((t) => t.duration), 'the three timings, in order').toEqual([0.01, 300, 0.01]);
+    expect.soft(c.offenders.length).toBe(1);
+    expect.soft(c.offenders[0]?.offending.map((t) => t.duration)).toEqual([300]);
+    expect.soft(c.firstTimingOnlyWouldSay, 'judging the first timing only would have found nothing').toEqual([[]]);
+    expect.soft({ final: c.finalStillPresent, declared: c.declaredFindingsNamingIt.length, quiet: c.quiet }).toEqual({ final: 0, declared: 0, quiet: true });
+  }
+  // The unreadable frames: reported with their frame numbers, the page otherwise quiet and effect-free.
+  {
+    const c = controls['unreadable-snapshot'];
+    expect.soft(c.unreadable.count, 'unreadable frames recorded').toBeGreaterThanOrEqual(1);
+    expect.soft(c.unreadable.frames.every((f) => f > c.framesBefore), 'they are frames of this control').toBe(true);
+    expect.soft(c.failures.length).toBe(1);
+    expect.soft(c.failures[0]).toMatch(/^incomplete observation: the effects of \d+ frame\(s\) could not be read \(frames [\d, ]+\)$/);
+    expect.soft({ quietAfterwards: c.quietAfterwards, effectsSeen: c.effectsSeen, finalStillPresent: c.finalStillPresent, snapshotWorksAgain: c.snapshotWorksAgain }).toEqual({ quietAfterwards: true, effectsSeen: 0, finalStillPresent: 0, snapshotWorksAgain: true });
+  }
+  // No observation of the site itself had an unreadable frame.
+  for (const [name, r] of Object.entries(results.reduce)) expect.soft(r.observation.unreadable, `${name}: every frame was read`).toMatchObject({ count: 0, initialSnapshotReadable: true, finalSnapshotReadable: true });
+  expect.soft(Object.keys(controls).sort()).toEqual(['delayed', 'intended-instant-transition', 'persistent', 'short-repeated-indefinitely', 'short-repeated-meaningful-total', 'site-hover-and-focus', 'sustained-opacity', 'sustained-transform', 'timing-changes-on-one-key', 'unreadable-snapshot']);
   expect.soft(afterControls.verdict.failures, 'after the controls the page passes again').toEqual([]);
 });
 

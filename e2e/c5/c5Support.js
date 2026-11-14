@@ -377,6 +377,12 @@ export function motionProbe(page) {
  * from the nearest landmark or id), its kind and its animation name or
  * transitioned property - not by an index into a list.
  *
+ * What it cannot see: it reads once per frame, in the frame's callbacks. An
+ * effect shorter than one frame that starts AFTER that reading (in the same
+ * frame's rendering step) has ended before the next reading and is never
+ * listed. Anything that lasts into the next frame is. The declared-motion
+ * check in motionObserve does not depend on frames.
+ *
  * Note: getAnimations() brings the document's style up to date, so the
  * recorder makes a pending style change take effect in the frame it is seen
  * rather than a later one. It can move WHEN a transition starts by a frame; it
@@ -384,7 +390,21 @@ export function motionProbe(page) {
  */
 export const MOTION_RECORDER = () => {
   const MAX_EFFECTS = 400;
-  const rec = { frame: 0, effects: new Map(), lastCount: 0, quietFrames: 0, truncated: false, marks: [] };
+  const MAX_TIMINGS = 24;
+  const MAX_UNREADABLE = 60;
+  const rec = { frame: 0, effects: new Map(), lastCount: 0, lastReadable: true, quietFrames: 0, truncated: false, unreadableFrames: [], unreadableCount: 0, marks: [] };
+  // One entry per DISTINCT timing seen on a key: an effect that changes its timing between frames is judged on each.
+  const timingOf = (d) => ({ kind: d.kind, duration: d.duration, delay: d.delay, endDelay: d.endDelay, iterations: d.iterations, activeDuration: d.activeDuration, fill: d.fill });
+  const signature = (t) => JSON.stringify([t.kind, t.duration, t.delay, t.endDelay, t.iterations, t.activeDuration, t.fill]);
+  const noteTiming = (known, d) => {
+    const t = timingOf(d);
+    const sig = signature(t);
+    const last = known.timings[known.timings.length - 1];
+    // Consecutive frames with the same timing extend the entry; a change, or a return to an earlier timing, opens a new one.
+    if (last && last.signature === sig) { last.lastFrame = rec.frame; last.frames += 1; return; }
+    if (known.timings.length >= MAX_TIMINGS) { rec.truncated = true; return; }
+    known.timings.push({ ...t, signature: sig, firstFrame: rec.frame, lastFrame: rec.frame, frames: 1, playState: d.playState, currentTime: d.currentTime, computed: d.computed });
+  };
   const where = (el, pseudo) => {
     if (!el || !el.tagName) return 'unknown target';
     const parts = [];
@@ -438,7 +458,19 @@ export const MOTION_RECORDER = () => {
   rec.snapshot = () => { try { return document.getAnimations().map(describe); } catch { return null; } };
   const tick = () => {
     rec.frame += 1;
-    const now = rec.snapshot() ?? [];
+    const read = rec.snapshot();
+    // A frame whose effects could not be listed is NOT a quiet frame: it is recorded as unreadable.
+    if (read === null) {
+      rec.unreadableCount += 1;
+      if (rec.unreadableFrames.length < MAX_UNREADABLE) rec.unreadableFrames.push(rec.frame);
+      rec.lastReadable = false;
+      rec.lastCount = null;
+      rec.quietFrames = 0;
+      requestAnimationFrame(tick);
+      return;
+    }
+    rec.lastReadable = true;
+    const now = read;
     const seen = new Set();
     for (const d of now) {
       seen.add(d.key);
@@ -448,8 +480,11 @@ export const MOTION_RECORDER = () => {
         if (known.lastFrame !== rec.frame - 1) { known.runs += 1; if (known.runFrames.length < 12) known.runFrames.push(rec.frame); }
         known.lastFrame = rec.frame;
         known.last = d;
+        noteTiming(known, d);
       } else if (rec.effects.size < MAX_EFFECTS) {
-        rec.effects.set(d.key, { ...d, firstFrame: rec.frame, lastFrame: rec.frame, framesSeen: 1, runs: 1, runFrames: [rec.frame], firstAt: Math.round(performance.now() * 10) / 10, last: d });
+        const fresh = { ...d, firstFrame: rec.frame, lastFrame: rec.frame, framesSeen: 1, runs: 1, runFrames: [rec.frame], firstAt: Math.round(performance.now() * 10) / 10, last: d, timings: [] };
+        noteTiming(fresh, d);
+        rec.effects.set(d.key, fresh);
       } else {
         rec.truncated = true;
       }
@@ -475,6 +510,10 @@ export const MOTION_RECORDER = () => {
  *   observation, counted in frames, not a sleep: nothing is retried and no
  *   effect is cancelled or finished;
  *   final     what is listed when the watching ends;
+ *   unreadable  the frames whose effects could not be listed (an exception
+ *             from getAnimations()): never counted as quiet, and reported;
+ *   each effect carries `timings`: one entry per distinct timing seen on that
+ *             target/kind/name, with the frames it covered;
  *   rule      the durations the page's own reduced-motion rule declares;
  *   declaredBeyondRule  every element (and ::before / ::after) whose computed
  *             style declares an animation, or a transition, longer than the
@@ -507,7 +546,7 @@ export function motionObserve(page, { maxFrames = 90, quietFrames = 3, sinceFram
     // The closing quiet frames are counted within THIS watch: frames before it started do not count.
     let framesObserved = 0;
     let quietRun = 0;
-    while (framesObserved < maxFrames && quietRun < quietFrames) { await frame(); framesObserved += 1; quietRun = rec.lastCount === 0 ? quietRun + 1 : 0; }
+    while (framesObserved < maxFrames && quietRun < quietFrames) { await frame(); framesObserved += 1; quietRun = rec.lastReadable && rec.lastCount === 0 ? quietRun + 1 : 0; }
     const final = rec.snapshot();
     const quiet = quietRun >= quietFrames && Array.isArray(final) && final.length === 0;
 
@@ -541,7 +580,10 @@ export function motionObserve(page, { maxFrames = 90, quietFrames = 3, sinceFram
       if (!shown(footer)) unavailable.push('the footer is not visible');
       if (footerLinks.length === 0 || !footerLinks.every(shown)) unavailable.push(`footer links visible: ${footerLinks.filter(shown).length} of ${footerLinks.length}`);
     }
-    const effects = [...rec.effects.values()].filter((e) => e.lastFrame >= sinceFrame);
+    // Only what was seen from `sinceFrame` on: the effects, each one's distinct timings, and the unreadable frames.
+    const effects = [...rec.effects.values()].filter((e) => e.lastFrame >= sinceFrame).map((e) => ({ ...e, timings: e.timings.filter((t) => t.lastFrame >= sinceFrame) }));
+    const unreadableFrames = rec.unreadableFrames.filter((f) => f >= sinceFrame);
+    const unreadable = { frames: unreadableFrames, count: unreadableFrames.length, recorderTotal: rec.unreadableCount, initialSnapshotReadable: Array.isArray(initial), finalSnapshotReadable: Array.isArray(final) };
     for (const e of effects) {
       // The end state of a permitted transient: its target must not be left hidden.
       const selector = e.where.replace(/::(before|after)$/, '');
@@ -553,7 +595,7 @@ export function motionObserve(page, { maxFrames = 90, quietFrames = 3, sinceFram
     return {
       reducedMotionApplies: applies, scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior, rule, pending,
       startFrame, endFrame: rec.frame, framesObserved, quiet, quietFramesAtEnd: quietRun, truncated: rec.truncated,
-      initial, effects, final, declaredBeyondRule, unavailable,
+      initial, effects, final, unreadable, declaredBeyondRule, unavailable,
       availability: { h1: shown(document.querySelector('h1')), footer: shown(footer), footerLinks: footerLinks.length, footerLinksShown: footerLinks.filter(shown).length },
     };
   }, { maxFrames, quietFrames, sinceFrame });

@@ -6,7 +6,7 @@
 | Baseline | `389c421a72fb090dc2c08c8251b664bada73d9a0` (GitHub `main` = `c4-work`) |
 | Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227`, `777c1e6` and `fffc252`. Test code only |
 | Fixes | `24a351d` F1, `22344eb` F2, `4807dda` F3, `72a9d52` F4. Frontend CSS and two data attributes; the backend is unchanged |
-| Status | **READY FOR REVIEW (round 3, §9), with one automated gate failing intermittently: C5-14, in both complete runs (§9.7).** Round 3 narrowed the Careers label-in-name exception and added the Job API preload hint; mobile lab LCP on Job Detail, Apply and the missing Job is now inside 2.5 s (O2). Open: C5-14, OD-C5-2 and OD-C5-4, the Doc 06 synchronisation, and the manual checklist. The round-2 status was: READY FOR REVIEW (round 2, §8), with mobile LCP open. C5 is not accepted: acceptance is pending independent review and the owner's approval |
+| Status | **READY FOR REVIEW (round 3 and its follow-up, §9 and §10).** The follow-up diagnosed C5-14 and corrected the test: a justified test correction, not a retroactive pass; the two failed round-3 runs stay failed. One complete C5 suite at `c7bf09d`: 22 passed, 1 skipped by design. Open: the manual checklist, the Doc 06 synchronisation, OD-C5-2 and OD-C5-4, field Core Web Vitals. The round-3 status was: READY FOR REVIEW with one automated gate failing intermittently (C5-14, §9.7). C5 is not accepted: acceptance is pending independent review and the owner's approval |
 | Constraints kept | Local work only. Nothing pushed, deployed or sent; no settings changed. Production candidate acknowledgements stay disabled. The first genuine Cybersecurity Specialist vacancy stays Draft, its eligible work countries OPEN. Approved copy, the social card, job eligibility and the publication rules are unchanged |
 
 Everything below was observed in **Chromium**, through Playwright, on one Linux machine. Nothing here is a claim about other browsers, real devices, real screen readers or production field data. Those are in §6, the manual checklist, and stay open until a person runs them.
@@ -609,3 +609,136 @@ The full list is §6 (M1–M12). Everything in it stays **OPEN** until performed
 | C | Switch the hint off | Not shown to remove the count, and it restores the three LCP failures |
 
 Recommendation: A, with the two failing runs kept as the record of why.
+
+## 10. Round 3 follow-up — C5-14 resolved precisely (2026-11-13)
+
+From `246796b` (tree `c5b8e3f`), on Astra's instruction "C5 Round 3 follow-up: resolve C5-14 precisely". Sections 1–9 are kept as written. §9.7 described C5-14 as open, with causes "not established"; this section establishes them. Option A of §9.7 (ignore everything up to 10 ms) was **not** implemented.
+
+**This is a justified correction of a test, not a retroactive pass.** The two complete runs of round 3 (`8049060`, `b5ec779`) failed C5-14 under the criterion in force at the time. They stay failed and their evidence is unchanged.
+
+| | |
+| --- | --- |
+| Implementation | **Complete**: one test correction (`c7bf09d`). **Product code is unchanged** |
+| Verification | **Passed**: the focused checks, the controls, and one complete C5 suite on the committed candidate (§10.5). Manual checks: none performed |
+| Independent review, owner acceptance | **Pending.** C5 is not accepted |
+
+### 10.1 The requirement
+
+- Doc 16 §58: respect `prefers-reduced-motion: reduce`.
+- Doc 16 §59: when reduction is requested, "remove decorative continuous motion; remove unnecessary parallax; minimize large transitions; preserve all functionality/content". A11Y-032: the preference is respected.
+- Doc 17 §255 and Doc 18 §170 require the behaviour to be tested and the technology used to be identified.
+
+The requirement is about decorative and large motion, and about content staying available. It does not say that `document.getAnimations()` must be empty at any instant.
+
+### 10.2 Diagnosis: what the four transitions were
+
+Recorded on every animation frame from the start of each document (C5-14, every run of this follow-up):
+
+1. While a Job is pending, the footer is `visibility: hidden` (fix F4, `PublicLayout.module.css`). When the Job arrives it becomes visible.
+2. Under reduced motion the site's rule (`base.css`) gives **every** element `transition-duration: 0.01ms`. `visibility` is inherited, so the change does not reach the whole footer at once: each DOM level starts its own 0.01 ms transition one frame after its parent's has ended.
+3. The footer is six levels deep: `footer` → container → the two columns → brand block, two navigation groups, copyright → their headings, lists, mark and text → the **four list items**. That is 18 transitions over **6 consecutive frames**, in every run, then nothing.
+4. The links inside the list items declare `transition: color` only, so they do not transition `visibility`; the cascade ends at the list items.
+
+| Frame after the footer's change | Elements starting a `visibility` transition |
+| --- | --- |
+| 1 | `footer` |
+| 2 | `footer > div` |
+| 3 | the two columns |
+| 4 | brand block, two `nav`, copyright `p` |
+| 5 | mark `img`, brand `p`, two `h2`, two `ul` |
+| 6 | **four `li`** (2 in "Company", 2 in "Legal") |
+
+Every one of the 18: `CSSTransition`, property `visibility`, duration 0.01 ms, delay 0, end delay 0, 1 iteration, active duration 0.01 ms, fill `backwards`. Each is listed in one frame (one exception is described below). After the sixth frame none remains; the footer, its four links and the page heading are visible.
+
+**The r3 failure was the sixth frame.** The old probe read `getAnimations()` once, after the page settled. With the preload hint the Job arrives as the script runs, the footer's change falls in the first frames, and the settle sometimes ended exactly on the list-item frame: 4 transitions on `li`, `visibility`, 0.01 ms, at time 0 — what run 2 of round 3 recorded. In this follow-up the old instantaneous reading is still taken beside the new observation, and it again read 4 (the four `li`), 2, 1 or 0 depending on the frame it landed on. That is why it was intermittent and order-dependent: it was a race between a six-frame cascade and the moment of one reading.
+
+**Corrections to §9.7.** The four items are the footer's list items (then "not established"). They were at time 0 because the reading landed in the frame they started. The hint affects only *when* the cascade happens: the held scenario shows it whenever the Job arrives after the pending state has been painted, which is the situation without the hint. It was also seen on Apply (8 transitions, a shallower footer).
+
+**Two things observed and not explained, recorded rather than hidden:**
+
+- In about half the runs the brand paragraph (`footer … div > p`, beside the lazily loaded mark) starts its 0.01 ms `visibility` transition twice, two to four frames apart, inside the same six frames (in the complete run: frames 4 and 7 of 3–8). Both are the same instantaneous kind. Why it starts twice is not established.
+- On a direct load with the hint, the Job is sometimes there before the first frame. The footer is then never hidden and there is no cascade at all.
+
+**Is this a product defect?** Not against Doc 16 §59: nothing decorative or continuous runs, no large transition exists, and all content is available when it ends. It is a real side effect, though, and it is stated: under reduced motion the footer's content returns level by level over six frames (about 0.1 s at 60 frames a second), where without the preference it returns in one frame. The reduced-motion rule itself causes it. **Product code was not changed.** If Astra wants it removed, the smallest change is to stop `visibility` being transitioned inside the footer; that is a product CSS change with its own regression check and is not made here.
+
+### 10.3 The criterion, old and new
+
+**Old (rounds 1–3), exactly:**
+
+- at one instant after the page settled, `document.getAnimations().length === 0`;
+- `html` computed `scroll-behavior` is `auto`;
+- no element whose computed style declares an **animation** longer than 10 ms. Declared transitions over 10 ms were recorded in the same list but the assertion filtered them out (`moving.filter((m) => m.animation)`).
+
+**New (`e2e/c5/motionJudge.js`, observed by `motionObserve` in `c5Support.js`), exactly:**
+
+1. **Every effect is observed, not sampled.** A recorder installed before any page script lists `document.getAnimations()` on every animation frame from the start of the document. Each effect is identified by a stable path to its target, its kind and its animation name or transitioned property, with its landmark, timing, play state and the target's computed styles.
+2. **Then the page is watched frame by frame** until three consecutive frames list no effect, or 90 frames have passed. The watch always covers at least three frames. Nothing is cancelled, finished, retried or slept through; the first observations and the final ones are both kept.
+3. **One kind of effect is permitted**, and only when all of this holds: it is a CSS transition or CSS animation; its duration is **exactly the duration the page's own reduced-motion rule declares**, read from that rule in the page's stylesheet; no delay; no end delay; exactly one iteration; active duration equal to that duration; not left filling; and it is **gone** when the watch ends.
+4. **Everything else fails**: any other duration, any delay, more than one iteration, a script animation or unrecognised kind, timing that cannot be read, an effect still present at the end, a page not quiet within the watch, a truncated or missing observation.
+5. **Declared motion fails for transitions as well as animations**: no element or `::before`/`::after` may declare an animation or a transition longer than the rule's value, delayed, or repeated. (This closes the gap in the old assertion.) The former over-10 ms list is still asserted, now unfiltered.
+6. **Scrolling is instant** (`scroll-behavior: auto`), as before.
+7. **Content is available afterwards**: the heading, the footer and every footer link are visible; while a route is pending, its loading indication is. A target left hidden after its `visibility` transition fails.
+8. For the footer's return specifically: the effects are in the footer only, are `visibility` transitions only, and take **no more frames than the nesting levels they pass through** (6 and 6).
+
+**What is not in the criterion.** There is no numeric tolerance. The permitted duration is the value in the site's own rule; a test on a page whose rule said something else would use that value, and the unit tests show 0.02 ms, 1 ms, 5 ms and 10 ms all failing. Neither 0.01 ms nor the 90-frame bound is an accessibility standard: the first is the site's implementation choice, the second limits how long the test watches.
+
+### 10.4 What is covered, and the controls
+
+**Observed under reduced motion** (and, for contrast, with no preference): Home, Careers, Job Detail, Apply after settling; Job Detail read at its first content without settling; the Careers skeleton held, then its content; **Job Detail held in its loading state, then released** — the loading-to-content change, made deterministic. The loading-state checks are kept: the skeleton does not animate, and the footer is unpainted while the Job is pending.
+
+**Controls**, on Job Detail under reduced motion. Each puts one effect into the live page and is observed and judged exactly as the page is; the injected node is removed only after the verdict.
+
+| Control | Injected | Expected | Result | Reason given by the judge |
+| --- | --- | --- | --- | --- |
+| Sustained transform | a script animation moving an element for 2 s, repeating without end | FAIL | **FAIL** | not a CSS transition or animation; infinite iterations; still present |
+| Sustained opacity | a 3 s CSS opacity transition (`!important`, overriding the rule) | FAIL | **FAIL** | duration 3000 ms, not the rule's 0.01 ms; still present |
+| Short, repeated without end | a 0.01 ms CSS animation, infinite | FAIL | **FAIL** | infinite iterations; active duration infinite; still present |
+| Short, meaningful total | a 5 ms CSS animation × 400 (2 s) | FAIL | **FAIL** | 5 ms is not the rule's value; 400 iterations; active duration 2000 ms |
+| Delayed | a 0.01 ms transition after a 2 s delay | FAIL | **FAIL** | delay of 2000 ms; still present |
+| Persistent | a 0.01 ms animation with fill `forwards` | FAIL | **FAIL** | keeps filling; still present |
+| Intended instantaneous transition | an ordinary element whose opacity changes under the site's rule | PASS | **PASS** | seen, permitted, gone |
+| The site's own control | hover and focus on "Apply for This Role" | PASS | **PASS** | one 0.01 ms `background-color` transition, gone; the action stays visible and enabled |
+| The site without the preference | Home with `no-preference` | detected | **detected** | 27 findings: smooth scrolling, the hero's continuous animations, 0.18 s transitions |
+
+Each failing control is caught from **observation** (the effect itself is named with its reason); the five declared in CSS are also caught by the declared-motion check. After the controls the page passes again.
+
+`npm run test:c5:motion` (10 unit tests, no browser) fixes the judgement itself: the saved r3 case passes when the four transitions finish and fails when they remain; no duration threshold exists; repeated, delayed, filling, script and unreadable effects fail; declared transitions fail; unknown is never a pass.
+
+### 10.5 Verification
+
+| Check | Commit | Result |
+| --- | --- | --- |
+| C5-14, focused, first complete version | (uncommitted, then `c7bf09d`) | Passed. The old instantaneous reading, taken in the same run, read **4** on Job Detail — the r3 failure reproduced beside a passing observation |
+| C5-14 repeated 10 times | `c7bf09d` content | **10 of 10 passed.** The cascade was 6 frames over 6 nesting levels every time it occurred |
+| `npm run test:c5:motion` | `c7bf09d` | 10 / 10 |
+| **One complete C5 suite** (23 cases, Lighthouse included), 20.9 min | `c7bf09d`, clean worktree | **22 passed, 0 failed, 1 skipped** (C5-99, the manual-hold case, by design) |
+| — C5-14 inside it | | Passed. Footer cascade: 18 `visibility` transitions, 6 frames, 6 levels, on both Job Detail scenarios. The old instantaneous reading read **2** twice in this run: the old criterion would have failed again |
+| — C5-06 | | 0 axe violations; 4 label-in-name findings, all exact reviewed role links; 8 of 8 negative controls fail the gate |
+| — C5-17 (hint on), mobile LCP p75 | | Job Detail 2156, Apply 2124, missing Job 2092, Home 2120, About 2108, Careers 2056 ms; 5 of 5 valid each. Every LCP, CLS and INP verdict PASS |
+| — C5-19 Lighthouse 13.6.0, median Performance | | Home, Careers 100. Job Detail mobile 94, Apply mobile 95; desktop 100. Accessibility 100 on every page |
+| — C5-22 | | Passed |
+
+**Development runs that failed, kept and explained** (`logs/dev1.log`, `logs/dev3-repeat.log`):
+
+- Two defects in the draft observer: its watch could end before watching a single frame, and it required a heading while the Job was pending. Both fixed.
+- Two wrong assertions of my own: a `nav` inside the footer counted as "outside the footer", and a direct load was required to show a cascade, which it does not always do. Both corrected.
+- **One draft assertion was removed, and this is disclosed:** "no element starts its transition twice". The brand paragraph does (§10.2), in about half the runs. The repeat is recorded in every run (`cascade.repeated`), it is the same permitted 0.01 ms kind, and it stays inside the six frames, which *is* asserted. It is not asserted on its own because its cause is not established. If Astra wants it gated, it is one line.
+
+None of these was a product failure. The judgement of motion itself (`motionJudge.js`) was not loosened after any of them.
+
+**The Lighthouse discrepancy remains, and is restated.** Directly measured lab LCP (throttling really applied) is 2.1–2.2 s on Job Detail and Apply. Lighthouse's *simulated* mobile LCP in the same run is 3.1–3.5 s on Job Detail and 2.5–3.0 s on Apply, though its score passes. The two methods disagree on those pages. **Neither is field evidence**; field p75 is open.
+
+**Not rerun, and why.** Product code did not change in this follow-up (`git diff 246796b..HEAD -- frontend backend` is empty), so the C4 SEO suite (16 passed), `verify:quality` (1140 tests, budgets) and the guards (36) at `8049060`, and the C3 suite at `b354744`, still apply. The backend suite was not rerun for the same reason.
+
+### 10.6 Remaining gates
+
+**Acceptance blockers that remain:**
+
+1. Astra's independent review of this follow-up and of round 3; then the owner's acceptance. That includes accepting the change to the C4 document server (§9.2) and this change to a gate's criterion.
+2. The manual checks: §9.6 checklist and §6 (M1–M12). **None has been performed by anyone.** Reduced motion on a real operating-system setting (not Chromium's emulation) is among them.
+3. Doc 06 synchronisation (§9.5). No external canonical document was updated.
+4. OD-C5-2 and OD-C5-4: decide or explicitly defer. No redesign was added.
+
+**For Astra's decision, not blocking this test:** whether the footer's six-frame return under reduced motion (§10.2) should be removed in product CSS.
+
+**Not blockers for C5, and not claimed:** field Core Web Vitals; host compression, caching and the hint at the production host (C6). C6 has not been started.

@@ -6,7 +6,7 @@
 | Baseline | `389c421a72fb090dc2c08c8251b664bada73d9a0` (GitHub `main` = `c4-work`) |
 | Harness | `06dd991` (suite); follow-ups `f82f765`, `47bf227`, `777c1e6` and `fffc252`. Test code only |
 | Fixes | `24a351d` F1, `22344eb` F2, `4807dda` F3, `72a9d52` F4. Frontend CSS and two data attributes; the backend is unchanged |
-| Status | **READY FOR REVIEW (round 3 and its two follow-ups, §9–§11).** §11 corrects two defects in the C5-14 recorder and judge (every distinct timing is judged; an unreadable frame is incomplete, not quiet) and gives the one ordered manual checklist (§11.4). Verified at `79b1b7b`: unit 15/15, C5-14 8/8; the complete suite at `c7bf09d` (22 passed, 1 skipped by design) is reused for the other cases. Open: every manual check, the Doc 06 synchronisation, OD-C5-2 and OD-C5-4, field Core Web Vitals. C5 is not accepted: acceptance is the owner's |
+| Status | **OWNER-ACCEPTED on 2026-11-15 at `a6a0fe1`** ([acceptance record](../review/OWNER_RECORD_2026-11-15_C5_ACCEPTANCE.md); §12). The status before acceptance was: READY FOR REVIEW (round 3 and its two follow-ups, §9–§11). Every earlier section is kept as written, including its "not accepted" and "pending" wording, as the history of its date. Open after acceptance: desktop and iOS Safari, field Core Web Vitals, host delivery |
 | Constraints kept | Local work only. Nothing pushed, deployed or sent; no settings changed. Production candidate acknowledgements stay disabled. The first genuine Cybersecurity Specialist vacancy stays Draft, its eligible work countries OPEN. Approved copy, the social card, job eligibility and the publication rules are unchanged |
 
 Everything below was observed in **Chromium**, through Playwright, on one Linux machine. Nothing here is a claim about other browsers, real devices, real screen readers or production field data. Those are in §6, the manual checklist, and stay open until a person runs them.
@@ -856,3 +856,20 @@ Keep the stack from step 0 running. On the PC: `adb reverse tcp:4203 tcp:4203` a
 | D4 | C5 acceptance | The milestone review rule | After A–B are recorded and D1–D3 decided | The owner's acceptance record. **Claude does not declare it** |
 
 **Shortest acceptable subset, if time is short:** A1, A2, A3, A4, A6 at 400% in one browser, A9, B1 — about 40 minutes. The rest stay recorded as OPEN.
+
+## 12. Owner acceptance (2026-11-15)
+
+The owner accepted C5 on 2026-11-15 at `a6a0fe11b60a3e8dd37d896fdefe1e9466c77c4b` (tree `3e94bd4239eb84c56edcc27eae1eccb120de9ca2`). The record is [`docs/review/OWNER_RECORD_2026-11-15_C5_ACCEPTANCE.md`](../review/OWNER_RECORD_2026-11-15_C5_ACCEPTANCE.md). This section only points to it; sections 1–11 are unchanged.
+
+| Earlier statement in this record | Now |
+| --- | --- |
+| "C5 is not accepted", "acceptance pending" (throughout) | **Accepted by the owner**, 2026-11-15 |
+| OD-C5-3, and §11.4 row D2: the document-server preload awaits a decision | **Accepted** (decision 1). The lab improvement and the Lighthouse results are both kept as measured; field performance stays open |
+| §11.4 row D3: the C5-14 criterion awaits a decision | **Accepted**, with the corrected recorder (decision 2). The failed runs of §9.7 stay failed |
+| OD-C5-2 and OD-C5-4 | The current visuals are accepted for C5; both are **carried as follow-up** (decision 3) |
+| §11.4 Part C row C1: Safari on macOS and iOS | **OPEN**, carried to the C6 review host, to be resolved before final C7 acceptance (decision 4) |
+| §8.1, §9.5, §11.4 row D1: Doc 06 is not synchronised | The owner supplied the synchronised revision for §§9, 87 and 110; its three clauses and its checksum are verified in the acceptance record §3. **Adoption in the maintained canonical collection and the Doc 00 entry are not verified** |
+| §11.4 Parts A and B: no manual check performed | The owner reports his Windows and Android review complete and satisfactory, and NVDA on Windows **personally tested by him** (owner attestation). Versions, per-route results and transcripts were not supplied; rows are not marked as individually evidenced. No WCAG conformance determination is made |
+| §11.4 rows C2, C3: field Core Web Vitals and host delivery | Unchanged: **OPEN** |
+
+One count is corrected: the range `389c421..a6a0fe1` holds 37 commits, not the 36 stated in the round-5 handoff.

@@ -252,7 +252,7 @@ Cases: A `closed` (listed and unlisted visitors), B `testers`, C invalid
 delegation and forwarding, the key absent or wrong, a cross-origin redirect,
 D the same URL for different visitors in both orders with conditional
 requests, E a local `public` fixture (synthetic authorisation, production
-`APP_ENV`, no storage), F the API down, K the key in no build, log or HTTP
+`APP_ENV`, no storage) including E6, a Job opened, closed and archived with the sitemap following at once (SEO-012), F the API down, K the key in no build, log or HTTP
 evidence. Output: `results.json` (expected versus actual), sanitised
 `http/*.txt` (the key appears as `[INTERNAL_SERVICE_KEY]`), screenshots and
 logs. Ports start at 4330 (`C6T2_BASE_PORT`). It does not show a real host's

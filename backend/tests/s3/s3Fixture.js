@@ -58,3 +58,22 @@ export async function listKeys(prefix = '') {
 export async function emptyBucket() {
   for (const key of await listKeys()) await s3Request(directEndpoint(), { method: 'DELETE', key });
 }
+
+/** Test-side PUT straight into the double (not through the driver): a pre-existing object. */
+export async function putObject(key, bytes, metadata = {}) {
+  const { Readable } = await import('node:stream');
+  const { createHash } = await import('node:crypto');
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  const headers = { 'content-type': 'application/octet-stream' };
+  for (const [name, value] of Object.entries(metadata)) headers[`x-amz-meta-${name}`] = value;
+  const res = await s3Request(directEndpoint(), { method: 'PUT', key, headers, body: Readable.from([bytes]), contentLength: bytes.length, payloadSha256: digest });
+  if (res.kind !== 'response' || res.status !== 200) throw new Error(`test PUT failed: ${res.status ?? res.code}`);
+}
+
+/** HEAD as the test sees it: { exists, length, lastModified, etag, metadata }. */
+export async function headObject(key) {
+  const res = await s3Request(directEndpoint(), { method: 'HEAD', key });
+  if (res.status === 404) return { exists: false };
+  const metadata = Object.fromEntries(Object.entries(res.headers).filter(([k]) => k.startsWith('x-amz-meta-')).map(([k, v]) => [k.slice(11), v]));
+  return { exists: true, length: Number(res.headers['content-length']), lastModified: res.headers['last-modified'], etag: res.headers.etag, metadata };
+}

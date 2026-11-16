@@ -300,12 +300,32 @@ try {
       { exitCode: r.exitCode, portOpened: r.portOpened, output: r.output.trim().split('\n').slice(-1).join(' | ') }, r.exitCode === 1 && !r.portOpened && pattern.test(r.output) && adviceOk && !r.output.includes('[REDACTED]'));
   }
 
+  // C6-T4 correction 1, finding 2: the start-up privacy check is conclusive.
+  const resumeObjects = () => JSON.parse(execFileSync(PYTHON, ['-c', `import sys,boto3;c=boto3.client('s3',endpoint_url=sys.argv[1],region_name='us-east-1',aws_access_key_id=sys.argv[3],aws_secret_access_key=sys.argv[4]);print(len(c.list_objects_v2(Bucket=sys.argv[2],Prefix='resumes/').get('Contents',[])))`, moto.endpoint, moto.bucket, moto.app.accessKeyId, moto.app.secretAccessKey], { encoding: 'utf8' }));
+  const removeResumeObjects = () => execFileSync(PYTHON, ['-c', `import sys,boto3;c=boto3.client('s3',endpoint_url=sys.argv[1],region_name='us-east-1',aws_access_key_id=sys.argv[3],aws_secret_access_key=sys.argv[4]);[c.delete_object(Bucket=sys.argv[2],Key=o['Key']) for o in c.list_objects_v2(Bucket=sys.argv[2],Prefix='resumes/').get('Contents',[])]`, moto.endpoint, moto.bucket, moto.app.accessKeyId, moto.app.secretAccessKey]);
+  const privacy = [
+    ['S7', 'the résumé prefix anonymously readable (the probe now uses a résumé key)', { '*': [(req) => (req.anonymous && req.url.includes('/resumes/') ? { respond: { status: 200, body: 'public' } } : 'pass')] }, /\(PUBLIC_ACCESS\)/, 0],
+    ['S8', 'an inconclusive anonymous answer (a 500, not a denial)', { '*': [(req) => (req.anonymous ? { respond: { status: 500, body: '<Error><Code>InternalError</Code></Error>' } } : 'pass')] }, /\(PUBLIC_ACCESS_UNVERIFIED\)/, 0],
+    ['S9', 'a redirect to the anonymous read (307)', { '*': [(req) => (req.anonymous ? { respond: { status: 307, headers: { location: 'https://elsewhere.example.test/' } } } : 'pass')] }, /\(PUBLIC_ACCESS_UNVERIFIED\)/, 0],
+    ['S10', 'probe cleanup unconfirmed (DELETE answered 204, the object is still there)', { DELETE: [{ respond: { status: 204 } }], '*': ['pass'] }, /\(PROBE_CLEANUP_FAILED\)/, 1],
+  ];
+  for (const [id, label, plan, pattern, leftover] of privacy) {
+    proxy.setPlan(plan);
+    const r = await expectRefusal(`${id}-${label.replace(/\W+/g, '-')}`, backendEnv(proxy.endpoint));
+    proxy.setPlan({ '*': ['pass'] });
+    const left = resumeObjects();
+    check(id, 'start-up', `The backend refuses to start, before listening, with ${label}`, `exit 1; port never open; output matches ${pattern}; S3 advice only; ${leftover} synthetic probe object(s) left${leftover ? ' (preserved, then removed by the run)' : ''}`,
+      { exitCode: r.exitCode, portOpened: r.portOpened, output: r.output.trim().split('\n').slice(-1).join(' | '), probeObjectsLeft: left },
+      r.exitCode === 1 && !r.portOpened && pattern.test(r.output) && r.output.includes('RESUME_STORAGE_S3_ENDPOINT') && !r.output.includes('RESUME_STORAGE_LOCAL_ROOT') && left === leftover);
+    if (left) removeResumeObjects();
+  }
+
   proxy.setPlan({ '*': ['pass'] });
   let backend = await startBackend('main', backendEnv(proxy.endpoint));
   const ready = await exchange('readiness', { target: '/api/v1/health/ready' });
-  check('S6', 'readiness', 'With a working store the backend starts and readiness is 200 (the start-up probe wrote, checked and deleted a probe object; an anonymous read of it was refused)', '200; no probe object left',
-    { status: ready.status, probeObjectsLeft: JSON.parse(execFileSync(PYTHON, ['-c', `import sys,boto3;c=boto3.client('s3',endpoint_url=sys.argv[1],region_name='us-east-1',aws_access_key_id=sys.argv[3],aws_secret_access_key=sys.argv[4]);print(len(c.list_objects_v2(Bucket=sys.argv[2],Prefix='probes/').get('Contents',[])))`, moto.endpoint, moto.bucket, moto.app.accessKeyId, moto.app.secretAccessKey], { encoding: 'utf8' })) },
-    ready.status === 200);
+  check('S6', 'readiness', 'With a working store the backend starts and readiness is 200 (the start-up probe wrote a synthetic object under a résumé key, checked it, saw the anonymous read explicitly DENIED, and confirmed its deletion)', '200; no probe object left',
+    { status: ready.status, probeObjectsLeft: resumeObjects() },
+    ready.status === 200 && resumeObjects() === 0);
 
   /* ======================================================= A: APPLY ====== */
   const before1 = { apps: await count(), objects: readStore(), mail: smtpMessages() };
@@ -360,6 +380,17 @@ try {
   const del = await reconcileCli('delete', ['--delete', '--confirm-delete'], cliEnv);
   const afterDelete = readStore();
   check('R2', 'reconciliation', 'The reconciliation CLI with --delete --confirm-delete deletes NOTHING younger than the 24 h floor: every object, referenced or not, is still there (deletion of an old orphan is proven in tests/s3 with an injected clock)', `exit 0; ${c4.objects.length} objects remain`, { exit: del.code, objects: afterDelete.length }, del.code === 0 && afterDelete.length === c4.objects.length);
+
+  // C6-T4 correction 1, finding 3: an invalid listing page fails the whole run.
+  const beforeInvalid = readStore();
+  proxy.setPlan({ '*': [(req) => (req.method === 'GET' && req.url.includes('list-type=2') ? { rewrite: (_status, body) => body.replace(/<KeyCount>\d+<\/KeyCount>/, '<KeyCount>999</KeyCount>') } : 'pass')] });
+  const bad = await reconcileCli('invalid-listing-delete', ['--delete', '--confirm-delete', '--min-age-hours', '24'], cliEnv);
+  proxy.setPlan({ '*': ['pass'] });
+  const badLog = readFileSync(path.join(OUT, 'logs', 'reconcile-invalid-listing-delete.log'), 'utf8');
+  const afterInvalid = readStore();
+  check('R3', 'reconciliation', 'The reconciliation CLI with --delete --confirm-delete against an INVALID listing (KeyCount disagreeing with the entries): a controlled failure, no report, nothing deleted', 'exit non-zero; LISTING_INVALID; no "possible orphans" report; objects unchanged',
+    { exit: bad.code, tail: sanitise(badLog).split('\n').filter((l) => /LISTING|FAILED|REFUSED|possible orphans/.test(l)).slice(0, 4), objects: [beforeInvalid.length, afterInvalid.length] },
+    bad.code !== 0 && badLog.includes('LISTING_INVALID') && !badLog.includes('possible orphans') && afterInvalid.length === beforeInvalid.length);
 
   // Concurrency against the real database.
   const key = randomUUID();

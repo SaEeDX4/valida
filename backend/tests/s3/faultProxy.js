@@ -11,6 +11,16 @@ import { createServer, request as httpRequest } from 'node:http';
  *                              whose answer was lost)
  *   reset                      destroy the client connection without forwarding
  *   status:<n>                 answer <n> without forwarding (nothing happens upstream)
+ *   hang                       never answer (the client's timeout decides)
+ *   reset-then-forward:<ms>    destroy the client connection at once, then forward the
+ *                              buffered request <ms> later (a write that lands AFTER the
+ *                              client gave up: a late write)
+ *   { respond: { status, headers, body } }   answer this without forwarding
+ *   { rewrite: (status, body) => body }      forward, then replace the answer's body
+ *
+ * C6-T4 correction 1: a plan entry may also be a FUNCTION (req) => mode,
+ * evaluated per request (for example by path, or by whether the request is
+ * anonymous); `anonymous` is true when the request carries no Authorization.
  *
  * `plan` maps a method (or '*') to a list of modes consumed one per request;
  * the last mode repeats. Every request is recorded (method, mode, upstream
@@ -19,20 +29,50 @@ import { createServer, request as httpRequest } from 'node:http';
 export async function startFaultProxy({ upstream }) {
   const target = new URL(upstream);
   const state = { plan: {}, log: [] };
-  const next = (method) => {
-    const list = state.plan[method] ?? state.plan['*'] ?? ['pass'];
-    return list.length > 1 ? list.shift() : list[0];
+  const next = (req) => {
+    const list = state.plan[req.method] ?? state.plan['*'] ?? ['pass'];
+    const entry = list.length > 1 ? list.shift() : list[0];
+    return typeof entry === 'function' ? entry({ method: req.method, url: req.url, anonymous: !req.headers.authorization }) : entry;
   };
   const server = createServer((req, res) => {
-    const mode = next(req.method);
-    const entry = { method: req.method, mode, upstreamStatus: null };
+    const mode = next(req);
+    const entry = { method: req.method, mode: typeof mode === 'string' ? mode : Object.keys(mode)[0], anonymous: !req.headers.authorization, upstreamStatus: null };
     state.log.push(entry);
+    if (mode === 'hang') {
+      req.resume();
+      return;
+    }
+    if (typeof mode === 'object' && mode.respond) {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(mode.respond.status, { 'content-type': 'application/xml', ...(mode.respond.headers ?? {}) });
+        res.end(mode.respond.body ?? '');
+      });
+      return;
+    }
+    if (typeof mode === 'string' && mode.startsWith('reset-then-forward:')) {
+      const delay = Number(mode.split(':')[1]);
+      const chunks = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () => {
+        req.socket.destroy();
+        setTimeout(() => {
+          const late = httpRequest({ host: target.hostname, port: target.port, method: req.method, path: req.url, headers: req.headers }, (answer) => {
+            entry.upstreamStatus = answer.statusCode;
+            answer.resume();
+          });
+          late.on('error', () => {});
+          late.end(Buffer.concat(chunks));
+        }, delay);
+      });
+      return;
+    }
     if (mode === 'reset') {
       req.resume();
       req.socket.destroy();
       return;
     }
-    if (mode.startsWith('status:')) {
+    if (typeof mode === 'string' && mode.startsWith('status:')) {
       req.resume();
       req.on('end', () => {
         const status = Number(mode.slice(7));
@@ -46,6 +86,18 @@ export async function startFaultProxy({ upstream }) {
       if (mode === 'lose-answer') {
         answer.resume();
         answer.on('end', () => req.socket.destroy());
+        return;
+      }
+      if (typeof mode === 'object' && mode.rewrite) {
+        const parts = [];
+        answer.on('data', (c) => parts.push(c));
+        answer.on('end', () => {
+          const body = mode.rewrite(answer.statusCode, Buffer.concat(parts).toString('utf8'));
+          const headers = { ...answer.headers, 'content-length': String(Buffer.byteLength(body)) };
+          delete headers['transfer-encoding'];
+          res.writeHead(answer.statusCode, headers);
+          res.end(body);
+        });
         return;
       }
       res.writeHead(answer.statusCode, answer.headers);

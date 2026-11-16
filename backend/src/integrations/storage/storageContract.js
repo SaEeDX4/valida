@@ -86,8 +86,12 @@ export const STORAGE_FAILURE_REASONS = Object.freeze([
   'OUTCOME_UNKNOWN', // a write may or may not have happened, and the store could not say
   'TLS_FAILURE', // the endpoint's certificate was not trusted: nothing was sent
   'BUCKET_NOT_FOUND',
-  'PUBLIC_ACCESS', // an anonymous request could read the probe object
+  'PUBLIC_ACCESS', // an anonymous request could read the probe object (a representative résumé key)
   'PROVIDER_ERROR', // any other refusal from the store
+  // C6-T4 correction 1.
+  'PUBLIC_ACCESS_UNVERIFIED', // the anonymous read of the start-up probe was not explicitly denied
+  'PROBE_CLEANUP_FAILED', // the start-up probe's removal could not be confirmed
+  'LISTING_INVALID', // an object listing was malformed, incomplete, unrelated or over a limit
 ]);
 
 const REASON_SET = new Set(STORAGE_FAILURE_REASONS);

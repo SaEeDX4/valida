@@ -1502,7 +1502,9 @@ with an explicit timeout — no hidden retry.
 | Never overwrite | `If-None-Match: *` on every PUT; a 412 is a key collision and a new key is generated |
 | No read | The driver has no GET of an object, no URL and no presigned operation (Doc 09 §170) |
 | TLS | `https` with Node's default certificate verification; there is no option to disable it. An untrusted certificate is `TLS_FAILURE`, and nothing is sent |
-| Start-up (`init`) | Writes a probe object under `probes/`, checks it with HEAD, checks that an **anonymous** read of it is refused (`PUBLIC_ACCESS` otherwise), deletes it. Any failure stops the backend before it listens, with a fixed reason: `PERMISSION_DENIED`, `BUCKET_NOT_FOUND`, `UNAVAILABLE`, `TLS_FAILURE`, `PUBLIC_ACCESS`, `PROVIDER_ERROR` |
+| Ownership marker | Every PUT carries a fresh random marker of its own, `x-amz-meta-attempt` (128 bits, never reused, never logged). After an uncertain outcome an object is adopted or deleted **only** if its marker is this attempt's (correction 1) |
+| Start-up (`init`) | Writes a disposable **synthetic** probe under a **representative résumé key** (`resumes/<32 hex>/<32 hex>`, the same generator and so the same access policy as an upload), checks it with HEAD (length and marker), reads it **anonymously** and requires an **explicit denial** (401/403), then deletes it and **confirms** the deletion (DELETE 200/204, then HEAD 404). A 2xx is `PUBLIC_ACCESS`; a redirect, 404, 5xx, reset or timeout is `PUBLIC_ACCESS_UNVERIFIED`; an unconfirmed cleanup is `PROBE_CLEANUP_FAILED` (the probe's one-way reference is logged as `storage_probe_cleanup_unconfirmed`). Any failure stops the backend before it listens, with a fixed reason: `PERMISSION_DENIED`, `BUCKET_NOT_FOUND`, `UNAVAILABLE`, `TLS_FAILURE`, `PUBLIC_ACCESS`, `PUBLIC_ACCESS_UNVERIFIED`, `PROBE_CLEANUP_FAILED`, `PROBE_MISMATCH`, `PROVIDER_ERROR`. This proves the result for one résumé key at start-up; the provider's policy as a whole is still a hosted check |
+| Listing (reconciliation only) | Every `ListObjectsV2` page is validated: one `ListBucketResult` for this bucket and the `resumes/` prefix; `KeyCount` equal to the entries; `MaxKeys` within the requested page size; `IsTruncated` present; a `NextContinuationToken` on a truncated page, never repeated; every entry with one key under the prefix, one size and one valid date; no duplicate keys; page, object and size caps. Any failure on **any** page is `LISTING_INVALID` (logged as `storage_listing_invalid` with a fixed label): no report and no deletion, even when earlier pages were valid |
 | Readiness | Set by that start-up probe, as for the local driver. A storage outage **after** start-up is not reflected in readiness: each submission fails with 503 until the store answers again (observed in the stack check, A7) |
 
 **The outcome of a write** (object-first persistence is unchanged):
@@ -1511,10 +1513,13 @@ with an explicit timeout — no hidden retry.
 | --- | --- | --- | --- | --- |
 | 200, verified | stored | continues to the insert | referenced once inserted | — |
 | a definite refusal (4xx) or no connection | `PERMISSION_DENIED`, `UNAVAILABLE`, … — **proven** nothing written | 503, no Application | none | nothing to do |
-| the answer lost after sending (reset, timeout, 5xx) | asks the store (HEAD of its own unique key): present and matching → **stored**; absent → `UNAVAILABLE`; no answer → `OUTCOME_UNKNOWN` | 201, or 503 with no Application | present-and-matching, absent, or **possibly present and unreferenced** | the unreferenced object is listed by its one-way reference (logged as `storage_write_outcome_unknown`), kept while younger than the 24 h floor, deleted only by the confirmed command after that |
+| the answer lost after sending (reset, timeout, 5xx) | asks the store (HEAD of the key) and decides by **ownership**: this attempt's marker, matching → **stored**; this attempt's marker, wrong → deleted, `INTEGRITY_MISMATCH`; present with another or no marker → **not owned**: neither adopted nor deleted, `OUTCOME_UNKNOWN` (`storage_write_outcome_unknown`, `outcome: NOT_OWNED`); absent → `UNAVAILABLE`, logged as `storage_write_outcome_unobserved` with `outcome: ABSENT_AT_OBSERVATION` (nothing was there **when checked**; a timed-out PUT may still land); no answer → `OUTCOME_UNKNOWN` | 201, or 503 with no Application | own-and-matching, untouched (not owned), absent at observation, or **possibly present and unreferenced** | an unreferenced object is listed by its one-way reference, kept while younger than the 24 h floor, deleted only by the confirmed command after that |
+| a local integrity failure (the source changed while sent) | `INTEGRITY_MISMATCH`; the object under the key is deleted **only** if its marker is this attempt's; otherwise preserved (`storage_discard_skipped`) | 503, no Application | none of this attempt's | anything preserved is listed as above |
 
-The driver deletes only an object under the key it generated for the current
-write, and only when that object is proven wrong (integrity). Compensation
+The driver deletes only an object whose ownership marker proves it was written
+by the current attempt, and only when that object is wrong (integrity). A
+matching key, length and SHA-256 alone are **not** ownership: another writer
+can have put identical bytes there. Compensation
 after a proven database failure deletes that submission's own object; a
 concurrent submission that wins the Idempotency-Key keeps its object (tested
 against the real database unique index).
@@ -1527,7 +1532,8 @@ against the real database unique index).
 - **`npm run test:s3`:**
   - the same contract and the S3 driver against a local S3-compatible test double, moto server with signature checking and a scoped policy;
   - a fault-injecting proxy for lost answers, resets and refusals;
-  - the Apply service end to end.
+  - the Apply service end to end;
+  - `tests/s3/s3-correction-1.test.js` (correction 1): objects this attempt did not write (identical or different bytes, the conditional PUT's answer lost; a local integrity error) are never adopted or deleted, with the positive control; the conclusive start-up privacy check and confirmed cleanup; invalid, incomplete, unrelated and over-limit listings, including a later invalid page after a valid one, with the empty-bucket and multi-page controls.
   - It needs Python with `moto[server]` (tested with moto 5.2.5), named by `VALIDA_TEST_MOTO_PYTHON`. Windows (PowerShell):
 
     ```powershell

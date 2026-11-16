@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { ConfigurationError, loadConfig } from '../src/config/env.js';
 import { signRequest, EMPTY_PAYLOAD_SHA256, uriEncode } from '../src/integrations/storage/s3/sigv4.js';
-import { parseListing, errorCodeOf } from '../src/integrations/storage/s3/s3Http.js';
+import { parseListing, parseListObjectsV2, errorCodeOf } from '../src/integrations/storage/s3/s3Http.js';
 import { S3PrivateStorage } from '../src/integrations/storage/s3PrivateStorage.js';
 import { createPrivateStorage, PrivateStorageError, StorageInitializationError, STORAGE_FAILURE_REASONS } from '../src/integrations/storage/privateStorage.js';
 import { OFFLINE_TEST_MONGODB_URI } from './helpers.js';
@@ -187,13 +187,14 @@ describe('answers from the store (an in-process S3 stand-in)', () => {
         const custom = overrides[req.method]?.(req, res, Buffer.concat(chunks), objects);
         if (custom) return;
         if (req.method === 'PUT') {
-          objects.set(key, { body: Buffer.concat(chunks), sha: req.headers['x-amz-meta-sha256'] });
+          objects.set(key, { body: Buffer.concat(chunks), sha: req.headers['x-amz-meta-sha256'], attempt: req.headers['x-amz-meta-attempt'] });
           return answer(res, 200);
         }
         if (req.method === 'HEAD') {
           const object = objects.get(key);
           if (!object) return answer(res, 404);
-          res.writeHead(200, { 'content-length': object.body.length, 'x-amz-meta-sha256': object.sha });
+          // Like S3: user metadata (x-amz-meta-*) comes back on HEAD; C6-T4 correction 1 adds the attempt marker.
+          res.writeHead(200, { 'content-length': object.body.length, 'x-amz-meta-sha256': object.sha, ...(object.attempt ? { 'x-amz-meta-attempt': object.attempt } : {}) });
           return res.end();
         }
         if (req.method === 'GET') return answer(res, 403, 'AccessDenied');
@@ -245,7 +246,7 @@ describe('answers from the store (an in-process S3 stand-in)', () => {
     await s.init();
     const objects = store({
       PUT: (q, res, body, map) => {
-        map.set(q.url, { body: body.subarray(1), sha: q.headers['x-amz-meta-sha256'] });
+        map.set(q.url, { body: body.subarray(1), sha: q.headers['x-amz-meta-sha256'], attempt: q.headers['x-amz-meta-attempt'] });
         answer(res, 200);
         return true;
       },
@@ -322,5 +323,53 @@ describe('listing and error documents are parsed safely', () => {
     expect(parseListing(xml)).toEqual({ entries: [{ key: 'resumes/x<y', size: 12, lastModified: new Date('2026-11-16T00:00:00.000Z') }], truncated: true, nextToken: 'a&b' });
     expect(errorCodeOf('<Error><Code>NoSuchKey</Code></Error>')).toBe('NoSuchKey');
     expect(errorCodeOf('<Error><Code>bad code with spaces</Code></Error>')).toBeNull();
+  });
+});
+
+describe('C6-T4 correction 1 — the strict ListObjectsV2 page parser used by reconciliation', () => {
+  const opts = { bucket: 'qa-valida-resumes', prefix: 'resumes/', pageSize: 1000 };
+  const entry = (key = 'resumes/a/b', size = '3') => `<Contents><Key>${key}</Key><LastModified>2026-11-16T00:00:00.000Z</LastModified><Size>${size}</Size></Contents>`;
+  const page = ({ name = 'qa-valida-resumes', prefix = 'resumes/', keyCount, maxKeys = '1000', truncated = 'false', next = '', echo = '', entries = [entry()] } = {}) =>
+    `<?xml version="1.0" encoding="UTF-8"?>\n<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>${name}</Name><Prefix>${prefix}</Prefix>${echo}<MaxKeys>${maxKeys}</MaxKeys><KeyCount>${keyCount ?? entries.length}</KeyCount><IsTruncated>${truncated}</IsTruncated>${next}${entries.join('')}</ListBucketResult>`;
+  const why = (xml, extra = {}) => parseListObjectsV2(xml, { ...opts, ...extra }).why ?? 'OK';
+
+  it('accepts a complete page and an empty page', () => {
+    expect(parseListObjectsV2(page(), opts)).toEqual({ ok: true, entries: [{ key: 'resumes/a/b', size: 3, lastModified: new Date('2026-11-16T00:00:00.000Z') }], truncated: false, nextToken: null });
+    expect(parseListObjectsV2(page({ entries: [] }), opts)).toEqual({ ok: true, entries: [], truncated: false, nextToken: null });
+    expect(parseListObjectsV2(page({ truncated: 'true', next: '<NextContinuationToken>t&amp;1</NextContinuationToken>' }), opts).nextToken).toBe('t&1');
+    expect(why(page({ echo: '<ContinuationToken>t1</ContinuationToken>' }), { continuationToken: 't1' })).toBe('OK');
+  });
+
+  it.each([
+    ['an HTML page', '<html>maintenance</html>', 'NOT_A_LISTING'],
+    ['an empty body', '', 'NOT_A_LISTING'],
+    ['a cut-off document', page().slice(0, -30), 'NOT_A_LISTING'],
+    ['another bucket', page({ name: 'qa-other' }), 'WRONG_BUCKET'],
+    ['another prefix', page({ prefix: 'other/' }), 'WRONG_PREFIX'],
+    ['a key outside the prefix', page({ entries: [entry('elsewhere/a')] }), 'ENTRY_OUTSIDE_PREFIX'],
+    ['a wrong KeyCount', page({ keyCount: '2' }), 'KEY_COUNT_MISMATCH'],
+    ['no KeyCount', page().replace(/<KeyCount>\d+<\/KeyCount>/, ''), 'KEY_COUNT_MISMATCH'],
+    ['no IsTruncated', page().replace(/<IsTruncated>false<\/IsTruncated>/, ''), 'NO_TRUNCATION_STATE'],
+    ['IsTruncated not a boolean', page({ truncated: 'maybe' }), 'NO_TRUNCATION_STATE'],
+    ['truncated without a token', page({ truncated: 'true' }), 'TRUNCATED_WITHOUT_TOKEN'],
+    ['more entries than MaxKeys', page({ maxKeys: '0' }), 'OVER_PAGE_LIMIT'],
+    ['a MaxKeys above the requested page size', page({ maxKeys: '5000' }), 'OVER_PAGE_LIMIT'],
+    ['an entry without a size', page({ entries: ['<Contents><Key>resumes/a</Key><LastModified>2026-11-16T00:00:00Z</LastModified></Contents>'] }), 'MALFORMED_ENTRY'],
+    ['an entry with two keys', page({ entries: ['<Contents><Key>resumes/a</Key><Key>resumes/b</Key><Size>1</Size><LastModified>2026-11-16T00:00:00Z</LastModified></Contents>'] }), 'MALFORMED_ENTRY'],
+    ['an invalid date', page({ entries: ['<Contents><Key>resumes/a</Key><Size>1</Size><LastModified>yesterday</LastModified></Contents>'] }), 'MALFORMED_ENTRY'],
+    ['an unclosed entry', page({ entries: ['<Contents><Key>resumes/a</Key>'] }), 'MALFORMED_ENTRY'],
+    ['common prefixes (a delimiter was never requested)', page({ entries: ['<CommonPrefixes><Prefix>resumes/x/</Prefix></CommonPrefixes>'] }), 'UNREQUESTED_ELEMENT'],
+    ['a url-encoded listing (never requested)', page().replace('<MaxKeys>', '<EncodingType>url</EncodingType><MaxKeys>'), 'UNREQUESTED_ELEMENT'],
+  ])('refuses %s (%s)', (_label, xml, reason) => {
+    expect(why(xml)).toBe(reason);
+  });
+
+  it('refuses an echoed continuation token that is not the one sent', () => {
+    expect(why(page({ echo: '<ContinuationToken>other</ContinuationToken>' }), { continuationToken: 't1' })).toBe('WRONG_CONTINUATION');
+  });
+
+  it('the failure label never carries document text', () => {
+    const result = parseListObjectsV2(page({ name: 'qa-secret-bucket-name' }), opts);
+    expect(result).toEqual({ ok: false, why: 'WRONG_BUCKET' });
   });
 });

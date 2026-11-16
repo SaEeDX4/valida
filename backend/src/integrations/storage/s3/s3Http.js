@@ -9,7 +9,7 @@ import { canonicalQueryString, signRequest, uriEncode, EMPTY_PAYLOAD_SHA256 } fr
  * For a request with a body, the outcome is classified so the caller can
  * tell "nothing was sent" from "it may have been written":
  *
- *   { kind: 'response', status, headers, body }      an answer arrived
+ *   { kind: 'response', status, headers, body, overflow } an answer arrived
  *   { kind: 'not-sent', code }                        no connection was established
  *                                                     (refused, unresolved, TLS failed):
  *                                                     the request cannot have taken effect
@@ -85,7 +85,9 @@ export function s3Request(endpoint, { method, key = null, query = {}, headers = 
         });
         res.on('end', () => {
           const bytes = Buffer.concat(chunks);
-          settle({ kind: 'response', status: res.statusCode, headers: res.headers, body: bytes.toString('utf8'), bytes });
+          // `overflow`: the answer was longer than maxBody and was cut; a caller that
+          // needs the whole document (a listing) must treat it as invalid.
+          settle({ kind: 'response', status: res.statusCode, headers: res.headers, body: bytes.toString('utf8'), bytes, overflow: size > maxBody });
         });
         res.on('error', () => settle({ kind: connected ? 'uncertain' : 'not-sent', code: 'RESPONSE_ABORTED' }));
       },
@@ -139,4 +141,67 @@ export function parseListing(xml) {
   const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
   const token = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
   return { entries, truncated, nextToken: token ? decode(token[1]) : null };
+}
+
+/**
+ * C6-T4 correction 1, finding 3 — a STRICT ListObjectsV2 page, for the only
+ * caller that acts on a listing (orphan reconciliation). Returns
+ *   { ok: true, entries: [{ key, size, lastModified }], truncated, nextToken }
+ * or { ok: false, why } — never a partial or guessed listing. The document
+ * must be one ListBucketResult with exactly one Name (the bucket), Prefix
+ * (the requested prefix), KeyCount (the number of entries), MaxKeys (at most
+ * the requested page size, and not fewer than the entries) and IsTruncated
+ * ('true' or 'false'); a truncated page must carry a NextContinuationToken;
+ * an echoed ContinuationToken must be the one sent; every entry must have
+ * exactly one Key under the prefix, one Size and one valid LastModified; no
+ * CommonPrefixes and no EncodingType (neither is requested). `why` is a fixed
+ * label for tests and operator logs; it never contains document text.
+ */
+export function parseListObjectsV2(xml, { bucket, prefix, pageSize, continuationToken = null }) {
+  const fail = (why) => ({ ok: false, why });
+  if (typeof xml !== 'string') return fail('NOT_A_DOCUMENT');
+  const doc = xml.trim().replace(/^<\?xml[^>]*\?>\s*/, '');
+  const root = /^<ListBucketResult(?:\s+xmlns="[^"]*")?\s*>([\s\S]*)<\/ListBucketResult>$/.exec(doc);
+  if (!root) return fail('NOT_A_LISTING');
+  const inner = root[1];
+  if (/<ListBucketResult[\s>]/.test(inner)) return fail('NOT_A_LISTING');
+  const opens = (inner.match(/<Contents>/g) ?? []).length;
+  const closes = (inner.match(/<\/Contents>/g) ?? []).length;
+  const blocks = [...inner.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)].map((m) => m[1]);
+  if (opens !== closes || blocks.length !== opens) return fail('MALFORMED_ENTRY');
+  const top = inner.replace(/<Contents>[\s\S]*?<\/Contents>/g, '');
+  const one = (name) => {
+    const found = [...top.matchAll(new RegExp(`<${name}>([^<]*)</${name}>|<${name}\\s*/>`, 'g'))];
+    return found.length === 1 ? decode(found[0][1] ?? '') : found.length === 0 ? undefined : null;
+  };
+  if (/<CommonPrefixes[\s>]/.test(top) || /<EncodingType[\s>]/.test(top)) return fail('UNREQUESTED_ELEMENT');
+  const name = one('Name');
+  if (name !== bucket) return fail('WRONG_BUCKET');
+  if (one('Prefix') !== prefix) return fail('WRONG_PREFIX');
+  const truncatedText = one('IsTruncated');
+  if (truncatedText !== 'true' && truncatedText !== 'false') return fail('NO_TRUNCATION_STATE');
+  const truncated = truncatedText === 'true';
+  const keyCount = one('KeyCount');
+  if (typeof keyCount !== 'string' || !/^\d+$/.test(keyCount) || Number(keyCount) !== blocks.length) return fail('KEY_COUNT_MISMATCH');
+  const maxKeys = one('MaxKeys');
+  if (typeof maxKeys !== 'string' || !/^\d+$/.test(maxKeys) || Number(maxKeys) > pageSize || blocks.length > Number(maxKeys)) return fail('OVER_PAGE_LIMIT');
+  const echoed = one('ContinuationToken');
+  if (echoed === null || (echoed !== undefined && echoed !== continuationToken)) return fail('WRONG_CONTINUATION');
+  const next = one('NextContinuationToken');
+  if (next === null) return fail('MALFORMED_TOKEN');
+  if (truncated && !next) return fail('TRUNCATED_WITHOUT_TOKEN');
+  const entries = [];
+  for (const block of blocks) {
+    const keys = [...block.matchAll(/<Key>([^<]*)<\/Key>/g)];
+    const sizes = [...block.matchAll(/<Size>([^<]*)<\/Size>/g)];
+    const dates = [...block.matchAll(/<LastModified>([^<]*)<\/LastModified>/g)];
+    if (keys.length !== 1 || sizes.length !== 1 || dates.length !== 1) return fail('MALFORMED_ENTRY');
+    const key = decode(keys[0][1]);
+    if (!key.startsWith(prefix)) return fail('ENTRY_OUTSIDE_PREFIX');
+    if (!/^\d+$/.test(sizes[0][1]) || !Number.isSafeInteger(Number(sizes[0][1]))) return fail('MALFORMED_ENTRY');
+    const lastModified = new Date(dates[0][1]);
+    if (Number.isNaN(lastModified.getTime())) return fail('MALFORMED_ENTRY');
+    entries.push({ key, size: Number(sizes[0][1]), lastModified });
+  }
+  return { ok: true, entries, truncated, nextToken: truncated ? next : null };
 }

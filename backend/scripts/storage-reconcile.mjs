@@ -21,7 +21,7 @@ import mongoose from 'mongoose';
 import { loadConfig, ConfigurationError } from '../src/config/env.js';
 import { createLogger } from '../src/lib/logger.js';
 import { safeErrorSummary } from '../src/lib/safeError.js';
-import { createPrivateStorage } from '../src/integrations/storage/privateStorage.js';
+import { createPrivateStorage, PrivateStorageError } from '../src/integrations/storage/privateStorage.js';
 import { Application } from '../src/models/Application.js';
 import {
   createApplicationReferenceLookup, parseReconcileArgs, reconcileOrphanObjects, ReconciliationRefused, MIN_AGE_FLOOR_MS,
@@ -96,7 +96,7 @@ async function main() {
       console.error(`REFUSED: ${error.reason}. Nothing was deleted.`);
       process.exitCode = 2;
     } else {
-      console.error(`FAILED: ${safeErrorSummary(error)}. Reconciliation stopped.`);
+      console.error(`FAILED: ${failureText(error)}. Reconciliation stopped; nothing further was deleted.`);
       process.exitCode = 1;
     }
   } finally {
@@ -105,7 +105,16 @@ async function main() {
   }
 }
 
+/**
+ * C6-T4 correction 1: a storage failure (an invalid listing, for example) is
+ * printed as its fixed, sanitised message ("private storage list failed:
+ * LISTING_INVALID"); anything else as the safe summary, never "[object Object]".
+ */
+function failureText(error) {
+  return error instanceof PrivateStorageError ? error.message : JSON.stringify(safeErrorSummary(error));
+}
+
 main().catch((error) => {
-  console.error(`FAILED: ${safeErrorSummary(error)}`);
+  console.error(`FAILED: ${failureText(error)}`);
   process.exit(1);
 });

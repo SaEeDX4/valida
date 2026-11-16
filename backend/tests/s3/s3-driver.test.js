@@ -139,7 +139,8 @@ describe('start-up fails closed: no readiness, never a fallback to disk', () => 
     // The anonymous GET is the only GET init sends: answer it 200.
     proxy.setPlan({ GET: ['status:200'] });
     expect(await initReason({ RESUME_STORAGE_S3_ENDPOINT: proxy.endpoint })).toBe('PUBLIC_ACCESS');
-    expect(await listKeys('probes/')).toEqual([]);
+    // C6-T4 correction 1: the probe uses a résumé key; nothing is left anywhere.
+    expect(await listKeys('')).toEqual([]);
   });
 
   it('the real server refuses to start, before listening, when the store refuses (startServer)', async () => {

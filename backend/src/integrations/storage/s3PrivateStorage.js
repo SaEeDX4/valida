@@ -62,9 +62,24 @@ import { errorCodeOf, parseListObjectsV2, s3Request } from './s3/s3Http.js';
  *     - the store does not answer             -> OUTCOME_UNKNOWN.
  *   The same check governs the local-integrity paths: the driver deletes only
  *   an object whose marker proves it is this attempt's.
- *   Residual window (documented, not closed): between the HEAD that proves
- *   ownership and the DELETE, nothing else can write under the key (every
- *   writer uses If-None-Match), so the only change possible is a deletion.
+ *
+ *   GENERATION-BOUND DELETION (correction 2). An observation of ownership is
+ *   not, by itself, a licence to delete: between the HEAD and a DELETE, a
+ *   writer outside this driver (one that does not use If-None-Match) could
+ *   replace the object, even with identical bytes. A plain DELETE, a second
+ *   HEAD, a random key or a content-only ETag cannot tell that replacement
+ *   apart. So every deletion names the exact object GENERATION observed —
+ *   `DELETE ?versionId=<the version the HEAD reported with this attempt's
+ *   marker>` — and removes that generation only; a replacement is a different
+ *   version and survives. This needs one provider capability, tracked
+ *   explicitly as REQUIRED_CAPABILITIES.VERSION_BOUND_DELETE: bucket
+ *   versioning enabled, a version id on PUT and HEAD, and DELETE/HEAD by
+ *   version id (s3:GetObjectVersion, s3:DeleteObjectVersion). Where a HEAD
+ *   reports no version id, nothing is deleted: the object is preserved, its
+ *   one-way reference is logged (`storage_discard_skipped`, outcome
+ *   NO_DELETE_BINDING) for reconciliation, and the generic failure stands.
+ *   init() refuses to start (DELETE_BINDING_UNAVAILABLE) on a store without
+ *   the capability, because its own probe could not be removed safely.
  *
  * WHAT IS NOT VERIFIED LOCALLY
  *   The provider's access policy, encryption at rest, region or jurisdiction,
@@ -72,6 +87,9 @@ import { errorCodeOf, parseListObjectsV2, s3Request } from './s3/s3Http.js';
  *   init() checks, conclusively, that an anonymous request is DENIED reading a
  *   representative résumé key (correction 1, finding 2); that proves the
  *   result for that one key at start-up, not the provider's policy as a whole.
+ *   Whether the chosen provider offers VERSION_BOUND_DELETE (and how its
+ *   versioning interacts with retention, lifecycle and restore) is a hosted
+ *   check, tracked separately.
  */
 
 const CHECKSUM_PATTERN = /^[a-f0-9]{64}$/;
@@ -83,6 +101,21 @@ const DEFAULT_LIST_PAGE_SIZE = 1000;
 const ATTEMPT_HEADER = 'x-amz-meta-attempt';
 const PROBE_BODY_PREFIX = 'valida synthetic storage probe; contains no personal data; ';
 const freshMarker = () => randomBytes(16).toString('hex');
+const VERSION_HEADER = 'x-amz-version-id';
+
+/**
+ * C6-T4 correction 2 — the provider capabilities this driver relies on,
+ * named so they are verified (at start-up) and tracked (hosted check) one by one.
+ */
+export const REQUIRED_CAPABILITIES = Object.freeze({
+  VERSION_BOUND_DELETE: 'VERSION_BOUND_DELETE', // versioning on; version ids on PUT/HEAD; DELETE and HEAD by versionId
+});
+
+/** A version id the store can bind an operation to ('null' is S3's word for "unversioned"). */
+function boundVersion(headers) {
+  const value = headers?.[VERSION_HEADER];
+  return typeof value === 'string' && value.length > 0 && value.length <= 1024 && value !== 'null' ? value : null;
+}
 
 function reasonForStatus(status, code) {
   if (status === 403 || status === 401) return 'PERMISSION_DENIED';
@@ -224,11 +257,15 @@ export class S3PrivateStorage {
       if (put.status < 500) throw new StorageInitializationError(reasonForStatus(put.status, errorCodeOf(put.body)));
       failure = new StorageInitializationError(reasonForStatus(put.status, errorCodeOf(put.body)));
     }
+    // The generation this probe created, as the store reported it (correction 2).
+    let probeVersion = put.kind === 'response' && put.status === 200 ? boundVersion(put.headers) : null;
     if (!failure) {
       try {
         const head = await s3Request(this.#endpoint, { method: 'HEAD', key: probeKey });
         if (head.kind !== 'response') throw new StorageInitializationError(reasonForTransport(head));
         if (head.status !== 200 || Number(head.headers['content-length']) !== body.length || head.headers[ATTEMPT_HEADER] !== marker) throw new StorageInitializationError('PROBE_MISMATCH');
+        // The HEAD that saw this probe's marker must name the same generation the PUT reported.
+        if (probeVersion !== null && boundVersion(head.headers) !== probeVersion) throw new StorageInitializationError('PROBE_MISMATCH');
         const anonymous = await s3Request(this.#endpoint, { method: 'GET', key: probeKey, anonymous: true, maxBody: 4096 });
         const verdict = anonymousVerdict(anonymous, body);
         if (verdict !== 'DENIED') throw new StorageInitializationError(verdict);
@@ -236,32 +273,60 @@ export class S3PrivateStorage {
         failure = error;
       }
     }
-    const cleaned = await this.#removeProbe(probeKey, marker, put.kind !== 'response');
+    if (put.kind === 'response' && put.status === 200 && probeVersion === null) {
+      this.#logger?.error({ event: 'storage_capability_missing', capability: REQUIRED_CAPABILITIES.VERSION_BOUND_DELETE }, 'the store reports no object version: a deletion cannot be bound to the object observed');
+      this.#logger?.error({ event: 'storage_probe_cleanup_unconfirmed', objectRef: storageObjectRef(probeKey), step: 'NO_DELETE_BINDING' }, 'the start-up probe could not be confirmed removed; left for reconciliation');
+      if (failure) throw failure;
+      throw new StorageInitializationError('DELETE_BINDING_UNAVAILABLE');
+    }
+    const cleanup = await this.#removeProbe(probeKey, marker, probeVersion, put.kind !== 'response' || put.status >= 500);
     if (failure) throw failure;
-    if (!cleaned) throw new StorageInitializationError('PROBE_CLEANUP_FAILED');
+    if (cleanup !== 'CONFIRMED') throw new StorageInitializationError(cleanup);
     this.#state = 'ready';
   }
 
-  /** Deletes the probe (only if it is this probe) and confirms it is gone. */
-  async #removeProbe(probeKey, marker, putUncertain = false) {
+  /**
+   * Removes the probe's OWN generation and confirms it is gone (correction 2).
+   * Returns 'CONFIRMED', 'DELETE_BINDING_UNAVAILABLE' (the store gave no
+   * version id to bind the deletion to: nothing is deleted, the probe is
+   * preserved for reconciliation) or 'PROBE_CLEANUP_FAILED'.
+   *   - The DELETE names the version this probe created (from the PUT answer
+   *     or, after an uncertain PUT, from a HEAD that showed this probe's
+   *     marker); a replacement under the key is another version and survives.
+   *   - Confirmed only when a HEAD of that version answers 404 AND the key
+   *     holds no current object: a replacement found there is preserved, but
+   *     the key is not clean, so start-up is refused (step KEY_OCCUPIED).
+   */
+  async #removeProbe(probeKey, marker, knownVersion, putUncertain = false) {
     const objectRef = storageObjectRef(probeKey);
-    const unconfirmed = (step) => {
+    const unconfirmed = (step, reason = 'PROBE_CLEANUP_FAILED') => {
       this.#logger?.error({ event: 'storage_probe_cleanup_unconfirmed', objectRef, step }, 'the start-up probe could not be confirmed removed; left for reconciliation');
-      return false;
+      return reason;
     };
-    const before = await this.#inspect(probeKey, marker);
-    if (before.state === 'ABSENT') {
-      // After a PUT whose answer was lost, "absent" holds only at observation: a late write may land.
-      if (putUncertain) this.#logger?.warn({ event: 'storage_write_outcome_unobserved', objectRef, why: 'PROBE', outcome: 'ABSENT_AT_OBSERVATION' }, 'the start-up probe was absent when checked; a late write would be found by reconciliation');
-      return true;
+    let version = knownVersion;
+    if (version === null) {
+      const seen = await this.#inspect(probeKey, marker);
+      if (seen.state === 'ABSENT') {
+        // After a PUT whose answer was lost, "absent" holds only at observation: a late write may land.
+        if (putUncertain) this.#logger?.warn({ event: 'storage_write_outcome_unobserved', objectRef, why: 'PROBE', outcome: 'ABSENT_AT_OBSERVATION' }, 'the start-up probe was absent when checked; a late write would be found by reconciliation');
+        return putUncertain ? 'CONFIRMED' : unconfirmed('ABSENT_AFTER_WRITE');
+      }
+      if (seen.state === 'UNKNOWN') return unconfirmed('HEAD');
+      if (seen.state === 'NOT_OWNED') return unconfirmed('NOT_OWNED');
+      if (seen.versionId === null) {
+        this.#logger?.error({ event: 'storage_capability_missing', capability: REQUIRED_CAPABILITIES.VERSION_BOUND_DELETE }, 'the store reports no object version: a deletion cannot be bound to the object observed');
+        return unconfirmed('NO_DELETE_BINDING', 'DELETE_BINDING_UNAVAILABLE');
+      }
+      version = seen.versionId;
     }
-    if (before.state === 'UNKNOWN') return unconfirmed('HEAD');
-    if (before.state === 'NOT_OWNED') return unconfirmed('NOT_OWNED');
-    const removed = await s3Request(this.#endpoint, { method: 'DELETE', key: probeKey });
+    const removed = await s3Request(this.#endpoint, { method: 'DELETE', key: probeKey, query: { versionId: version } });
     if (removed.kind !== 'response' || (removed.status !== 204 && removed.status !== 200)) return unconfirmed('DELETE');
-    const after = await this.#inspect(probeKey, marker);
-    if (after.state !== 'ABSENT') return unconfirmed('CONFIRM');
-    return true;
+    const gone = await s3Request(this.#endpoint, { method: 'HEAD', key: probeKey, query: { versionId: version } });
+    if (gone.kind !== 'response' || gone.status !== 404) return unconfirmed('CONFIRM');
+    const current = await s3Request(this.#endpoint, { method: 'HEAD', key: probeKey });
+    if (current.kind !== 'response') return unconfirmed('CONFIRM');
+    if (current.status !== 404) return unconfirmed(current.status === 200 ? 'KEY_OCCUPIED' : 'CONFIRM');
+    return 'CONFIRMED';
   }
 
   /**
@@ -380,7 +445,7 @@ export class S3PrivateStorage {
 
   /**
    * What is under a key, as far as THIS attempt is concerned:
-   *   { state: 'OWN', complete } | { state: 'NOT_OWNED' } | { state: 'ABSENT' } | { state: 'UNKNOWN' }
+   *   { state: 'OWN', complete, versionId } | { state: 'NOT_OWNED' } | { state: 'ABSENT' } | { state: 'UNKNOWN' }
    * `complete`: the length and recorded SHA-256 are the expected ones.
    */
   async #inspect(storageKey, marker, sizeBytes = null, checksumSha256 = null) {
@@ -390,7 +455,8 @@ export class S3PrivateStorage {
     if (head.status !== 200) return { state: 'UNKNOWN' };
     if (head.headers[ATTEMPT_HEADER] !== marker) return { state: 'NOT_OWNED' };
     const complete = Number(head.headers['content-length']) === sizeBytes && head.headers['x-amz-meta-sha256'] === checksumSha256;
-    return { state: 'OWN', complete };
+    // The generation this observation is about: the only one a later deletion may remove.
+    return { state: 'OWN', complete, versionId: boundVersion(head.headers) };
   }
 
   async #resolveUncertain({ storageKey, sizeBytes, checksumSha256, marker }, why) {
@@ -401,7 +467,7 @@ export class S3PrivateStorage {
       return 'STORED';
     }
     if (seen.state === 'OWN') {
-      await this.#deleteOwn(storageKey, 'STORED_OBJECT_MISMATCH');
+      await this.#deleteOwn(storageKey, seen.versionId, 'STORED_OBJECT_MISMATCH');
       throw new PrivateStorageError('store', 'INTEGRITY_MISMATCH');
     }
     if (seen.state === 'NOT_OWNED') {
@@ -420,7 +486,7 @@ export class S3PrivateStorage {
   async #discardIfOwn({ storageKey, marker }, why) {
     const objectRef = storageObjectRef(storageKey);
     const seen = await this.#inspect(storageKey, marker);
-    if (seen.state === 'OWN') return this.#deleteOwn(storageKey, why);
+    if (seen.state === 'OWN') return this.#deleteOwn(storageKey, seen.versionId, why);
     if (seen.state === 'ABSENT') {
       this.#logger?.warn({ event: 'storage_write_outcome_unobserved', objectRef, why, outcome: 'ABSENT_AT_OBSERVATION' }, 'no object was present when checked; a late write would be found by reconciliation');
       return undefined;
@@ -429,11 +495,22 @@ export class S3PrivateStorage {
     return undefined;
   }
 
-  /** Deletes an object already PROVEN to be this attempt's (marker checked by the caller). */
-  async #deleteOwn(storageKey, why) {
-    const result = await s3Request(this.#endpoint, { method: 'DELETE', key: storageKey });
+  /**
+   * Deletes the GENERATION a HEAD showed carrying this attempt's marker
+   * (correction 2): `DELETE ?versionId=<observed>`. A replacement placed after
+   * that observation is another version and is not touched. Without a version
+   * id to bind to, nothing is deleted: the object is preserved and its
+   * one-way reference logged for reconciliation.
+   */
+  async #deleteOwn(storageKey, versionId, why) {
+    const objectRef = storageObjectRef(storageKey);
+    if (versionId === null) {
+      this.#logger?.error({ event: 'storage_discard_skipped', objectRef, why, outcome: 'NO_DELETE_BINDING' }, 'the store gave no object version to bind the deletion to; the object is preserved for reconciliation');
+      return;
+    }
+    const result = await s3Request(this.#endpoint, { method: 'DELETE', key: storageKey, query: { versionId } });
     if (result.kind !== 'response' || (result.status !== 204 && result.status !== 200 && result.status !== 404)) {
-      this.#logger?.error({ event: 'storage_discard_failed', objectRef: storageObjectRef(storageKey), why }, 'a rejected object could not be removed; left for reconciliation');
+      this.#logger?.error({ event: 'storage_discard_failed', objectRef, why }, 'a rejected object could not be removed; left for reconciliation');
     }
   }
 
@@ -444,7 +521,12 @@ export class S3PrivateStorage {
     if (head.kind !== 'response') throw new PrivateStorageError('delete', reasonForTransport(head));
     if (head.status === 404) return { deleted: false, reason: 'NOT_FOUND' };
     if (head.status !== 200) throw new PrivateStorageError('delete', reasonForStatus(head.status, null));
-    const result = await s3Request(this.#endpoint, { method: 'DELETE', key: storageKey });
+    // Correction 2: the deletion removes the generation the HEAD saw (and so,
+    // on a versioned store, leaves no noncurrent copy behind); without a
+    // version to bind to it is refused rather than made unconditional.
+    const versionId = boundVersion(head.headers);
+    if (versionId === null) throw new PrivateStorageError('delete', 'DELETE_BINDING_UNAVAILABLE');
+    const result = await s3Request(this.#endpoint, { method: 'DELETE', key: storageKey, query: { versionId } });
     if (result.kind !== 'response') throw new PrivateStorageError('delete', reasonForTransport(result));
     if (result.status === 204 || result.status === 200) return { deleted: true };
     if (result.status === 404) return { deleted: false, reason: 'NOT_FOUND' };

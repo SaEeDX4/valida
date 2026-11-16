@@ -259,7 +259,7 @@ let mongoose;
 try {
   // 0. The double, the proxy, SMTP, the database, the Job.
   moto = await startMoto({ python: PYTHON });
-  secrets.push(moto.app.secretAccessKey, moto.app.accessKeyId, moto.denied.secretAccessKey, moto.denied.accessKeyId, SMTP_PASSWORD);
+  secrets.push(moto.app.secretAccessKey, moto.app.accessKeyId, moto.denied.secretAccessKey, moto.denied.accessKeyId, moto.fixture.secretAccessKey, moto.fixture.accessKeyId, SMTP_PASSWORD);
   proxy = await startFaultProxy({ upstream: moto.endpoint });
   smtpDir = mkdtempSync(path.join(os.tmpdir(), 'valida-c6t4-smtp-'));
   const smtpChild = startNode([fileURLToPath(new URL('../support/smtpCapture.mjs', import.meta.url))], {
@@ -302,7 +302,10 @@ try {
 
   // C6-T4 correction 1, finding 2: the start-up privacy check is conclusive.
   const resumeObjects = () => JSON.parse(execFileSync(PYTHON, ['-c', `import sys,boto3;c=boto3.client('s3',endpoint_url=sys.argv[1],region_name='us-east-1',aws_access_key_id=sys.argv[3],aws_secret_access_key=sys.argv[4]);print(len(c.list_objects_v2(Bucket=sys.argv[2],Prefix='resumes/').get('Contents',[])))`, moto.endpoint, moto.bucket, moto.app.accessKeyId, moto.app.secretAccessKey], { encoding: 'utf8' }));
-  const removeResumeObjects = () => execFileSync(PYTHON, ['-c', `import sys,boto3;c=boto3.client('s3',endpoint_url=sys.argv[1],region_name='us-east-1',aws_access_key_id=sys.argv[3],aws_secret_access_key=sys.argv[4]);[c.delete_object(Bucket=sys.argv[2],Key=o['Key']) for o in c.list_objects_v2(Bucket=sys.argv[2],Prefix='resumes/').get('Contents',[])]`, moto.endpoint, moto.bucket, moto.app.accessKeyId, moto.app.secretAccessKey]);
+  // C6-T4 correction 2: the résumé bucket is VERSIONED; the run's own clean-up removes every version (test-side fixture credentials).
+  const VERSIONS_PY = `import sys,json,boto3;c=boto3.client('s3',endpoint_url=sys.argv[1],region_name='us-east-1',aws_access_key_id=sys.argv[3],aws_secret_access_key=sys.argv[4]);r=c.list_object_versions(Bucket=sys.argv[2],Prefix='resumes/');v=r.get('Versions',[]);m=r.get('DeleteMarkers',[])`;
+  const versionCounts = (bucket = moto.bucket) => JSON.parse(execFileSync(PYTHON, ['-c', `${VERSIONS_PY};print(json.dumps({'current':sum(1 for x in v if x['IsLatest']),'noncurrent':sum(1 for x in v if not x['IsLatest']),'deleteMarkers':len(m)}))`, moto.endpoint, bucket, moto.fixture.accessKeyId, moto.fixture.secretAccessKey], { encoding: 'utf8' }));
+  const removeResumeObjects = (bucket = moto.bucket) => execFileSync(PYTHON, ['-c', `${VERSIONS_PY};[c.delete_object(Bucket=sys.argv[2],Key=x['Key'],VersionId=x['VersionId']) for x in v+m]`, moto.endpoint, bucket, moto.fixture.accessKeyId, moto.fixture.secretAccessKey]);
   const privacy = [
     ['S7', 'the résumé prefix anonymously readable (the probe now uses a résumé key)', { '*': [(req) => (req.anonymous && req.url.includes('/resumes/') ? { respond: { status: 200, body: 'public' } } : 'pass')] }, /\(PUBLIC_ACCESS\)/, 0],
     ['S8', 'an inconclusive anonymous answer (a 500, not a denial)', { '*': [(req) => (req.anonymous ? { respond: { status: 500, body: '<Error><Code>InternalError</Code></Error>' } } : 'pass')] }, /\(PUBLIC_ACCESS_UNVERIFIED\)/, 0],
@@ -320,12 +323,25 @@ try {
     if (left) removeResumeObjects();
   }
 
+  // C6-T4 correction 2: a store that cannot bind a deletion to the object version observed is refused.
+  {
+    proxy.setPlan({ '*': ['pass'] });
+    proxy.log.length = 0;
+    const r = await expectRefusal('S11-unversioned-bucket', backendEnv(proxy.endpoint, { RESUME_STORAGE_S3_BUCKET: moto.unversionedBucket }));
+    const deletes = proxy.log.filter((e) => e.method === 'DELETE').length;
+    const left = versionCounts(moto.unversionedBucket);
+    check('S11', 'start-up', 'The backend refuses to start, before listening, on a bucket WITHOUT versioning: no deletion could be bound to the exact object version observed, so the probe cannot be removed safely', 'exit 1; port never open; (DELETE_BINDING_UNAVAILABLE); advice names versioning; no DELETE sent; the synthetic probe preserved (1 object), then removed by the run',
+      { exitCode: r.exitCode, portOpened: r.portOpened, output: r.output.trim().split('\n').slice(-1).join(' | '), deletesSent: deletes, probeLeft: left },
+      r.exitCode === 1 && !r.portOpened && /\(DELETE_BINDING_UNAVAILABLE\)/.test(r.output) && r.output.includes('versioning') && deletes === 0 && left.current === 1);
+    removeResumeObjects(moto.unversionedBucket);
+  }
+
   proxy.setPlan({ '*': ['pass'] });
   let backend = await startBackend('main', backendEnv(proxy.endpoint));
   const ready = await exchange('readiness', { target: '/api/v1/health/ready' });
   check('S6', 'readiness', 'With a working store the backend starts and readiness is 200 (the start-up probe wrote a synthetic object under a résumé key, checked it, saw the anonymous read explicitly DENIED, and confirmed its deletion)', '200; no probe object left',
-    { status: ready.status, probeObjectsLeft: resumeObjects() },
-    ready.status === 200 && resumeObjects() === 0);
+    { status: ready.status, probeObjectsLeft: resumeObjects(), versions: versionCounts() },
+    ready.status === 200 && resumeObjects() === 0 && JSON.stringify(versionCounts()) === JSON.stringify({ current: 0, noncurrent: 0, deleteMarkers: 0 }));
 
   /* ======================================================= A: APPLY ====== */
   const before1 = { apps: await count(), objects: readStore(), mail: smtpMessages() };
@@ -440,6 +456,11 @@ try {
   });
   check('K1', 'evidence', 'No credential, SMTP password or storage key appears in any evidence file (logs, HTTP, start-up output)', '0 files', { files: files.length, leaks: leaks.map((f) => path.relative(OUT, f)) }, leaks.length === 0);
   const logText = readdirSync(path.join(OUT, 'logs')).filter((f) => f.startsWith('backend-')).map((f) => readFileSync(path.join(OUT, 'logs', f), 'utf8')).join('\n');
+  {
+    const counts = versionCounts();
+    check('K3', 'storage', 'Every deletion in the run (start-up probes, Apply compensation of losing objects) removed the exact version: the versioned résumé bucket holds no noncurrent version and no delete marker', 'noncurrent 0; delete markers 0',
+      counts, counts.noncurrent === 0 && counts.deleteMarkers === 0);
+  }
   check('K2', 'evidence', 'The backend log carries no applicant field (name, email) and no résumé content', 'none found', { name: logText.includes('QA Synthetic Applicant C6T4'), email: logText.includes('qa+c6t4@'), content: logText.includes('QA TEST DOCUMENT C6-T4') }, !logText.includes('QA Synthetic Applicant C6T4') && !logText.includes('qa+c6t4@') && !logText.includes('QA TEST DOCUMENT C6-T4'));
 } catch (error) {
   check('X', 'harness', 'The stack check ran to completion', 'no error', sanitise(String(error?.stack ?? error)), false);

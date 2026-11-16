@@ -591,7 +591,9 @@ export function formatStartupFailure(error) {
       `[valida-backend] failed to start: the private resume storage could not be initialised (${error.reason}). ` +
       'Check RESUME_STORAGE_S3_ENDPOINT, RESUME_STORAGE_S3_REGION, RESUME_STORAGE_S3_BUCKET and the access key: ' +
       'the endpoint must be reachable and present a trusted TLS certificate, the bucket must exist, ' +
-      'the credentials must be allowed to put, read, delete and list objects in that bucket, ' +
+      'the credentials must be allowed to put, read, delete and list objects in that bucket ' +
+      '(including reading and deleting a specific object version), bucket versioning must be enabled so that ' +
+      'every deletion can be bound to the exact object version observed, ' +
       'and the bucket must not allow anonymous reads. There is no fallback to local storage.'
     );
   }

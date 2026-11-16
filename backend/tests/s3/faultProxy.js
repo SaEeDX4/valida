@@ -36,7 +36,7 @@ export async function startFaultProxy({ upstream }) {
   };
   const server = createServer((req, res) => {
     const mode = next(req);
-    const entry = { method: req.method, mode: typeof mode === 'string' ? mode : Object.keys(mode)[0], anonymous: !req.headers.authorization, upstreamStatus: null };
+    const entry = { method: req.method, mode: typeof mode === 'string' ? mode : Object.keys(mode)[0], anonymous: !req.headers.authorization, versionId: new URL(req.url, 'http://x').searchParams.get('versionId'), upstreamStatus: null };
     state.log.push(entry);
     if (mode === 'hang') {
       req.resume();
@@ -86,6 +86,22 @@ export async function startFaultProxy({ upstream }) {
       if (mode === 'lose-answer') {
         answer.resume();
         answer.on('end', () => req.socket.destroy());
+        return;
+      }
+      // C6-T4 correction 2: { afterUpstream, stripHeaders } — the store has
+      // answered; `afterUpstream(status, headers)` runs (e.g. a synthetic
+      // replacement is placed) BEFORE the client sees the answer, so it lands
+      // after the client's observation and before its next request.
+      if (typeof mode === 'object' && (mode.afterUpstream || mode.stripHeaders)) {
+        const parts = [];
+        answer.on('data', (c) => parts.push(c));
+        answer.on('end', async () => {
+          if (mode.afterUpstream) await mode.afterUpstream(answer.statusCode, answer.headers);
+          const headers = { ...answer.headers };
+          for (const name of mode.stripHeaders ?? []) delete headers[name];
+          res.writeHead(answer.statusCode, headers);
+          res.end(Buffer.concat(parts));
+        });
         return;
       }
       if (typeof mode === 'object' && mode.rewrite) {

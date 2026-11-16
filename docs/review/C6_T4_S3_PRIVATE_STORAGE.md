@@ -5,7 +5,7 @@
 | Task | **C6-T4**, C6 plan revision 3, §10 step 2a |
 | Authorised by | [Owner record 2026-11-16 (2)](OWNER_RECORD_2026-11-16_C6_T3_ACCEPTANCE_AND_C6_T4_AUTHORISATION.md), §2 — local implementation only |
 | Recorded against | Doc 15 §§97–106 (storage hosting class, interface, provider requirements, S3 preference, public access, credential, encryption, durability); Doc 13 §§101, 108–111 (credential scope, exposure, access control, encryption, transport); Doc 09 §§101–108, 116–119, 170 (keys, adapter, production storage, object-first persistence, no retrieval API); Doc 10 §§94–108 (résumé metadata); Doc 17 (evidence) |
-| Status | Implemented and tested locally on `c6-work`; **correction 1** applied (§5). **Not accepted** — that is the owner's decision, after Astra's review. Nothing pushed |
+| Status | Implemented and tested locally on `c6-work`; **corrections 1 and 2** applied (§§5–6). **Not accepted** — that is the owner's decision, after Astra's review. Nothing pushed |
 
 ## 1. What was built
 
@@ -52,8 +52,32 @@
 | 2. Start-up privacy check | Probe under `probes/` (a different prefix from résumés); only a 2xx anonymous answer refused start-up; the DELETE result was ignored | Probe under a representative résumé key; an explicit 401/403 is required (2xx `PUBLIC_ACCESS`; redirect, 404, 5xx, reset, timeout `PUBLIC_ACCESS_UNVERIFIED`); cleanup confirmed by DELETE then HEAD 404, else `PROBE_CLEANUP_FAILED` |
 | 3. Reconciliation listing | Pages parsed by pattern; a malformed page read as an empty or partial listing | Strict page validation (`parseListObjectsV2`); any invalid page fails the whole listing (`LISTING_INVALID`): no report, no deletion. The CLI prints the fixed message and exits non-zero |
 
-Residual, documented: between the HEAD that proves ownership and the DELETE of
-this attempt's own wrong object, no other writer can create an object under
-the key (every writer uses `If-None-Match: *`); only a deletion can intervene.
+The residual this section originally recorded (an unconditional DELETE after
+the ownership HEAD) is closed by correction 2 (§6). The statement that "no
+other writer can create an object under the key" was an operational
+assumption, not a guarantee enforced by code; it is no longer relied on.
 The real provider's policy, its `If-None-Match` handling and its listing
 format remain hosted checks (§4).
+
+## 6. Correction 2 (generation-bound deletion)
+
+| Path | Before (`c311977`) | After |
+| --- | --- | --- |
+| Upload clean-up after an uncertain or failed write (`#discardIfOwn`, `#resolveUncertain` → `#deleteOwn`) | HEAD proved ownership, then a plain `DELETE` of the key: a replacement placed in between (same bytes, another marker) was deleted (on a versioned bucket, hidden behind a delete marker) | `DELETE ?versionId=<the version the HEAD reported with this attempt's marker>`: only that generation is removed; the replacement survives. No version id → nothing deleted; preserved; `storage_discard_skipped` / `NO_DELETE_BINDING` with the one-way reference; the generic failure (503 at Apply) |
+| `deletePrivateObject` (compensation, retention, reconciliation) | HEAD then plain `DELETE` | bound to the version its HEAD saw; refused (`DELETE_BINDING_UNAVAILABLE`) without one. Reconciliation's existing safeguards (24 h floor, confirmation, re-check of references, validated listing) are unchanged |
+| Start-up probe clean-up | HEAD then plain `DELETE`, then HEAD 404 | `DELETE ?versionId=<the version the probe's PUT created>` (after an uncertain PUT: the version a HEAD showed with the probe's marker); confirmed by a HEAD of that version (404) and an empty key. A replacement survives, but the key is not clean: refused (`PROBE_CLEANUP_FAILED`, step `KEY_OCCUPIED`) |
+| A store without object versions | ready | refused before listening: `DELETE_BINDING_UNAVAILABLE` (`storage_capability_missing`, capability `VERSION_BOUND_DELETE`); the probe preserved for reconciliation |
+
+Why a version id: a second HEAD, a random key or a content-only ETag cannot
+tell a replacement with identical bytes and a different marker apart from the
+object observed; a version id names the generation itself.
+
+Provider capability, tracked separately for hosted verification:
+`VERSION_BOUND_DELETE` — versioning enabled on the bucket; version ids on PUT
+and HEAD; HEAD and DELETE by `versionId`; `s3:GetObjectVersion` and
+`s3:DeleteObjectVersion` in the scoped token; the interaction of versioning
+with lifecycle rules, retention, restore and the absence of noncurrent copies.
+Locally it is proven against moto 5.2.5 with a versioned bucket (and refused
+on an unversioned one). This makes bucket versioning a deployment requirement
+of the S3 driver — a proposed addition to Doc 15 §§97–102 and the hosted
+checklist, **not adopted** until the owner decides.

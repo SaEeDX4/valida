@@ -8,7 +8,7 @@ import net from 'node:net';
  * (see backend/README.md, "S3-compatible storage (C6-T4)"). Never a real
  * provider; synthetic credentials only.
  */
-export const SETUP_ACTIONS = 7;
+export const SETUP_ACTIONS = 12; // moto_setup.py numbers its actions (C6-T4 correction 2: 12)
 
 async function freePort() {
   return new Promise((resolve) => {

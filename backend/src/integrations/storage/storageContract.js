@@ -92,6 +92,8 @@ export const STORAGE_FAILURE_REASONS = Object.freeze([
   'PUBLIC_ACCESS_UNVERIFIED', // the anonymous read of the start-up probe was not explicitly denied
   'PROBE_CLEANUP_FAILED', // the start-up probe's removal could not be confirmed
   'LISTING_INVALID', // an object listing was malformed, incomplete, unrelated or over a limit
+  // C6-T4 correction 2.
+  'DELETE_BINDING_UNAVAILABLE', // the store cannot bind a deletion to the exact object version observed
 ]);
 
 const REASON_SET = new Set(STORAGE_FAILURE_REASONS);

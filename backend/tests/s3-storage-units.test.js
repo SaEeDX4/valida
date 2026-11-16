@@ -176,30 +176,39 @@ describe('answers from the store (an in-process S3 stand-in)', () => {
     res.writeHead(status, { 'content-type': 'application/xml', ...headers });
     res.end(code ? `<Error><Code>${code}</Code></Error>` : '');
   };
-  /** A well-behaved store, with per-test overrides of one operation. */
+  /**
+   * A well-behaved VERSIONED store (C6-T4 correction 2: a version id on PUT and
+   * HEAD; HEAD and DELETE by ?versionId), with per-test overrides of one
+   * operation. Objects are keyed by path; one current version per key.
+   */
+  let versionCounter = 0;
   const store = (overrides = {}) => {
     const objects = new Map();
     handler = (req, res) => {
       const chunks = [];
       req.on('data', (c) => chunks.push(c));
       req.on('end', () => {
-        const key = req.url;
+        const url = new URL(req.url, 'http://x');
+        const key = url.pathname;
+        const versionId = url.searchParams.get('versionId');
         const custom = overrides[req.method]?.(req, res, Buffer.concat(chunks), objects);
         if (custom) return;
         if (req.method === 'PUT') {
-          objects.set(key, { body: Buffer.concat(chunks), sha: req.headers['x-amz-meta-sha256'], attempt: req.headers['x-amz-meta-attempt'] });
-          return answer(res, 200);
+          const version = `qa-v${(versionCounter += 1)}`;
+          objects.set(key, { body: Buffer.concat(chunks), sha: req.headers['x-amz-meta-sha256'], attempt: req.headers['x-amz-meta-attempt'], version });
+          return answer(res, 200, null, { 'x-amz-version-id': version });
         }
         if (req.method === 'HEAD') {
           const object = objects.get(key);
-          if (!object) return answer(res, 404);
+          if (!object || (versionId !== null && object.version !== versionId)) return answer(res, 404);
           // Like S3: user metadata (x-amz-meta-*) comes back on HEAD; C6-T4 correction 1 adds the attempt marker.
-          res.writeHead(200, { 'content-length': object.body.length, 'x-amz-meta-sha256': object.sha, ...(object.attempt ? { 'x-amz-meta-attempt': object.attempt } : {}) });
+          res.writeHead(200, { 'content-length': object.body.length, 'x-amz-meta-sha256': object.sha, ...(object.attempt ? { 'x-amz-meta-attempt': object.attempt } : {}), ...(object.version ? { 'x-amz-version-id': object.version } : {}) });
           return res.end();
         }
         if (req.method === 'GET') return answer(res, 403, 'AccessDenied');
         if (req.method === 'DELETE') {
-          objects.delete(key);
+          const object = objects.get(key);
+          if (object && (versionId === null || object.version === versionId)) objects.delete(key);
           return answer(res, 204);
         }
         return answer(res, 400, 'Unexpected');
@@ -246,7 +255,7 @@ describe('answers from the store (an in-process S3 stand-in)', () => {
     await s.init();
     const objects = store({
       PUT: (q, res, body, map) => {
-        map.set(q.url, { body: body.subarray(1), sha: q.headers['x-amz-meta-sha256'], attempt: q.headers['x-amz-meta-attempt'] });
+        map.set(q.url, { body: body.subarray(1), sha: q.headers['x-amz-meta-sha256'], attempt: q.headers['x-amz-meta-attempt'], version: 'qa-v-short' });
         answer(res, 200);
         return true;
       },
@@ -254,8 +263,38 @@ describe('answers from the store (an in-process S3 stand-in)', () => {
     expect(await reasonOf(s.storePrivateResume(req()))).toBe('INTEGRITY_MISMATCH');
     const methods = requests.map((r) => r.method);
     expect(methods.slice(-3)).toEqual(['PUT', 'HEAD', 'DELETE']);
-    expect(new Set(requests.slice(-3).map((r) => r.url)).size).toBe(1);
+    expect(new Set(requests.slice(-3).map((r) => new URL(r.url, 'http://x').pathname)).size).toBe(1);
+    // Correction 2: the DELETE names the generation the HEAD observed.
+    expect(new URL(requests.at(-1).url, 'http://x').searchParams.get('versionId')).toBe('qa-v-short');
     expect(objects.size).toBe(0);
+  });
+
+  // C6-T4 correction 2: a store that reports no object version cannot bind a deletion.
+  const unversionedPut = (q, res, body, map) => {
+    map.set(q.url, { body, sha: q.headers['x-amz-meta-sha256'], attempt: q.headers['x-amz-meta-attempt'] });
+    answer(res, 200);
+    return true;
+  };
+  it('a store that reports no object version (versioning off): init refuses DELETE_BINDING_UNAVAILABLE, sends no DELETE, and leaves the probe', async () => {
+    const s = storage();
+    const objects = store({ PUT: unversionedPut });
+    const error = await s.init().catch((e) => e);
+    expect(error.reason).toBe('DELETE_BINDING_UNAVAILABLE');
+    expect(s.isReady).toBe(false);
+    expect(requests.map((r) => r.method)).not.toContain('DELETE');
+    expect(objects.size).toBe(1);
+  });
+
+  it('deletePrivateObject on an object with no version id: refused (DELETE_BINDING_UNAVAILABLE), never an unconditional DELETE', async () => {
+    const s = storage();
+    store();
+    await s.init();
+    const objects = store({ PUT: unversionedPut });
+    const stored = await s.storePrivateResume(req());
+    requests = [];
+    expect(await reasonOf(s.deletePrivateObject(stored.storageKey))).toBe('DELETE_BINDING_UNAVAILABLE');
+    expect(requests.map((r) => r.method)).toEqual(['HEAD']);
+    expect(objects.size).toBe(1);
   });
 
   it('a hanging store: the PUT times out (uncertain), the HEAD resolves it as absent -> UNAVAILABLE', async () => {

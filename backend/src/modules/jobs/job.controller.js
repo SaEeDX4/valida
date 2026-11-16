@@ -4,6 +4,7 @@ import { DatabaseUnavailableError } from './job.repository.js';
 import { toPublicJobDetail, toPublicJobListItem } from './job.mapper.js';
 import { publicApplicationStatus } from './job.visibility.js';
 import { isValidPublicSlug, parseDetailQuery, parseListQuery } from './job.validation.js';
+import { mayUseJobs } from '../../middleware/recruitmentAccess.js';
 
 /**
  * Public Jobs controllers — 09_BACKEND_API_SPEC.md sections 48-70.
@@ -34,6 +35,16 @@ export function createJobsController({ repository, clock, logger }) {
       return;
     }
     const { page, limit } = query.value;
+
+    /*
+     * C6-T1 — recruitment access. A client who may not use Jobs gets the
+     * answer the API gives when no Job is open: an empty page, built from the
+     * same validated query. The database is not consulted.
+     */
+    if (!mayUseJobs(req)) {
+      res.status(200).json(successEnvelope({ items: [], pagination: { page, limit, total: 0, totalPages: 0 } }, req.id));
+      return;
+    }
     const now = clock();
 
     let result;
@@ -74,6 +85,12 @@ export function createJobsController({ repository, clock, logger }) {
     }
 
     const { jobSlug } = req.params;
+    // C6-T1 — recruitment access: for a client who may not use Jobs, every Job
+    // is an unknown one. The database is not consulted.
+    if (!mayUseJobs(req)) {
+      next(jobNotFound());
+      return;
+    }
     // Doc 09 section 61: an invalid slug is answered exactly like an unknown
     // one, and never reaches the database.
     if (!isValidPublicSlug(jobSlug)) {

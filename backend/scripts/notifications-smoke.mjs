@@ -481,6 +481,16 @@ async function main() {
         SUPPRESSION_HMAC_KEY: suppressionKey.toString('base64'),
         SUPPRESSION_HMAC_KEY_ID: suppressionKeyId,
         SUPPRESSION_HMAC_PREVIOUS_KEYS: '',
+        /*
+         * C6-T1 — recruitment is closed unless configured, and `public` is
+         * refused outside production. This throw-away server is local, bound
+         * to loopback, and receives one synthetic application from this same
+         * process: it takes the tester path, with loopback as its only listed
+         * address. Set explicitly, so the launching shell cannot change it.
+         */
+        RECRUITMENT_MODE: 'testers',
+        ACCESS_ALLOWLIST: '127.0.0.1/32',
+        RECRUITMENT_PUBLIC_AUTHORISATION: '',
       },
       logger,
       notificationTransportFactory: instrumented,

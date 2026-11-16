@@ -8,6 +8,7 @@ import {
 import { RESUME_UPLOAD_POLICY } from '../../config/resumePolicy.js';
 import { parseMultipartUpload } from '../../lib/multipart/multipart.js';
 import { APPLICATION_TEXT_FIELDS, validateIdempotencyKeyHeader } from './application.validation.js';
+import { mayUseJobs, submissionNotAvailable } from '../../middleware/recruitmentAccess.js';
 
 /**
  * POST /api/v1/jobs/:jobSlug/applications — Milestone B5 (Doc 09 sections 71-150).
@@ -56,6 +57,18 @@ function applyWording(error) {
 
 export function createApplicationsController({ service, uploadArea, resumeStorage }) {
   async function submitApplication(req, res, next) {
+    /*
+     * C6-T1 — recruitment access, second line. The gate in app.js has already
+     * refused a client who may not use Jobs, before this route was reached.
+     * This repeats the check where the work starts, so that no ordering
+     * change elsewhere can let a submission through: nothing below runs — no
+     * header check, no multipart parse, no temporary file, no storage, no
+     * database write, no notification.
+     */
+    if (!mayUseJobs(req)) {
+      next(submissionNotAvailable());
+      return;
+    }
     const key = validateIdempotencyKeyHeader(req.headers['idempotency-key']);
     if (!key.ok) {
       next(key.problem === 'MISSING' ? idempotencyKeyRequired({ closeConnection: true }) : invalidIdempotencyKey({ closeConnection: true }));

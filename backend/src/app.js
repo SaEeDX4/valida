@@ -9,6 +9,8 @@ import { generalRateLimit } from './middleware/rateLimit.js';
 import { apiNotFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { noStore } from './middleware/noStore.js';
+import { recruitmentAccessGate } from './middleware/recruitmentAccess.js';
+import { CLOSED_RECRUITMENT_ACCESS } from './config/recruitmentAccess.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
 import { jobsRouter } from './modules/jobs/job.routes.js';
@@ -47,6 +49,8 @@ export const API_BASE_PATH = '/api/v1';
  *                       also covers responses that parsing or rate limiting
  *                       end early (400, 413, 429)
  *   5. CORS             before the body is read, so preflight is cheap
+ *   5b. recruitment     the access gate on /api/v1/jobs (C6-T1): a client who
+ *                       may not use Jobs is answered before any body is read
  *   6. body parsing     with the 100 KB limit
  *   7. rate limiting    after identity, before any route work
  *   8. API routes
@@ -168,6 +172,15 @@ export function createApp({
 
   // 5. CORS, from the explicit allowlist.
   app.use(corsMiddleware(config.corsAllowedOrigins));
+
+  /*
+   * 5b. Recruitment access gate — C6-T1 (middleware/recruitmentAccess.js).
+   * After CORS, so a refusal still carries the CORS headers a browser needs to
+   * read it; BEFORE body parsing and rate limiting, so a client who may not use
+   * Jobs is refused with the body unread. A configuration object without a
+   * `recruitment` entry is treated as closed.
+   */
+  app.use(`${API_BASE_PATH}/jobs`, recruitmentAccessGate({ access: config.recruitment ?? CLOSED_RECRUITMENT_ACCESS }));
 
   // 6. JSON body parsing with the general 100 KB limit. A malformed body or an
   //    oversized one becomes a controlled envelope in the error handler.

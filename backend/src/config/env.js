@@ -3,6 +3,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { resolveRecruitmentAccess } from './recruitmentAccess.js';
 import { parseMongoUri } from '../db/connectionString.js';
 import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
@@ -1006,6 +1007,20 @@ export function loadConfig(env = process.env) {
     nodeEnv: config.NODE_ENV,
     appEnv: config.APP_ENV,
     isProduction,
+    /*
+     * C6-T1 — recruitment access (config/recruitmentAccess.js). Read from the
+     * raw environment on purpose: these three variables are NOT validated by
+     * the schema above, because a wrong value must never stop the backend and
+     * must never be reported with its content. Whatever is not exactly right
+     * resolves to `closed`. The allowlist (testers' network addresses) is a
+     * non-enumerable property of this object: it is in no serialised view.
+     */
+    recruitment: resolveRecruitmentAccess({
+      mode: env?.RECRUITMENT_MODE,
+      authorisation: env?.RECRUITMENT_PUBLIC_AUTHORISATION,
+      allowlist: env?.ACCESS_ALLOWLIST,
+      appEnv: config.APP_ENV,
+    }),
     port: config.PORT,
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,

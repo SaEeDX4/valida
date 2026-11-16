@@ -2,6 +2,7 @@ import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { createApp } from './app.js';
 import { loadConfig, ConfigurationError } from './config/env.js';
+import { describeRecruitmentAccess } from './config/recruitmentAccess.js';
 import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
@@ -164,6 +165,17 @@ export async function startServer({
   }
 
   readiness.set('configuration', DEPENDENCY_STATE.READY);
+
+  /*
+   * C6-T1 — recruitment access (config/recruitmentAccess.js). One line states
+   * the EFFECTIVE mode and why, so a release check can read it. A rejected
+   * configuration is a warning, not a failure: the backend runs with
+   * recruitment closed. The line holds no client address and no configured
+   * value: the allowlist entry is a count, the reason a fixed code. The field
+   * names are prefixed so that they cannot be mistaken for another line's.
+   */
+  const recruitment = describeRecruitmentAccess(config.recruitment);
+  logger[recruitment.recruitmentConfiguration === 'invalid' ? 'warn' : 'info'](recruitment, 'recruitment access');
 
   /*
    * B4 — private resume storage, before anything else is opened.

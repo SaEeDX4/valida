@@ -30,6 +30,23 @@ export function readRun() {
 }
 
 /**
+ * C6-T1 — the recruitment access these local runs use.
+ *
+ * The API serves no Job unless recruitment is configured, and `public` is
+ * accepted only with APP_ENV=production, which these runs deliberately never
+ * use (see the comments on each environment below). They take the permitted
+ * tester path instead: mode `testers`, with the loopback addresses the
+ * browser and the document server reach the API from. Every assertion is
+ * unchanged. `closed`, an unlisted client and `public` are tested by the
+ * backend suites (backend/tests/c6-recruitment-*.test.js).
+ */
+export const LOCAL_RECRUITMENT_ENVIRONMENT = Object.freeze({
+  RECRUITMENT_MODE: 'testers',
+  ACCESS_ALLOWLIST: '127.0.0.1/32,::1/128',
+  RECRUITMENT_PUBLIC_AUTHORISATION: '',
+});
+
+/**
  * The backend's environment — for the server AND for every backend CLI the
  * run uses (indexes, Job provisioning, suppression operations), so all of
  * them see one configuration.
@@ -46,6 +63,7 @@ export function backendEnvironment({ run, smtpPassword = process.env.E2E_SMTP_PA
     ...baseEnvironment(),
     NODE_ENV: 'development',
     APP_ENV: 'local',
+    ...LOCAL_RECRUITMENT_ENVIRONMENT,
     PORT: String(BACKEND_PORT),
     LOG_LEVEL: 'info',
     TRUST_PROXY: 'false',

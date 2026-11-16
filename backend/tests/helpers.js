@@ -42,8 +42,26 @@ export function capturingLogger() {
  */
 export const OFFLINE_TEST_MONGODB_URI = 'mongodb://127.0.0.1:27017/valida_test';
 
+/**
+ * C6-T1 — the recruitment access the existing suites run under.
+ *
+ * Recruitment is CLOSED unless configured (config/recruitmentAccess.js), and
+ * `public` is accepted only with APP_ENV=production, which these suites
+ * deliberately never use. They therefore take the permitted tester path: mode
+ * `testers`, with the loopback addresses Supertest and the local test servers
+ * connect from. Every assertion in those suites is unchanged; what they
+ * exercise is the accepted behaviour for a client that is let through.
+ * `closed`, the unlisted client and `public` are tested separately
+ * (c6-recruitment-*.test.js).
+ */
+export const TEST_RECRUITMENT_ENV = Object.freeze({
+  RECRUITMENT_MODE: 'testers',
+  ACCESS_ALLOWLIST: '127.0.0.1/32,::1/128',
+});
+
 export function testConfig(overrides = {}) {
   const base = loadConfig({
+    ...TEST_RECRUITMENT_ENV,
     NODE_ENV: 'test',
     APP_ENV: 'local',
     // A concrete port: the schema rejects 0 on purpose, because a production

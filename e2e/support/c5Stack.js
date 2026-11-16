@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { baseEnvironment } from './processes.js';
+import { LOCAL_RECRUITMENT_ENVIRONMENT } from './stackConfig.js';
 
 /**
  * Fixed settings of the C5 integrated-site quality run (playwright.c5.config.js;
@@ -60,6 +61,8 @@ export function c5BackendEnvironment({ storageRoot }) {
     ...baseEnvironment(),
     NODE_ENV: 'development',
     APP_ENV: 'local',
+    // C6-T1: the permitted tester path for a local run (stackConfig.js).
+    ...LOCAL_RECRUITMENT_ENVIRONMENT,
     PORT: String(C5_BACKEND_PORT),
     LOG_LEVEL: 'info',
     TRUST_PROXY: 'false',

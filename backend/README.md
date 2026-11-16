@@ -206,6 +206,9 @@ node tests/diagnostics/localhost-addressing.mjs
 | `LOG_LEVEL` | no | `info` | `fatal`…`trace`, or `silent` |
 | `CORS_ALLOWED_ORIGINS` | **yes in production** | localhost 5173 + 4173 | Comma-separated exact origins. `*` is rejected |
 | `TRUST_PROXY` | no | `false` | `false`, or the number of trusted proxy hops (1–10) |
+| `RECRUITMENT_MODE` | no | — (**closed**) | C6-T1. Exactly `closed`, `testers` or `public`. Anything else, or nothing, is `closed`. See "Recruitment access (C6-T1)" |
+| `ACCESS_ALLOWLIST` | with `testers` | — | C6-T1. Comma-separated addresses or CIDR ranges (IPv4, IPv6; 1–50). Never logged |
+| `RECRUITMENT_PUBLIC_AUTHORISATION` | with `public` | — | C6-T1. The owner decision that opens recruitment, as `OD-YYYY-MM-DD-NN` |
 | `RATE_LIMIT_WINDOW_MS` | no | `60000` | Rate-limit window |
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
@@ -255,6 +258,103 @@ It defaults to `false`. Trusting `X-Forwarded-For` when no proxy sets it lets
 any client spoof its IP and bypass the rate limit completely. The correct
 production value depends on how many proxies actually sit in front of the app
 and must be confirmed per deployment.
+
+---
+
+## Recruitment access (C6-T1)
+
+Decision record: [`docs/review/OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md`](../docs/review/OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md) (Doc 00 §5; recorded against Docs 13 and 15).
+
+Publishing a Job no longer makes it visible by itself. The API also has a
+**recruitment mode**, and it is **closed unless configured**.
+
+| Mode | `GET /jobs` | `GET /jobs/:jobSlug` | `POST /jobs/:jobSlug/applications` |
+| --- | --- | --- | --- |
+| `closed` | `200`, an empty page | `404 JOB_NOT_FOUND` | `404 JOB_NOT_FOUND`, body unread |
+| `testers` | as accepted for a listed client; as `closed` for anyone else | the same | the same |
+| `public` | as accepted | as accepted | as accepted |
+
+"As accepted" means every rule of B3 and B5 below, unchanged: an open Job is
+listed, a closed one is served as closed and refuses applications, and a
+Draft, archived or not-yet-published Job is an unknown Job.
+
+### What makes the mode `closed`
+
+| Configuration | Effective mode | Reason code in the start-up line |
+| --- | --- | --- |
+| `RECRUITMENT_MODE` absent or empty | `closed` | `MODE_ABSENT` |
+| Any value other than exactly `closed`, `testers`, `public` — a typo, `Public`, `" public"` | `closed` | `MODE_INVALID` |
+| `closed` | `closed` | `MODE_CLOSED` |
+| `testers` without `ACCESS_ALLOWLIST` | `closed` | `TESTERS_ALLOWLIST_ABSENT` |
+| `testers` with a list that has any invalid entry, a duplicate, more than 50 entries, or a range broader than `/8` (IPv4) or `/16` (IPv6) | `closed` | `TESTERS_ALLOWLIST_INVALID` |
+| `public` with `APP_ENV` other than `production` | `closed` | `PUBLIC_NOT_PRODUCTION` |
+| `public` without `RECRUITMENT_PUBLIC_AUTHORISATION` | `closed` | `PUBLIC_AUTHORISATION_ABSENT` |
+| `public` with an authorisation not of the form `OD-YYYY-MM-DD-NN` | `closed` | `PUBLIC_AUTHORISATION_INVALID` |
+| `testers` with a valid list | `testers` | `MODE_TESTERS` |
+| `public`, production, a well-formed authorisation | `public` | `MODE_PUBLIC` |
+
+A wrong value **does not stop the backend**. These three variables are read
+outside the validated schema on purpose: the backend starts, recruitment is
+shut, and one line says why —
+
+```
+{"level":"warn","recruitmentMode":"closed","recruitmentConfiguration":"invalid","recruitmentReason":"MODE_INVALID","recruitmentAuthorisation":null,"recruitmentAllowlistEntries":0,"msg":"recruitment access"}
+```
+
+The line is `info` for a valid or absent configuration and `warn` for a
+rejected one. It never contains a configured value or an address.
+
+### How a request is decided
+
+1. The gate (`middleware/recruitmentAccess.js`) is mounted on `/api/v1/jobs`
+   after CORS and **before body parsing and rate limiting** (step 5b of the
+   middleware order).
+2. The client address is `req.ip`: the socket's peer, or — only when
+   `TRUST_PROXY` is a hop count — the `X-Forwarded-For` entry that many hops
+   from the right. `True-Client-IP`, `CF-Connecting-IP`, `X-Real-IP` and
+   `Forwarded` are never read. An IPv4-mapped IPv6 address is compared as
+   IPv4. Anything that is not a plain address is not listed.
+3. A client that may not use Jobs:
+   - `GET` / `HEAD` / `OPTIONS` continue to the router. The list answers an
+     empty page from the validated query; Job Detail answers the unknown-Job
+     `404`. Query validation and the general rate limit apply as to anyone.
+     **The database is not consulted.**
+   - any other method is answered at once, body unread, connection closed in
+     stages (B7): a submission with the Apply `404 JOB_NOT_FOUND`
+     ("This application isn't available."), anything else with the canonical
+     `404 API_ROUTE_NOT_FOUND`.
+4. The Apply controller repeats the check before it does anything, and the
+   Jobs controllers treat a request that carries no decision as refused: a
+   route mounted without the gate serves nothing.
+5. A listed client in `testers` mode receives `X-Valida-Audience: tester` on
+   Jobs responses, including error responses. No one else does.
+
+A refused client cannot tell a hidden Job from one that does not exist: both
+answers have the same status and body.
+
+### What is never written
+
+Tester addresses are held in a non-enumerable property. They are in no log
+line, error, `JSON.stringify` or `util.inspect` of the configuration; only the
+number of entries is reported. The access log records method, route template
+and status — never a client address (unchanged from C3).
+
+### Limits — what this task does not show
+
+- **Behind a real hosting proxy.** The tests supply forwarded addresses
+  themselves. Whether a host appends the client address the way a hop count
+  assumes can only be verified on that host (C6 plan §4.6.3, §4.6.5), before
+  any synthetic Job is introduced there.
+- **The document server.** Pages, the sitemap and page-level caching are a
+  later task (C6-T2). In `closed` it already reports what the API tells it: no
+  Job. In `testers` the API sees the document server's own address, not the
+  visitor's, so the document server must not be exposed in `testers` mode on a
+  host until C6-T2 forwards the visitor's address. Local runs are unaffected:
+  browser, document server and API are all on loopback.
+- **Review as a private environment** is a later task.
+
+Tests: `tests/c6-recruitment-config.test.js`, `tests/c6-recruitment-http.test.js`,
+`tests/db/c6-recruitment-api.test.js`.
 
 ---
 
@@ -559,6 +659,9 @@ Order is the design, not a preference:
    also `Cache-Control: no-store` (B3), so it covers responses that parsing or
    rate limiting end early
 5. CORS — before the body is read, so preflight stays cheap
+   - 5b. the recruitment access gate on `/api/v1/jobs` (C6-T1) — after CORS,
+     so a refusal can be read by a browser; before body parsing, so a refused
+     request's body is never read
 6. JSON body parsing (100 KB limit)
 7. general rate limiting — after identity, before route work
 8. API routes

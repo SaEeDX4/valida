@@ -585,6 +585,16 @@ export function formatStartupFailure(error) {
       'Detail is withheld because it may contain configuration values or credentials.'
     );
   }
+  if (error instanceof StorageInitializationError && error.driver === 's3') {
+    // C6-T4: the S3-compatible driver. Fixed text; no endpoint, bucket or credential.
+    return (
+      `[valida-backend] failed to start: the private resume storage could not be initialised (${error.reason}). ` +
+      'Check RESUME_STORAGE_S3_ENDPOINT, RESUME_STORAGE_S3_REGION, RESUME_STORAGE_S3_BUCKET and the access key: ' +
+      'the endpoint must be reachable and present a trusted TLS certificate, the bucket must exist, ' +
+      'the credentials must be allowed to put, read, delete and list objects in that bucket, ' +
+      'and the bucket must not allow anonymous reads. There is no fallback to local storage.'
+    );
+  }
   if (error instanceof StorageInitializationError) {
     // `reason` is a fixed token (integrations/storage/storageContract.js); the
     // path is never printed.

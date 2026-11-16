@@ -9,6 +9,8 @@ import { createHash, randomBytes } from 'node:crypto';
 /** Doc 10 section 95 — internal provider identifiers. */
 export const STORAGE_PROVIDERS = Object.freeze({
   LOCAL_DEVELOPMENT: 'LOCAL_DEVELOPMENT',
+  // C6-T4: managed private object storage over the S3 API (Doc 10 section 95's example value).
+  S3_COMPATIBLE: 'S3_COMPATIBLE',
 });
 
 /**
@@ -79,6 +81,13 @@ export const STORAGE_FAILURE_REASONS = Object.freeze([
   'FORBIDDEN_LOCATION',
   'PATH_ESCAPES_STORAGE',
   'IO_ERROR',
+  // C6-T4 — the S3-compatible driver.
+  'UNAVAILABLE', // no connection, a timeout or a 5xx/429 from the store
+  'OUTCOME_UNKNOWN', // a write may or may not have happened, and the store could not say
+  'TLS_FAILURE', // the endpoint's certificate was not trusted: nothing was sent
+  'BUCKET_NOT_FOUND',
+  'PUBLIC_ACCESS', // an anonymous request could read the probe object
+  'PROVIDER_ERROR', // any other refusal from the store
 ]);
 
 const REASON_SET = new Set(STORAGE_FAILURE_REASONS);

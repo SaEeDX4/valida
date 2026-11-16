@@ -12,7 +12,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.js'],
-    exclude: ['tests/db/**', 'node_modules/**'],
+    // tests/db needs MongoDB (npm run test:db); tests/s3 needs the S3 test double (npm run test:s3, C6-T4).
+    exclude: ['tests/db/**', 'tests/s3/**', 'node_modules/**'],
     // Integration tests bind sockets and exercise a shared rate limiter;
     // running files sequentially keeps them deterministic.
     fileParallelism: false,

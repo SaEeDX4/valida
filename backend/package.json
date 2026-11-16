@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "verify:b1": "npm test && npm audit --audit-level=high",
     "test:db": "vitest run --config vitest.db.config.js",
+    "test:s3": "vitest run --config vitest.s3.config.js",
     "test:coverage": "vitest run --coverage",
     "db:indexes:check": "node --env-file-if-exists=.env scripts/db-indexes.mjs check",
     "db:indexes:apply": "node --env-file-if-exists=.env scripts/db-indexes.mjs apply",

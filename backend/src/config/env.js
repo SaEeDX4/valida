@@ -573,7 +573,16 @@ const baseSchema = z.object({
   MONGODB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5_000),
 
   // Private resume storage — Milestone B4. See the section above.
-  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local']).optional()),
+  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local', 's3']).optional()),
+  // C6-T4 — the S3-compatible driver. Presence only here; the rules (and the
+  // refusal messages, which never echo a value) are applied below.
+  RESUME_STORAGE_S3_ENDPOINT: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_REGION: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_BUCKET: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_ACCESS_KEY_ID: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_SECRET_ACCESS_KEY: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_URL_STYLE: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_TIMEOUT_MS: emptyAsUnset(z.string().optional()),
   // Only its presence is checked here; its rules are applied below, where the
   // failure can be reported without echoing the path.
   RESUME_STORAGE_LOCAL_ROOT: emptyAsUnset(z.string().optional()),
@@ -726,8 +735,19 @@ const RULE_TEXT = {
     'is required when APP_ENV=production; list the exact frontend origins allowed ' +
     'to call this API',
   RESUME_STORAGE_DRIVER:
-    'must be "local" (development only) or left unset; the production private-storage ' +
-    'provider is selected at deployment (Milestone C6)',
+    'must be "s3" (S3-compatible private object storage), "local" (development only) or left unset',
+  RESUME_STORAGE_S3_REQUIRED: 'is required when RESUME_STORAGE_DRIVER=s3',
+  RESUME_STORAGE_S3_WITHOUT_DRIVER: 'is set but RESUME_STORAGE_DRIVER is not "s3"; set the driver, or remove the S3 settings',
+  RESUME_STORAGE_S3_ENDPOINT_INVALID:
+    'must be an https:// origin only (scheme, host and optional port; no credentials, path, query or fragment)',
+  RESUME_STORAGE_S3_ENDPOINT_NOT_HTTPS:
+    'must use https://; plain http:// is accepted only for a loopback test endpoint when APP_ENV=local and NODE_ENV is not production',
+  RESUME_STORAGE_S3_REGION_INVALID: 'must be a region name: 1-32 lowercase letters, digits or hyphens (for example eu-central-1, or auto)',
+  RESUME_STORAGE_S3_BUCKET_INVALID: 'must be a bucket name: 3-63 lowercase letters, digits, dots or hyphens, starting and ending with a letter or digit',
+  RESUME_STORAGE_S3_ACCESS_KEY_ID_INVALID: 'must be 8-128 letters, digits, dots, hyphens or underscores',
+  RESUME_STORAGE_S3_SECRET_ACCESS_KEY_INVALID: 'must be 16-256 visible ASCII characters without spaces',
+  RESUME_STORAGE_S3_URL_STYLE_INVALID: 'must be "path" (the default) or "virtual"',
+  RESUME_STORAGE_S3_TIMEOUT_MS_INVALID: 'must be a whole number of milliseconds from 1000 to 120000',
   RESUME_STORAGE_LOCAL_NOT_ALLOWED:
     'is "local", which is development-only and is refused unless APP_ENV=local and ' +
     'NODE_ENV is not production — a deployed instance must use real private object storage',
@@ -765,6 +785,69 @@ function safeRuleText(issue) {
  * to stderr at startup. `issues` carries the variable names and the same safe
  * rule text — never a value.
  */
+const S3_BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+const S3_REGION = /^[a-z0-9-]{1,32}$/;
+const S3_ACCESS_KEY_ID = /^[A-Za-z0-9._-]{8,128}$/;
+const S3_SECRET = /^[\x21-\x7e]{16,256}$/;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/**
+ * C6-T4 — validates the S3-compatible storage settings. With the driver
+ * selected, every required one must be present and valid; without it, none
+ * may be set (a half-configured store is a mistake, never a fallback). Only
+ * fixed rule texts are reported.
+ *
+ * @returns {{ problems: Array<{variable: string, rule: string}>, value: object | null }}
+ */
+function checkS3Settings(config, selected) {
+  const names = ['RESUME_STORAGE_S3_ENDPOINT', 'RESUME_STORAGE_S3_REGION', 'RESUME_STORAGE_S3_BUCKET', 'RESUME_STORAGE_S3_ACCESS_KEY_ID', 'RESUME_STORAGE_S3_SECRET_ACCESS_KEY', 'RESUME_STORAGE_S3_URL_STYLE', 'RESUME_STORAGE_S3_TIMEOUT_MS'];
+  const problems = [];
+  const problem = (variable, sentinel) => problems.push({ variable, rule: RULE_TEXT[sentinel] });
+  if (!selected) {
+    for (const name of names) if (config[name] !== undefined) problem(name, 'RESUME_STORAGE_S3_WITHOUT_DRIVER');
+    return { problems, value: null };
+  }
+  for (const name of names.slice(0, 5)) if (config[name] === undefined) problem(name, 'RESUME_STORAGE_S3_REQUIRED');
+
+  let endpoint = null;
+  if (config.RESUME_STORAGE_S3_ENDPOINT !== undefined) {
+    let url = null;
+    try {
+      url = new URL(config.RESUME_STORAGE_S3_ENDPOINT);
+    } catch {
+      url = null;
+    }
+    const originOnly = url && !url.username && !url.password && (url.pathname === '/' || url.pathname === '') && !url.search && !url.hash && !config.RESUME_STORAGE_S3_ENDPOINT.includes('?');
+    if (!originOnly || (url.protocol !== 'https:' && url.protocol !== 'http:')) {
+      problem('RESUME_STORAGE_S3_ENDPOINT', 'RESUME_STORAGE_S3_ENDPOINT_INVALID');
+    } else if (url.protocol === 'http:' && !(LOOPBACK_HOSTS.has(url.hostname) && config.APP_ENV === 'local' && config.NODE_ENV !== 'production')) {
+      // Doc 13 section 111: backend <-> private object storage uses HTTPS/TLS.
+      problem('RESUME_STORAGE_S3_ENDPOINT', 'RESUME_STORAGE_S3_ENDPOINT_NOT_HTTPS');
+    } else {
+      endpoint = new URL(url.origin);
+    }
+  }
+  if (config.RESUME_STORAGE_S3_REGION !== undefined && !S3_REGION.test(config.RESUME_STORAGE_S3_REGION)) problem('RESUME_STORAGE_S3_REGION', 'RESUME_STORAGE_S3_REGION_INVALID');
+  const bucket = config.RESUME_STORAGE_S3_BUCKET;
+  if (bucket !== undefined && (!S3_BUCKET.test(bucket) || bucket.includes('..'))) problem('RESUME_STORAGE_S3_BUCKET', 'RESUME_STORAGE_S3_BUCKET_INVALID');
+  if (config.RESUME_STORAGE_S3_ACCESS_KEY_ID !== undefined && !S3_ACCESS_KEY_ID.test(config.RESUME_STORAGE_S3_ACCESS_KEY_ID)) problem('RESUME_STORAGE_S3_ACCESS_KEY_ID', 'RESUME_STORAGE_S3_ACCESS_KEY_ID_INVALID');
+  if (config.RESUME_STORAGE_S3_SECRET_ACCESS_KEY !== undefined && !S3_SECRET.test(config.RESUME_STORAGE_S3_SECRET_ACCESS_KEY)) problem('RESUME_STORAGE_S3_SECRET_ACCESS_KEY', 'RESUME_STORAGE_S3_SECRET_ACCESS_KEY_INVALID');
+  const urlStyle = config.RESUME_STORAGE_S3_URL_STYLE ?? 'path';
+  if (urlStyle !== 'path' && urlStyle !== 'virtual') problem('RESUME_STORAGE_S3_URL_STYLE', 'RESUME_STORAGE_S3_URL_STYLE_INVALID');
+  let timeoutMs = 15_000;
+  if (config.RESUME_STORAGE_S3_TIMEOUT_MS !== undefined) {
+    timeoutMs = /^[0-9]{4,6}$/.test(config.RESUME_STORAGE_S3_TIMEOUT_MS) ? Number(config.RESUME_STORAGE_S3_TIMEOUT_MS) : NaN;
+    if (!(timeoutMs >= 1000 && timeoutMs <= 120_000)) problem('RESUME_STORAGE_S3_TIMEOUT_MS', 'RESUME_STORAGE_S3_TIMEOUT_MS_INVALID');
+  }
+  if (problems.length > 0) return { problems, value: null };
+  const value = { endpoint, region: config.RESUME_STORAGE_S3_REGION, bucket, urlStyle, timeoutMs };
+  Object.defineProperty(value, 'credentials', {
+    value: Object.freeze({ accessKeyId: config.RESUME_STORAGE_S3_ACCESS_KEY_ID, secretAccessKey: config.RESUME_STORAGE_S3_SECRET_ACCESS_KEY }),
+    enumerable: false,
+  });
+  return { problems, value: Object.freeze(value) };
+}
+
 export class ConfigurationError extends Error {
   constructor(issues) {
     const details = issues.map(({ variable, rule }) => `  - ${variable}: ${rule}`).join('\n');
@@ -914,6 +997,11 @@ export function loadConfig(env = process.env) {
   } else if (storageRoot !== null) {
     missing.push({ variable: 'RESUME_STORAGE_LOCAL_ROOT', rule: RULE_TEXT.RESUME_STORAGE_LOCAL_ROOT_WITHOUT_DRIVER });
   }
+
+  // C6-T4 — the S3-compatible driver: every setting validated, nothing echoed,
+  // no fallback to disk. A broken setting stops the service (Doc 09 section 159).
+  const s3Settings = checkS3Settings(config, storageDriver === 's3');
+  missing.push(...s3Settings.problems);
 
   // B6 — transactional email (see checkNotificationSettings).
   const notificationSettings = {
@@ -1103,6 +1191,9 @@ export function loadConfig(env = process.env) {
     resumeStorage: Object.freeze({
       driver: storageDriver,
       localRoot: storageDriver === 'local' ? path.resolve(storageRoot) : null,
+      // C6-T4: the S3 settings. The credentials are a NON-ENUMERABLE property:
+      // in no serialised view, log line or inspection of the configuration.
+      s3: storageDriver === 's3' ? s3Settings.value : null,
     }),
     /*
      * B7 — recipient suppression (design rev 8 §4.2, §5). The key bytes are

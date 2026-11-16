@@ -14,6 +14,7 @@
     "test:c5:stats": "node --test c5/perfStats.test.js",
     "test:c5:motion": "node --test c5/motionJudge.test.js",
     "test:c6:stack": "node c6/c6-t2-stack.mjs",
+    "test:c6t3:stack": "node c6/c6-t3-stack.mjs",
     "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {

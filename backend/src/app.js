@@ -12,6 +12,8 @@ import { noStore } from './middleware/noStore.js';
 import { recruitmentAccessGate } from './middleware/recruitmentAccess.js';
 import { CLOSED_RECRUITMENT_ACCESS, DISABLED_SERVICE_DELEGATION } from './config/recruitmentAccess.js';
 import { noValidators } from './middleware/noValidators.js';
+import { siteAccessGate } from './middleware/siteAccess.js';
+import { PUBLIC_SITE_ACCESS } from './config/siteAccess.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
 import { jobsRouter } from './modules/jobs/job.routes.js';
@@ -49,6 +51,11 @@ export const API_BASE_PATH = '/api/v1';
  *                       the Jobs `Cache-Control: no-store` policy (B3), so it
  *                       also covers responses that parsing or rate limiting
  *                       end early (400, 413, 429)
+ *   4a. site access     C6-T3: on a private site, every request but liveness
+ *                       is admitted or answered 403 HERE — before the Jobs
+ *                       cache policy, CORS (preflight too), the recruitment
+ *                       gate, body parsing, rate limiting and routing. Every
+ *                       response is then `private, no-store`, no validators
  *   5. CORS             before the body is read, so preflight is cheap
  *   5b. recruitment     the access gate on /api/v1/jobs (C6-T1): a client who
  *                       may not use Jobs is answered before any body is read
@@ -159,6 +166,21 @@ export function createApp({
       },
       crossOriginResourcePolicy: { policy: 'same-origin' },
       referrerPolicy: { policy: 'no-referrer' },
+    }),
+  );
+
+  /*
+   * 4a. Site access — C6-T3 (middleware/siteAccess.js). A no-op on a public
+   * site. On a private one it admits or refuses every request before any
+   * other work, and makes every response `private, no-store` without
+   * validators. A configuration object without a `siteAccess` entry is the
+   * public site of a local run (config/env.js always supplies one).
+   */
+  app.use(
+    siteAccessGate({
+      site: config.siteAccess ?? PUBLIC_SITE_ACCESS,
+      trustedHops: config.trustProxy ?? false,
+      delegation: config.serviceDelegation ?? DISABLED_SERVICE_DELEGATION,
     }),
   );
 

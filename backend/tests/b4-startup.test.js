@@ -160,7 +160,10 @@ describe('without storage configuration the dependency is reported truthfully', 
   });
 
   it('deployed (APP_ENV=review): resumeStorage not_implemented — the production provider arrives with C6', async () => {
-    const handle = await start({ env: { APP_ENV: 'review', NODE_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://review.valida.example' } });
+    const handle = await start({
+      // C6-T3: review requires a private site; loopback (this test's client) is listed.
+      env: { APP_ENV: 'review', NODE_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://review.valida.example', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: '127.0.0.1/32' },
+    });
     expect(stateOf(handle.readiness, 'resumeStorage')).toBe('not_implemented');
     const response = await request(`http://127.0.0.1:${handle.port}`).get('/api/v1/health/ready');
     expect(response.status).toBe(503);

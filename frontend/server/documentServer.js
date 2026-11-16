@@ -6,6 +6,15 @@ import { buildRobotsTxt, buildSitemapXml } from '../src/seo/discovery.js';
 import { JOB_OUTCOME } from './jobsClient.js';
 import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocument.js';
 import { establishVisitorAddress } from './visitorAddress.js';
+import {
+  CONDITIONAL_REQUEST_HEADERS,
+  DOCUMENT_LIVENESS_PATH,
+  PUBLIC_SITE_ACCESS,
+  SITE_ADMISSION,
+  decideSiteAdmission,
+  enforcePrivateResponseHeaders,
+  isPrivateSite,
+} from './siteAccess.js';
 
 /**
  * The local reference document server (C4).
@@ -39,6 +48,12 @@ import { establishVisitorAddress } from './visitorAddress.js';
  *     X-Valida-* headers a request arrives with are never read and never
  *     passed on, so a visitor cannot name another address or present a key.
  *     The address is not logged.
+ *   - C6-T3: GET/HEAD of exactly /healthz is the liveness check: 200, empty
+ *     body, in every mode. With SITE_ACCESS=private (siteAccess.js) every
+ *     other request from a visitor whose address is not listed is answered
+ *     403 "Forbidden" FIRST — before the method check, redirects, robots.txt,
+ *     the sitemap, static files and documents — and every response carries
+ *     `Cache-Control: private, no-store` and no validator.
  */
 
 const CONTENT_TYPES = Object.freeze({
@@ -111,7 +126,10 @@ function send(res, method, status, headers, body = '') {
  * `jobApiPreloadBase` the browser-facing API base for the Job preload hint
  * (renderDocument.js jobApiPreloadTag), null for none.
  */
-export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, log = () => {} }) {
+const BODILESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, log = () => {} }) {
+  const privateSite = isPrivateSite(site);
   const distRoot = await realpath(distDir);
   const template = await loadTemplate(distRoot);
 
@@ -124,6 +142,39 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
     res.on('finish', finish);
 
     try {
+      const rawTarget = typeof req.url === 'string' ? req.url : '';
+
+      // C6-T3 — site access, before anything else.
+      if (privateSite) {
+        enforcePrivateResponseHeaders(res);
+        for (const name of CONDITIONAL_REQUEST_HEADERS) delete req.headers[name];
+        const { admission } = decideSiteAdmission({
+          site,
+          method,
+          rawUrl: rawTarget,
+          livenessPath: DOCUMENT_LIVENESS_PATH,
+          trustedHops,
+          socketAddress: req.socket?.remoteAddress,
+          forwardedFor: req.headers?.['x-forwarded-for'],
+        });
+        if (admission === SITE_ADMISSION.DENIED) {
+          routeKind = 'denied';
+          const headers = { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' };
+          if (!config.indexing) headers['x-robots-tag'] = 'noindex, nofollow';
+          // A request that may carry a body: its body is never read, and the
+          // connection is not reused after this answer.
+          if (!BODILESS_METHODS.has(method)) headers.connection = 'close';
+          send(res, method, 403, headers, 'Forbidden');
+          return;
+        }
+      }
+
+      if ((method === 'GET' || method === 'HEAD') && rawTarget === DOCUMENT_LIVENESS_PATH) {
+        routeKind = 'liveness';
+        send(res, method, 200, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }, '');
+        return;
+      }
+
       if (method !== 'GET' && method !== 'HEAD') {
         routeKind = 'method';
         send(res, method, 405, { allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8' }, 'Method Not Allowed');
@@ -212,8 +263,8 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
   };
 }
 
-export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, host = '127.0.0.1', port = 4173, log }) {
-  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, trustedHops, log });
+export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, host = '127.0.0.1', port = 4173, log }) {
+  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, trustedHops, site, log });
   const server = createServer((req, res) => {
     handle(req, res);
   });

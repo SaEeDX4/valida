@@ -515,16 +515,28 @@ export function decideRecruitmentAudience(access, clientAddress) {
   try {
     if (access?.mode === 'public') return RECRUITMENT_AUDIENCE.PUBLIC;
     if (access?.mode !== 'testers') return RECRUITMENT_AUDIENCE.NONE;
-    const client = toClientValue(clientAddress);
-    const ranges = access.allowlist;
-    // Only a list this module parsed is used: a stand-in object is not one.
-    if (!client || !PARSED_ALLOWLISTS.has(ranges)) return RECRUITMENT_AUDIENCE.NONE;
-    // An entry admits a client of its own family only. A mapped client is
-    // IPv4 by now, and no IPv6 entry can lie in the mapped block.
-    const listed = ranges.some((range) => range.family === client.family && samePrefix(client.bytes, range.network, range.prefix));
-    return listed ? RECRUITMENT_AUDIENCE.TESTER : RECRUITMENT_AUDIENCE.NONE;
+    return isAddressListed(access.allowlist, clientAddress) ? RECRUITMENT_AUDIENCE.TESTER : RECRUITMENT_AUDIENCE.NONE;
   } catch {
     return RECRUITMENT_AUDIENCE.NONE;
+  }
+}
+
+/**
+ * Whether `clientAddress` lies in `ranges`, a list made by
+ * parseAccessAllowlist. Total: anything else — a stand-in list, an unknown
+ * (null) address, text that is not a plain address — is false.
+ * C6-T3: also the site-admission rule (config/siteAccess.js).
+ */
+export function isAddressListed(ranges, clientAddress) {
+  try {
+    const client = toClientValue(clientAddress);
+    // Only a list this module parsed is used: a stand-in object is not one.
+    if (!client || !PARSED_ALLOWLISTS.has(ranges)) return false;
+    // An entry admits a client of its own family only. A mapped client is
+    // IPv4 by now, and no IPv6 entry can lie in the mapped block.
+    return ranges.some((range) => range.family === client.family && samePrefix(client.bytes, range.network, range.prefix));
+  } catch {
+    return false;
   }
 }
 

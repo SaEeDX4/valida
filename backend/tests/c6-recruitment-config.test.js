@@ -336,7 +336,7 @@ describe('loadConfig — the three variables never stop the backend and never ap
   it('production with a valid authorisation is public; the same variables in review are closed', () => {
     const variables = { RECRUITMENT_MODE: 'public', RECRUITMENT_PUBLIC_AUTHORISATION: OD };
     expect(loadConfig({ ...production, ...variables }).recruitment).toMatchObject({ mode: 'public', authorisationRef: OD });
-    expect(loadConfig({ ...production, APP_ENV: 'review', ...variables }).recruitment).toMatchObject({ mode: 'closed', reason: RECRUITMENT_REASONS.PUBLIC_NOT_PRODUCTION });
+    expect(loadConfig({ ...production, APP_ENV: 'review', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: '203.0.113.0/24', ...variables }).recruitment).toMatchObject({ mode: 'closed', reason: RECRUITMENT_REASONS.PUBLIC_NOT_PRODUCTION });
   });
 
   it('production without any recruitment variable is closed — production is not public by default', () => {

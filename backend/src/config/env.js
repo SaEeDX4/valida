@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseTrustedHops, resolveRecruitmentAccess, resolveServiceDelegation } from './recruitmentAccess.js';
+import { SITE_ACCESS_PROBLEM_TEXT, SITE_ACCESS_PROBLEM_VARIABLE, resolveSiteAccess } from './siteAccess.js';
 import { parseMongoUri } from '../db/connectionString.js';
 import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
@@ -869,6 +870,17 @@ export function loadConfig(env = process.env) {
    * worse, look like it worked while allowing nothing.
    */
   const missing = [];
+
+  /*
+   * C6-T3 — site access (config/siteAccess.js). Unlike the recruitment mode,
+   * a wrong value STOPS the backend: Review must be private with a valid
+   * allowlist, Production public. Reported by fixed text only — never the
+   * configured value or an address.
+   */
+  const site = resolveSiteAccess({ siteAccess: env?.SITE_ACCESS, allowlist: env?.ACCESS_ALLOWLIST, appEnv: config.APP_ENV });
+  if (!site.ok) {
+    missing.push({ variable: SITE_ACCESS_PROBLEM_VARIABLE[site.problem], rule: SITE_ACCESS_PROBLEM_TEXT[site.problem] });
+  }
   if (isProduction && (!config.CORS_ALLOWED_ORIGINS || config.CORS_ALLOWED_ORIGINS.length === 0)) {
     missing.push({ variable: 'CORS_ALLOWED_ORIGINS', rule: RULE_TEXT.CORS_REQUIRED_IN_PRODUCTION });
   }
@@ -1029,6 +1041,11 @@ export function loadConfig(env = process.env) {
      * serialised view.
      */
     serviceDelegation: resolveServiceDelegation({ key: env?.INTERNAL_SERVICE_KEY }),
+    /*
+     * C6-T3 — whether the whole API is private. Validated above (a refused
+     * configuration never gets here). The allowlist is non-enumerable.
+     */
+    siteAccess: site,
     port: config.PORT,
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,

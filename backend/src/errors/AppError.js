@@ -35,6 +35,14 @@ export const ERROR_CODES = {
   IDEMPOTENCY_KEY_REQUIRED: 'IDEMPOTENCY_KEY_REQUIRED',
   INVALID_IDEMPOTENCY_KEY: 'INVALID_IDEMPOTENCY_KEY',
   IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
+  /**
+   * C6-T3 — a client not admitted to a private environment (SITE_ACCESS=
+   * private). The code is the canonical 403 family of Doc 11 section 239/243;
+   * Doc 09 section 23 does not yet list a 403 for the public API, and Doc 11
+   * section 243 names it for an authenticated principal. The amendment that
+   * covers this use is proposed in docs/review (C6-T3 record), under Doc 00 §5.
+   */
+  AUTHORIZATION_DENIED: 'AUTHORIZATION_DENIED',
 };
 
 /**
@@ -363,4 +371,22 @@ export const applicationRateLimited = () =>
     message: 'Too many attempts were received in a short period. Please wait and try again.',
     reason: 'APPLICATION_RATE_LIMIT',
     closeConnection: true,
+  });
+
+/**
+ * C6-T3 — the answer to every request a private environment does not admit,
+ * whatever the route: the canonical 403 envelope, with Doc 06 section 188's
+ * approved generic system-error wording, which names no route, resource or
+ * reason. `closeConnection` when the request may carry a body, which is never
+ * read.
+ */
+export const SITE_ACCESS_DENIED_MESSAGE = 'We couldn’t complete this request. Please try again.';
+
+export const siteAccessDenied = ({ reason, closeConnection } = {}) =>
+  new AppError({
+    status: 403,
+    code: ERROR_CODES.AUTHORIZATION_DENIED,
+    message: SITE_ACCESS_DENIED_MESSAGE,
+    reason,
+    closeConnection,
   });

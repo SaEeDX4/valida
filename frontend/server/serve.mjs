@@ -8,6 +8,7 @@ import { startDocumentServer } from './documentServer.js';
 import { createJobsClient } from './jobsClient.js';
 import { resolveJobApiPreloadBase } from './renderDocument.js';
 import { isUsableServiceKey, parseTrustedHops } from './visitorAddress.js';
+import { describeSiteAccess, resolveDocumentSiteAccess } from './siteAccess.js';
 
 /**
  * Serves a production build with the C4 document behaviour (documentServer.js).
@@ -37,6 +38,15 @@ import { isUsableServiceKey, parseTrustedHops } from './visitorAddress.js';
  *                         server still starts; its Jobs reads are then
  *                         unauthenticated, and the API answers every one of
  *                         them with the unlisted (public) view.
+ *   APP_ENV               local (default), review or production (C6-T3).
+ *   SITE_ACCESS           "private" or "public" (C6-T3; config rule in
+ *                         backend/src/config/siteAccess.js). Review requires
+ *                         private with a valid ACCESS_ALLOWLIST and a build
+ *                         with indexing disabled; production requires public;
+ *                         absent is public outside review. A wrong or unsafe
+ *                         combination: refused, before listening.
+ *   ACCESS_ALLOWLIST      the addresses admitted to a private site (the API's
+ *                         list and range policy). Never printed.
  *
  * The SEO configuration (canonical origin, indexable or not) is NOT taken from
  * this process's environment: it is read from the build's valida-seo.json, so
@@ -78,6 +88,13 @@ if (manifest.indexing === true && !config.siteOrigin) {
 
 const trustedHops = parseTrustedHops(process.env.TRUST_PROXY);
 if (trustedHops === null) fail('TRUST_PROXY must be "false" or a hop count from 1 to 10');
+const access = resolveDocumentSiteAccess({
+  appEnv: process.env.APP_ENV,
+  siteAccess: process.env.SITE_ACCESS,
+  allowlist: process.env.ACCESS_ALLOWLIST,
+  indexing: config.indexing === true,
+});
+if (!access.ok) fail(`${access.variable}: ${access.rule}`);
 const serviceKey = process.env.INTERNAL_SERVICE_KEY;
 const keyState = serviceKey === undefined || serviceKey === '' ? 'absent' : isUsableServiceKey(serviceKey) ? 'usable' : 'unusable';
 
@@ -97,7 +114,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) fail('--port must be a 
 
 const log = values.quiet ? () => {} : (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`);
 const jobApiPreloadBase = values['no-job-preload'] ? null : resolveJobApiPreloadBase(manifest.apiBaseUrl);
-const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, trustedHops, host: values.host, port, log });
+const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, trustedHops, site: access.site, host: values.host, port, log });
 const address = server.address();
 process.stdout.write(
   `READY ${JSON.stringify({
@@ -112,6 +129,9 @@ process.stdout.write(
     // Whether reads are authenticated, and why not — never the key.
     delegation: jobs.delegation,
     serviceKey: keyState,
+    appEnv: access.appEnv,
+    // C6-T3: never the allowlist, only how many entries it has.
+    ...describeSiteAccess(access.site),
   })}\n`,
 );
 

@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { createApp } from './app.js';
 import { loadConfig, ConfigurationError } from './config/env.js';
 import { describeRecruitmentAccess } from './config/recruitmentAccess.js';
+import { describeSiteAccess } from './config/siteAccess.js';
 import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
@@ -176,6 +177,8 @@ export async function startServer({
    */
   const recruitment = describeRecruitmentAccess(config.recruitment, config.serviceDelegation);
   logger[recruitment.recruitmentConfiguration === 'invalid' ? 'warn' : 'info'](recruitment, 'recruitment access');
+  // C6-T3 — whether the whole API is private (a refused configuration never starts).
+  logger.info(describeSiteAccess(config.siteAccess), 'site access');
 
   /*
    * B4 — private resume storage, before anything else is opened.

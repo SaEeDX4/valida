@@ -209,6 +209,7 @@ node tests/diagnostics/localhost-addressing.mjs
 | `RECRUITMENT_MODE` | no | — (**closed**) | C6-T1. Exactly `closed`, `testers` or `public`. Anything else, or nothing, is `closed`. See "Recruitment access (C6-T1)" |
 | `ACCESS_ALLOWLIST` | with `testers` | — | C6-T1. Comma-separated addresses or CIDR ranges (IPv4, IPv6; 1–50). Never logged |
 | `RECRUITMENT_PUBLIC_AUTHORISATION` | with `public` | — | C6-T1. The owner decision that opens recruitment, as `OD-YYYY-MM-DD-NN` |
+| `SITE_ACCESS` | **yes, `private`, in review** | — (**public** outside review) | C6-T3. `private` or `public`, exactly. Review requires `private` with a valid `ACCESS_ALLOWLIST`; production requires `public`. A wrong or unsafe value **stops the backend** before it listens. See "Private site access (C6-T3)" |
 | `INTERNAL_SERVICE_KEY` | no | — (delegation **disabled**) | C6-T2. The secret the document server presents when it reads Jobs on a visitor's behalf; 32–512 visible ASCII characters, no spaces. Absent or unusable: every delegated read gets the unlisted view. Server-only; never logged. See "Delegated Jobs reads (C6-T2)" |
 | `RATE_LIMIT_WINDOW_MS` | no | `60000` | Rate-limit window |
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
@@ -431,6 +432,60 @@ Tests: `tests/c6-delegation.test.js` (with the shared case table
 `e2e/c6/c6-t2-stack.mjs`.
 
 ---
+
+## Private site access (C6-T3)
+
+Record: [`docs/review/C6_T3_PRIVATE_REVIEW_ACCESS.md`](../docs/review/C6_T3_PRIVATE_REVIEW_ACCESS.md) (authorised in [`OWNER_RECORD_2026-11-16_…`](../docs/review/OWNER_RECORD_2026-11-16_C6_T2_ACCEPTANCE_AND_C6_T3_AUTHORISATION.md)).
+
+`SITE_ACCESS=private` makes the **whole API** answer only clients whose
+address is in `ACCESS_ALLOWLIST` (the T1 list, parser and range policy). The
+same rule, in the same module (`config/siteAccess.js`), runs in the document
+server.
+
+| `APP_ENV` | `SITE_ACCESS` absent | `public` | `private` |
+| --- | --- | --- | --- |
+| `local` | public (the development default) | public | private — needs a valid list |
+| `review` | **refused** | **refused** | private — needs a valid list |
+| `production` | public | public | **refused** |
+
+Anything other than exactly `private` or `public` is refused everywhere. A
+refusal stops start-up before the socket is opened and names the variable and
+a fixed rule — never the value. The start-up line `site access` states the
+mode and the number of list entries.
+
+**On a private site** (`middleware/siteAccess.js`, step 4a of the middleware order):
+
+- **Only GET and HEAD of exactly `/api/v1/health`** pass without admission —
+  no query, no trailing slash, no other spelling. Readiness
+  (`/api/v1/health/ready`) is protected.
+- A client is admitted when its own address, established by the T1 rule
+  (`TRUST_PROXY`, the forwarding chain counted from the right; an incomplete
+  chain is unknown), is listed.
+- **A delegated read (C6-T2) is admitted for its authenticated end visitor
+  only**: a valid key, a listed `X-Valida-Visitor-Address`, GET or HEAD of the
+  Jobs list or one Job. Any other delegation — wrong or no key, `unlisted`, an
+  unlisted or malformed visitor, another route or method — is denied, **even
+  when the calling service's own address is listed**.
+- Everything else gets **403** before CORS (preflight included), the
+  recruitment gate, body parsing, rate limiting and routing, with the canonical
+  envelope:
+
+  ```json
+  { "success": false, "error": { "code": "AUTHORIZATION_DENIED", "message": "We couldn’t complete this request. Please try again." }, "meta": { "requestId": "…" } }
+  ```
+
+  The message is Doc 06 §188's approved generic wording; the code is the Doc 11
+  §239 403 family. A request that may carry a body is answered with its body
+  unread and the connection closed.
+- **Every response** — liveness, denials, errors, everything — carries
+  `Cache-Control: private, no-store`, with no `ETag` or `Last-Modified`;
+  conditional request headers are dropped, so nothing is answered `304`.
+- Admission grants nothing else: CORS, the recruitment mode, validation and
+  each route's rules apply as before.
+
+On a public site nothing changes: the T2 behaviour (`no-store` on Jobs) stands.
+
+Tests: `tests/c6-site-access.test.js`; the stack check `e2e/c6/c6-t3-stack.mjs`.
 
 ## Endpoints
 
@@ -732,6 +787,9 @@ Order is the design, not a preference:
 4. security headers — before any response body exists; for `/api/v1/jobs…`
    also `Cache-Control: no-store` (B3), so it covers responses that parsing or
    rate limiting end early
+   - 4a. site access (C6-T3) — on a private site, every request but liveness
+     is admitted or answered 403 here, before everything below; every response
+     becomes `private, no-store` without validators
 5. CORS — before the body is read, so preflight stays cheap
    - 5b. the recruitment access gate on `/api/v1/jobs` (C6-T1) — after CORS,
      so a refusal can be read by a browser; before body parsing, so a refused

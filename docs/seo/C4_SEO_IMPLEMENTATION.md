@@ -54,6 +54,7 @@ Every absolute URL — canonical links, `og:url`, sitemap `<loc>`, the robots.tx
 | any other path, including `/admin`, `/employee` | 404 (branded page) | `noindex, follow` | no | no |
 | `/sitemap.xml` | 200 (503 if the Jobs API fails; 404 in a review build) | — | — | — |
 | `/robots.txt` | 200 | — | — | — |
+| `/healthz` (C6-T3) | 200, empty body, `no-store` — GET/HEAD of exactly this target | — | — | — |
 
 Other rules:
 
@@ -76,6 +77,8 @@ Other rules:
 - Excluded: Apply, 404, Draft, Archived and Closed Jobs, the API and review URLs.
 - No `<lastmod>`: the public API exposes no content-modification time (SEO-013).
 - **C6-T2: the public view, whoever asks.** The sitemap's Jobs reads always name the visitor `unlisted`, so a Job visible only to listed testers is never in it, even when a listed tester requests it. Its caching is unchanged (`no-cache`): every requester receives the same document.
+
+**Private sites (C6-T3).** With `SITE_ACCESS=private` (required for Review) every request from an unlisted visitor except `/healthz` is answered `403 Forbidden` before any route above, and every response is `private, no-store` without validators ([`../review/C6_T3_PRIVATE_REVIEW_ACCESS.md`](../review/C6_T3_PRIVATE_REVIEW_ACCESS.md)). A Review document server refuses an indexable build.
 
 **Recruitment-dependent documents (C6-T2).** Careers, Job Detail and Apply depend on who is asking (the recruitment mode, [OD-2026-11-15-01](../review/OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md)). The document server reads Jobs on the visitor's behalf ([`../review/C6_T2_VISITOR_AWARE_DOCUMENTS.md`](../review/C6_T2_VISITOR_AWARE_DOCUMENTS.md)) and sends those three documents — 200, 404 and 503 alike — with `Cache-Control: private, no-store`, no `ETag`, no `Last-Modified`, and never a `304`. Every other document keeps `no-cache`; `/assets/` keeps `public, max-age=31536000, immutable`. Statuses, robots directives, heads, JobPosting and the C5 preload hint are unchanged.
 

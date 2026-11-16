@@ -258,3 +258,25 @@ evidence. Output: `results.json` (expected versus actual), sanitised
 logs. Ports start at 4330 (`C6T2_BASE_PORT`). It does not show a real host's
 proxy or shared cache: those are the hosted G-ACCESS checks.
 
+## C6-T3 — private site access (`c6/c6-t3-stack.mjs`)
+
+The same kind of stack check as C6-T2, for `SITE_ACCESS=private`: the start-up
+matrix of both services (each combination started or refused before
+listening), a private Review run (`APP_ENV=review`, `testers`, a review build)
+and a local private run with real résumé storage. The document server's egress
+is again a listed address, so a delegated read can only be admitted for its end
+visitor.
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t3"
+npm run test:c6t3:stack -- --label local --out C:\Temp\valida-c6t3
+```
+
+Cases: S start-up; R liveness, early refusal (both services, a head-only
+submission), listed access, delegation, cache isolation in both orders with
+conditional requests, Chromium; L a listed application end to end, an unlisted
+one refused with no record, object or notification, a closed-Job submission
+still refused; K the key and addresses in no evidence or log. Ports start at
+4360 (`C6T3_BASE_PORT`).
+

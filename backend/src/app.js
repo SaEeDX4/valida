@@ -178,9 +178,14 @@ export function createApp({
    * After CORS, so a refusal still carries the CORS headers a browser needs to
    * read it; BEFORE body parsing and rate limiting, so a client who may not use
    * Jobs is refused with the body unread. A configuration object without a
-   * `recruitment` entry is treated as closed.
+   * `recruitment` entry is treated as closed. The gate takes the same
+   * TRUST_PROXY value as step 1, and applies it more strictly than req.ip: a
+   * forwarding chain shorter than the hop count is an unknown client.
    */
-  app.use(`${API_BASE_PATH}/jobs`, recruitmentAccessGate({ access: config.recruitment ?? CLOSED_RECRUITMENT_ACCESS }));
+  app.use(
+    `${API_BASE_PATH}/jobs`,
+    recruitmentAccessGate({ access: config.recruitment ?? CLOSED_RECRUITMENT_ACCESS, trustedHops: config.trustProxy ?? false }),
+  );
 
   // 6. JSON body parsing with the general 100 KB limit. A malformed body or an
   //    oversized one becomes a controlled envelope in the error handler.

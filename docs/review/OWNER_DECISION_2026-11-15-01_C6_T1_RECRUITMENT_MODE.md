@@ -43,14 +43,17 @@ Through Release C the public API served every published Job to everyone: publica
 
 **Unchanged:** the Job and Application models; every documented response body, status and message (Doc 09; Doc 06); the accepted middleware order apart from the one added step; rate limits; CORS; the notification and suppression rules. **Production candidate acknowledgements stay disabled** (refused at start-up while G-SUP is unmet). The genuine vacancy stays Draft.
 
-## 3. Two details settled in implementation — for the reviewer
+## 3. Details settled in implementation — for the reviewer
 
-Both are narrower than the plan's text, in the closed direction.
+All are narrower than the plan's text, in the closed direction. The last three rows were added by correction 1, after Astra's review of `e7f09af`.
 
 | Detail | What was built | Why |
 | --- | --- | --- |
 | The broadest range an allowlist entry may cover | An IPv4 prefix shorter than `/8` or an IPv6 prefix shorter than `/16` makes the whole list invalid, and so the mode `closed` | `0.0.0.0/0` would make `testers` mean "everyone" — public by another name, without the decision identifier that `public` requires |
 | A scoped address such as `fe80::1%eth0` | Not an address: never listed, and invalid in the list | A zone names an interface of the server, not a client |
+| **An incomplete forwarding chain** (plan §4.6.3) | With `TRUST_PROXY=n`, the gate requires at least n `X-Forwarded-For` entries and takes the entry n from the right. Fewer entries, or no header, is an unknown client and therefore unlisted. The gate no longer uses Express's `req.ip`. With proxy trust disabled, the socket peer decides, as before | `req.ip` falls back to the socket peer, or to the leftmost entry, when the chain is short. Either could be a listed address that no proxy vouched for |
+| **IPv4-mapped IPv6 entries** | An allowlist entry that touches `::ffff:0:0/96` is refused in every spelling — dotted, hexadecimal, expanded, as a range inside the block or a range containing it. The check is made on the parsed value | Refusing only the text `::ffff:a.b.c.d` let `::ffff:cb00:7107` through, and `::ffff:0:0/96` — all of IPv4 — passed the IPv6 prefix limit |
+| **Equivalent spellings** | Client addresses and entries are compared by value. A mapped client address is the IPv4 client in every spelling. Two entries with the same value are a duplicate and invalidate the list | One address must have one meaning |
 
 ## 4. Canonical-document synchronisation still needed
 

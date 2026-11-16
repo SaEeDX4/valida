@@ -1,5 +1,5 @@
 import { applicationJobNotFound, notFound } from '../errors/AppError.js';
-import { RECRUITMENT_AUDIENCE, decideRecruitmentAudience } from '../config/recruitmentAccess.js';
+import { RECRUITMENT_AUDIENCE, decideRecruitmentAudience, establishClientAddress } from '../config/recruitmentAccess.js';
 
 /**
  * The recruitment access gate — Milestone C6, task C6-T1 (see
@@ -13,9 +13,14 @@ import { RECRUITMENT_AUDIENCE, decideRecruitmentAudience } from '../config/recru
  *     written or a notification is attempted.
  *
  * WHAT IT DOES
- *   1. Decides the request's audience once, from the address Express derived
- *      under the validated TRUST_PROXY setting (req.ip), and records it on
- *      the request. The controllers act on that record and treat a MISSING
+ *   1. Decides the request's audience once and records it on the request.
+ *      The client address comes from establishClientAddress — NOT from
+ *      Express's req.ip. With TRUST_PROXY disabled it is the socket's peer.
+ *      With n trusted hops it is the X-Forwarded-For entry n from the right,
+ *      and a chain shorter than n means the address is unknown, which is
+ *      unlisted; req.ip would fall back to the socket peer or to a
+ *      client-supplied entry (C6 plan revision 3, section 4.6.3). The rate
+ *      limiters keep using req.ip, unchanged. The controllers act on that record and treat a MISSING
  *      record as "none", so a route that is ever mounted without this gate is
  *      closed, not open.
  *   2. For a listed tester in `testers` mode, adds `X-Valida-Audience: tester`.
@@ -61,14 +66,19 @@ export function submissionNotAvailable() {
   return error;
 }
 
-export function recruitmentAccessGate({ access }) {
+export function recruitmentAccessGate({ access, trustedHops = false }) {
   return function recruitmentAccessMiddleware(req, res, next) {
     let audience = RECRUITMENT_AUDIENCE.NONE;
     try {
-      audience = decideRecruitmentAudience(access, req.ip);
+      const clientAddress = establishClientAddress({
+        trustedHops,
+        socketAddress: req.socket?.remoteAddress,
+        forwardedFor: req.headers?.['x-forwarded-for'],
+      });
+      audience = decideRecruitmentAudience(access, clientAddress);
     } catch {
-      // decideRecruitmentAudience is total; if reading req.ip itself throws,
-      // the request is answered as closed.
+      // Both functions are total; if reading the request itself throws, the
+      // request is answered as closed.
       audience = RECRUITMENT_AUDIENCE.NONE;
     }
     req[RECRUITMENT_ACCESS] = Object.freeze({ audience });

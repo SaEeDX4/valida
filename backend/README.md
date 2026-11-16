@@ -286,12 +286,22 @@ Draft, archived or not-yet-published Job is an unknown Job.
 | Any value other than exactly `closed`, `testers`, `public` — a typo, `Public`, `" public"` | `closed` | `MODE_INVALID` |
 | `closed` | `closed` | `MODE_CLOSED` |
 | `testers` without `ACCESS_ALLOWLIST` | `closed` | `TESTERS_ALLOWLIST_ABSENT` |
-| `testers` with a list that has any invalid entry, a duplicate, more than 50 entries, or a range broader than `/8` (IPv4) or `/16` (IPv6) | `closed` | `TESTERS_ALLOWLIST_INVALID` |
+| `testers` with a list that breaks the range policy below in **any** entry | `closed` | `TESTERS_ALLOWLIST_INVALID` |
 | `public` with `APP_ENV` other than `production` | `closed` | `PUBLIC_NOT_PRODUCTION` |
 | `public` without `RECRUITMENT_PUBLIC_AUTHORISATION` | `closed` | `PUBLIC_AUTHORISATION_ABSENT` |
 | `public` with an authorisation not of the form `OD-YYYY-MM-DD-NN` | `closed` | `PUBLIC_AUTHORISATION_INVALID` |
 | `testers` with a valid list | `testers` | `MODE_TESTERS` |
 | `public`, production, a well-formed authorisation | `public` | `MODE_PUBLIC` |
+
+**The range policy of `ACCESS_ALLOWLIST`** is applied to the parsed value of
+each entry, never to its text. One violation invalidates the whole list.
+
+| Rule | Refused | Why |
+| --- | --- | --- |
+| Not an address or CIDR range; a port; a zone (`fe80::1%eth0`); a netmask; more than 50 entries | `office`, `203.0.113.7:443` | The list must be fully understood or not used |
+| Broader than `/8` (IPv4) or `/16` (IPv6) | `0.0.0.0/0`, `10.0.0.0/7`, `::/0` | Such a range would make `testers` mean everyone — public without the decision record `public` requires |
+| An IPv6 entry that touches the IPv4-mapped block `::ffff:0:0/96`, in any spelling, inside the block or containing it | `::ffff:203.0.113.7`, `::ffff:cb00:7107`, `0:0:0:0:0:ffff:cb00:7107`, `::ffff:0:0/96`, `::/16` | That block is IPv4 written as IPv6. `::ffff:0:0/96` is all of IPv4 with an IPv6 prefix the previous rule would accept. An IPv4 network is written as IPv4, under the IPv4 limit |
+| The same value twice | `2001:db8::1,2001:0db8:0:0:0:0:0:1`; `203.0.113.0/24,203.0.113.7/24` | A duplicate is a mistake in the list, however it is spelt |
 
 A wrong value **does not stop the backend**. These three variables are read
 outside the validated schema on purpose: the backend starts, recruitment is
@@ -309,11 +319,23 @@ rejected one. It never contains a configured value or an address.
 1. The gate (`middleware/recruitmentAccess.js`) is mounted on `/api/v1/jobs`
    after CORS and **before body parsing and rate limiting** (step 5b of the
    middleware order).
-2. The client address is `req.ip`: the socket's peer, or — only when
-   `TRUST_PROXY` is a hop count — the `X-Forwarded-For` entry that many hops
-   from the right. `True-Client-IP`, `CF-Connecting-IP`, `X-Real-IP` and
-   `Forwarded` are never read. An IPv4-mapped IPv6 address is compared as
-   IPv4. Anything that is not a plain address is not listed.
+2. The client address is established by the gate itself, not taken from
+   Express's `req.ip` (correction 1):
+   - `TRUST_PROXY=false`: the socket's peer. `X-Forwarded-For` is not read.
+   - `TRUST_PROXY=n`: `X-Forwarded-For` must hold **at least n entries**. The
+     client is the entry n from the right; it and every entry to its right —
+     the ones the trusted proxies appended — must be plain addresses. Entries
+     to the left are client-supplied and ignored.
+   - **A chain shorter than n, or no header, means the address is unknown,
+     and unknown is not listed.** `req.ip` would fall back to the socket peer
+     or to the leftmost entry; either could be a listed address that no proxy
+     vouched for. The rate limiters still use `req.ip`, unchanged.
+   - `True-Client-IP`, `CF-Connecting-IP`, `X-Real-IP` and `Forwarded` are
+     never read.
+   - Addresses are compared by **value**, not text. An IPv4-mapped IPv6
+     address is the IPv4 client in every spelling (`::ffff:203.0.113.7`,
+     `::ffff:cb00:7107`, `0:0:0:0:0:ffff:cb00:7107`). Anything that is not a
+     plain address — a port, a zone, a host name — is not listed.
 3. A client that may not use Jobs:
    - `GET` / `HEAD` / `OPTIONS` continue to the router. The list answers an
      empty page from the validated query; Job Detail answers the unknown-Job

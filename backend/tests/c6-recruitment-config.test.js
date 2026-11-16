@@ -148,7 +148,9 @@ describe('ACCESS_ALLOWLIST — addresses and CIDR ranges, all or nothing', () =>
     const parsed = parseAccessAllowlist(value);
     expect(parsed.ok).toBe(true);
     expect(parsed.size).toBe(size);
-    expect(parsed.blockList).toBeInstanceOf(net.BlockList);
+    // The parsed form: one frozen range per entry (an internal detail; it replaced net.BlockList in correction 1).
+    expect(Object.isFrozen(parsed.ranges)).toBe(true);
+    expect(parsed.ranges).toHaveLength(size);
   });
 
   it.each([

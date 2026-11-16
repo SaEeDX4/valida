@@ -58,42 +58,172 @@ export const PUBLIC_AUTHORISATION_PATTERN = /^OD-20\d{2}-(0[1-9]|1[0-2])-(0[1-9]
 /** Input bounds: a list is a handful of networks, not a routing table. */
 export const ALLOWLIST_MAX_ENTRIES = 50;
 const ALLOWLIST_MAX_LENGTH = 4096;
+
 /**
- * The shortest prefixes accepted. A range such as 0.0.0.0/0 or ::/0 would make
- * `testers` mean "everyone" — public by another name, without the decision
- * record `public` requires. Such an entry invalidates the whole list.
+ * THE RANGE POLICY — applied to the parsed VALUE of an entry, never to its text.
+ *
+ * 1. The broadest range an entry may cover is /8 for IPv4 and /16 for IPv6.
+ *    A range such as 0.0.0.0/0 or ::/0 would make `testers` mean "everyone" —
+ *    public by another name, without the decision record `public` requires.
+ * 2. An IPv6 entry may not touch the IPv4-mapped block ::ffff:0:0/96, in any
+ *    spelling: "::ffff:203.0.113.7", "::ffff:cb00:7107",
+ *    "0:0:0:0:0:ffff:cb00:7107", or a range that contains or lies inside the
+ *    block. That block is IPv4 written as IPv6. "::ffff:0:0/96" is ALL of
+ *    IPv4 — with an IPv6 prefix of 96, which rule 1 would accept. An IPv4
+ *    network has exactly one accepted spelling here: its IPv4 one, under the
+ *    IPv4 limit.
+ * 3. Two entries with the same value are a mistake in the list, however each
+ *    is written: "2001:db8::1" and "2001:0db8:0:0:0:0:0:1", or
+ *    "203.0.113.0/24" and "203.0.113.7/24".
+ *
+ * Any violation invalidates the WHOLE list, and so closes recruitment: a
+ * partly understood list is never applied.
  */
 export const ALLOWLIST_MIN_PREFIX = Object.freeze({ ipv4: 8, ipv6: 16 });
 
-const IPV4_MAPPED = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i;
+/** ::ffff:0:0/96 — the IPv4-mapped block: ten zero bytes, then ff ff. */
+const MAPPED_PREFIX_BITS = 96;
+const MAPPED_PREFIX = Uint8Array.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0]);
 
-/**
- * The address in the one form the list is compared in.
- *
- * Returns `{ address, family }` or null. An IPv4-mapped IPv6 address
- * (`::ffff:203.0.113.7`, what a dual-stack socket reports for an IPv4 peer) is
- * reduced to its IPv4 form. Anything that is not a plain address — a zone
- * identifier, a port, a host name, a list — is null, and null is never listed.
- */
-export function normaliseClientAddress(value) {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 45) return null;
-  // net.isIP accepts a scoped address ("fe80::1%eth0"). A zone names an
-  // interface of THIS machine, not a client; it is never an address here.
-  if (value.includes('%')) return null;
-  const mapped = IPV4_MAPPED.exec(value);
-  const address = mapped ? mapped[1] : value;
-  const version = net.isIP(address);
-  if (version === 4) return { address, family: 'ipv4' };
-  if (version === 6) return { address, family: 'ipv6' };
-  return null;
+/* ------------------------------------------------------- address values -- */
+
+function parseIpv4Bytes(text) {
+  // net.isIPv4 has already refused leading zeros, hexadecimal and short forms.
+  return Uint8Array.from(text.split('.').map(Number));
+}
+
+/** The 16 bytes of an IPv6 address that net.isIPv6 has accepted, or null. */
+function parseIpv6Bytes(text) {
+  let source = text;
+  // A dotted IPv4 tail ("::ffff:203.0.113.7") is the last 32 bits.
+  const lastColon = source.lastIndexOf(':');
+  const tail = source.slice(lastColon + 1);
+  let tailGroups = [];
+  if (tail.includes('.')) {
+    if (net.isIPv4(tail) === false) return null;
+    const [b0, b1, b2, b3] = parseIpv4Bytes(tail);
+    tailGroups = [(b0 << 8) | b1, (b2 << 8) | b3];
+    source = source.slice(0, lastColon + 1);
+    // "1:2:3:4:5:6:" -> "1:2:3:4:5:6", but keep a real "::" intact.
+    if (source.endsWith(':') && !source.endsWith('::')) source = source.slice(0, -1);
+  }
+  const toGroups = (part) => (part === '' ? [] : part.split(':').map((group) => (/^[0-9a-f]{1,4}$/i.test(group) ? parseInt(group, 16) : NaN)));
+  let groups;
+  const gap = source.indexOf('::');
+  if (gap === -1) {
+    groups = [...toGroups(source), ...tailGroups];
+  } else {
+    if (source.indexOf('::', gap + 1) !== -1) return null;
+    const head = toGroups(source.slice(0, gap));
+    const rest = [...toGroups(source.slice(gap + 2)), ...tailGroups];
+    const missing = 8 - head.length - rest.length;
+    if (missing < 1) return null;
+    groups = [...head, ...new Array(missing).fill(0), ...rest];
+  }
+  if (groups.length !== 8 || groups.some((group) => !Number.isInteger(group) || group < 0 || group > 0xffff)) return null;
+  const bytes = new Uint8Array(16);
+  groups.forEach((group, index) => {
+    bytes[index * 2] = group >> 8;
+    bytes[index * 2 + 1] = group & 0xff;
+  });
+  return bytes;
 }
 
 /**
- * Parses ACCESS_ALLOWLIST: comma-separated addresses or CIDR ranges, IPv4 or
- * IPv6. All or nothing: one bad entry makes the whole list invalid, so a
- * partly understood list is never applied.
+ * An address as a VALUE: `{ family, bytes }`, or null. A scoped address
+ * ("fe80::1%eth0") is not an address here: a zone names an interface of this
+ * machine, not a client, and net.isIP would accept it.
+ */
+function parseAddressValue(text) {
+  if (typeof text !== 'string' || text.length === 0 || text.length > 45 || text.includes('%')) return null;
+  const version = net.isIP(text);
+  if (version === 4) return { family: 'ipv4', bytes: parseIpv4Bytes(text) };
+  if (version === 6) {
+    const bytes = parseIpv6Bytes(text);
+    return bytes ? { family: 'ipv6', bytes } : null;
+  }
+  return null;
+}
+
+/** True when the first `bits` bits of the two byte arrays are equal. */
+function samePrefix(left, right, bits) {
+  const whole = bits >> 3;
+  for (let index = 0; index < whole; index += 1) if (left[index] !== right[index]) return false;
+  const rest = bits & 7;
+  if (rest === 0) return true;
+  const mask = (0xff << (8 - rest)) & 0xff;
+  return (left[whole] & mask) === (right[whole] & mask);
+}
+
+/** The bytes with every bit after `bits` cleared: the network a range names. */
+function networkOf(bytes, bits) {
+  const network = new Uint8Array(bytes.length);
+  const whole = bits >> 3;
+  network.set(bytes.subarray(0, whole));
+  const rest = bits & 7;
+  if (rest !== 0) network[whole] = bytes[whole] & ((0xff << (8 - rest)) & 0xff);
+  return network;
+}
+
+const isMappedValue = (bytes) => samePrefix(bytes, MAPPED_PREFIX, MAPPED_PREFIX_BITS);
+
+function formatValue({ family, bytes }) {
+  if (family === 'ipv4') return Array.from(bytes).join('.');
+  // RFC 5952: lower case, no leading zeros, the longest run of zero groups
+  // (two or more) compressed, the first such run on a tie.
+  const groups = [];
+  for (let index = 0; index < 16; index += 2) groups.push(((bytes[index] << 8) | bytes[index + 1]).toString(16));
+  let bestStart = -1;
+  let bestLength = 0;
+  for (let index = 0; index < 8; ) {
+    if (groups[index] !== '0') {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < 8 && groups[end] === '0') end += 1;
+    if (end - index > bestLength) {
+      bestStart = index;
+      bestLength = end - index;
+    }
+    index = end;
+  }
+  if (bestLength < 2) return groups.join(':');
+  return `${groups.slice(0, bestStart).join(':')}::${groups.slice(bestStart + bestLength).join(':')}`;
+}
+
+/**
+ * The client address in the one form the list is compared in.
  *
- * @returns {{ ok: true, blockList: net.BlockList, size: number } | { ok: false, problem: 'ABSENT' | 'INVALID' }}
+ * Returns `{ address, family }` or null. An IPv4-mapped IPv6 address — what a
+ * dual-stack socket or a proxy may report for an IPv4 peer — is the IPv4
+ * client, IN EVERY SPELLING: "::ffff:203.0.113.7", "::ffff:cb00:7107" and
+ * "0:0:0:0:0:ffff:cb00:7107" are all 203.0.113.7. The decision is made on the
+ * parsed value, so no spelling can step around an entry or reach one it
+ * should not. Other IPv6 addresses are returned in their canonical (RFC 5952)
+ * form. Anything that is not a plain address — a zone identifier, a port, a
+ * host name, a list — is null, and null is never listed.
+ */
+export function normaliseClientAddress(value) {
+  const parsed = toClientValue(value);
+  return parsed ? { address: formatValue(parsed), family: parsed.family } : null;
+}
+
+function toClientValue(value) {
+  const parsed = parseAddressValue(value);
+  if (!parsed) return null;
+  if (parsed.family === 'ipv6' && isMappedValue(parsed.bytes)) return { family: 'ipv4', bytes: parsed.bytes.slice(12) };
+  return parsed;
+}
+
+/** Lists made by parseAccessAllowlist. A hand-made stand-in is not one. */
+const PARSED_ALLOWLISTS = new WeakSet();
+
+/**
+ * Parses ACCESS_ALLOWLIST: comma-separated addresses or CIDR ranges, IPv4 or
+ * IPv6, under the range policy above. All or nothing.
+ *
+ * @returns {{ ok: true, ranges: ReadonlyArray<object>, size: number } | { ok: false, problem: 'ABSENT' | 'INVALID' }}
  */
 export function parseAccessAllowlist(value) {
   if (value === undefined || value === null || value === '') return { ok: false, problem: 'ABSENT' };
@@ -103,34 +233,73 @@ export function parseAccessAllowlist(value) {
     return { ok: false, problem: 'INVALID' };
   }
 
-  const blockList = new net.BlockList();
+  const INVALID = { ok: false, problem: 'INVALID' };
+  const ranges = [];
   const seen = new Set();
   for (const entry of entries) {
     const slash = entry.indexOf('/');
     const addressPart = slash === -1 ? entry : entry.slice(0, slash);
     const prefixPart = slash === -1 ? null : entry.slice(slash + 1);
-    // The list is written by a person: an IPv4-mapped form is not accepted
-    // here, so each network has exactly one spelling.
-    const version = net.isIP(addressPart);
-    if (version === 0 || addressPart.includes('%') || IPV4_MAPPED.test(addressPart)) return { ok: false, problem: 'INVALID' };
-    const family = version === 4 ? 'ipv4' : 'ipv6';
-    const maxPrefix = version === 4 ? 32 : 128;
+    const parsed = parseAddressValue(addressPart);
+    if (!parsed) return INVALID;
+    const { family, bytes } = parsed;
+    const maxPrefix = family === 'ipv4' ? 32 : 128;
     let prefix = maxPrefix;
     if (prefixPart !== null) {
-      if (!/^\d{1,3}$/.test(prefixPart)) return { ok: false, problem: 'INVALID' };
+      if (!/^\d{1,3}$/.test(prefixPart)) return INVALID;
       prefix = Number(prefixPart);
-      if (prefix > maxPrefix || prefix < ALLOWLIST_MIN_PREFIX[family]) return { ok: false, problem: 'INVALID' };
+      // Policy rule 1.
+      if (prefix > maxPrefix || prefix < ALLOWLIST_MIN_PREFIX[family]) return INVALID;
     }
-    const key = `${family}:${addressPart.toLowerCase()}/${prefix}`;
-    if (seen.has(key)) return { ok: false, problem: 'INVALID' };
+    // Policy rule 2: an IPv6 range that overlaps ::ffff:0:0/96 — it lies inside
+    // the block, or contains it. Two ranges overlap exactly when they agree on
+    // the bits of the shorter prefix.
+    if (family === 'ipv6' && samePrefix(bytes, MAPPED_PREFIX, Math.min(prefix, MAPPED_PREFIX_BITS))) return INVALID;
+    const network = networkOf(bytes, prefix);
+    // Policy rule 3: the same value twice.
+    const key = `${family}/${prefix}/${Buffer.from(network).toString('hex')}`;
+    if (seen.has(key)) return INVALID;
     seen.add(key);
-    try {
-      blockList.addSubnet(addressPart, prefix, family);
-    } catch {
-      return { ok: false, problem: 'INVALID' };
-    }
+    ranges.push(Object.freeze({ family, prefix, network }));
   }
-  return { ok: true, blockList, size: entries.length };
+  Object.freeze(ranges);
+  PARSED_ALLOWLISTS.add(ranges);
+  return { ok: true, ranges, size: ranges.length };
+}
+
+/**
+ * The client address of one request, from the socket and the forwarding
+ * header, under the configured number of trusted proxy hops (TRUST_PROXY).
+ * C6 plan revision 3, section 4.6.3.
+ *
+ *   hops = 0 (TRUST_PROXY=false)
+ *       The socket's peer. The forwarding header is not read.
+ *
+ *   hops = n >= 1
+ *       X-Forwarded-For must hold AT LEAST n entries. The client is the entry
+ *       n from the right; that entry and every entry to its right — the ones
+ *       the trusted proxies appended — must be plain addresses. Entries to
+ *       the left are client-supplied and ignored.
+ *
+ *       With FEWER than n entries the address is UNKNOWN (null). Express's
+ *       own `req.ip` does not do this: with no header it returns the socket
+ *       peer, and with too few entries the leftmost one. Either could be a
+ *       listed address that no proxy vouched for — a request that reached
+ *       the backend around the proxy, or a header the client wrote.
+ *
+ * Returns the address text, or null. Null is never listed.
+ */
+export function establishClientAddress({ trustedHops, socketAddress, forwardedFor } = {}) {
+  if (trustedHops === false || trustedHops === 0 || trustedHops === undefined || trustedHops === null) {
+    return typeof socketAddress === 'string' && parseAddressValue(socketAddress) ? socketAddress : null;
+  }
+  if (!Number.isInteger(trustedHops) || trustedHops < 1 || trustedHops > 10) return null;
+  if (typeof forwardedFor !== 'string' || forwardedFor.length === 0 || forwardedFor.length > 2048) return null;
+  const chain = forwardedFor.split(',').map((entry) => entry.trim());
+  if (chain.length < trustedHops) return null;
+  const vouchedFor = chain.slice(chain.length - trustedHops);
+  if (vouchedFor.some((entry) => parseAddressValue(entry) === null)) return null;
+  return vouchedFor[0];
 }
 
 function closed(configured, reason) {
@@ -156,10 +325,10 @@ export function resolveRecruitmentAccess({ mode, authorisation, allowlist, appEn
     // Unreachable by construction; kept so that a defect here can only close.
     resolved = closed('invalid', RECRUITMENT_REASONS.MODE_INVALID);
   }
-  const { allowlist: blockList, ...visible } = resolved;
+  const { allowlist: ranges, ...visible } = resolved;
   const result = { ...visible };
   // Non-enumerable: absent from spreads, JSON, util.inspect and log lines.
-  Object.defineProperty(result, 'allowlist', { value: blockList, enumerable: false });
+  Object.defineProperty(result, 'allowlist', { value: ranges, enumerable: false });
   return Object.freeze(result);
 }
 
@@ -176,7 +345,7 @@ function resolve({ mode, authorisation, allowlist, appEnv }) {
     if (!parsed.ok) {
       return closed('invalid', parsed.problem === 'ABSENT' ? RECRUITMENT_REASONS.TESTERS_ALLOWLIST_ABSENT : RECRUITMENT_REASONS.TESTERS_ALLOWLIST_INVALID);
     }
-    return { mode: 'testers', configured: 'valid', reason: RECRUITMENT_REASONS.MODE_TESTERS, authorisationRef: null, allowlist: parsed.blockList, allowlistEntries: parsed.size };
+    return { mode: 'testers', configured: 'valid', reason: RECRUITMENT_REASONS.MODE_TESTERS, authorisationRef: null, allowlist: parsed.ranges, allowlistEntries: parsed.size };
   }
 
   // mode === 'public'
@@ -201,16 +370,20 @@ export const RECRUITMENT_AUDIENCE = Object.freeze({ NONE: 'none', TESTER: 'teste
  * The decision for one request. Total: any failure is `none`.
  *
  * @param {object} access         a result of resolveRecruitmentAccess
- * @param {unknown} clientAddress the address Express derived (req.ip), honouring TRUST_PROXY
+ * @param {unknown} clientAddress the address from establishClientAddress (or any address text)
  */
 export function decideRecruitmentAudience(access, clientAddress) {
   try {
     if (access?.mode === 'public') return RECRUITMENT_AUDIENCE.PUBLIC;
     if (access?.mode !== 'testers') return RECRUITMENT_AUDIENCE.NONE;
-    const client = normaliseClientAddress(clientAddress);
-    const blockList = access.allowlist;
-    if (!client || !(blockList instanceof net.BlockList)) return RECRUITMENT_AUDIENCE.NONE;
-    return blockList.check(client.address, client.family) ? RECRUITMENT_AUDIENCE.TESTER : RECRUITMENT_AUDIENCE.NONE;
+    const client = toClientValue(clientAddress);
+    const ranges = access.allowlist;
+    // Only a list this module parsed is used: a stand-in object is not one.
+    if (!client || !PARSED_ALLOWLISTS.has(ranges)) return RECRUITMENT_AUDIENCE.NONE;
+    // An entry admits a client of its own family only. A mapped client is
+    // IPv4 by now, and no IPv6 entry can lie in the mapped block.
+    const listed = ranges.some((range) => range.family === client.family && samePrefix(client.bytes, range.network, range.prefix));
+    return listed ? RECRUITMENT_AUDIENCE.TESTER : RECRUITMENT_AUDIENCE.NONE;
   } catch {
     return RECRUITMENT_AUDIENCE.NONE;
   }

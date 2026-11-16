@@ -13,6 +13,7 @@
     "test:e2e:c5": "playwright test --config playwright.c5.config.js",
     "test:c5:stats": "node --test c5/perfStats.test.js",
     "test:c5:motion": "node --test c5/motionJudge.test.js",
+    "test:c6:stack": "node c6/c6-t2-stack.mjs",
     "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {

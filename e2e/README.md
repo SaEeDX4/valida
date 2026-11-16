@@ -232,3 +232,29 @@ Remove-Item Env:MONGODB_TEST_URI
 - `dist/`.
 
 **Not proven here.** Other browsers and real devices, real screen readers, OS text scaling, field Core Web Vitals, and the production host's compression, caching and TLS. These are in the manual checklist and in C6/C7.
+
+## C6-T2 — visitor-aware Job documents (`c6/c6-t2-stack.mjs`)
+
+A stack check, not a Playwright suite: the real API and two real document
+servers (indexable and review builds), local forwarding proxies standing in
+for a host's proxy (both services run with `TRUST_PROXY=1`), synthetic Jobs on
+a disposable database, and Chromium for the rendered pages. The document
+server's own egress is made a **listed** address on purpose, so a document
+server that failed to delegate would show the tester view to everyone.
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t2"
+npm run test:c6:stack -- --label local --out C:\Temp\valida-c6t2
+```
+
+Cases: A `closed` (listed and unlisted visitors), B `testers`, C invalid
+delegation and forwarding, the key absent or wrong, a cross-origin redirect,
+D the same URL for different visitors in both orders with conditional
+requests, E a local `public` fixture (synthetic authorisation, production
+`APP_ENV`, no storage), F the API down, K the key in no build, log or HTTP
+evidence. Output: `results.json` (expected versus actual), sanitised
+`http/*.txt` (the key appears as `[INTERNAL_SERVICE_KEY]`), screenshots and
+logs. Ports start at 4330 (`C6T2_BASE_PORT`). It does not show a real host's
+proxy or shared cache: those are the hosted G-ACCESS checks.
+

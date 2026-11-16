@@ -209,6 +209,7 @@ node tests/diagnostics/localhost-addressing.mjs
 | `RECRUITMENT_MODE` | no | — (**closed**) | C6-T1. Exactly `closed`, `testers` or `public`. Anything else, or nothing, is `closed`. See "Recruitment access (C6-T1)" |
 | `ACCESS_ALLOWLIST` | with `testers` | — | C6-T1. Comma-separated addresses or CIDR ranges (IPv4, IPv6; 1–50). Never logged |
 | `RECRUITMENT_PUBLIC_AUTHORISATION` | with `public` | — | C6-T1. The owner decision that opens recruitment, as `OD-YYYY-MM-DD-NN` |
+| `INTERNAL_SERVICE_KEY` | no | — (delegation **disabled**) | C6-T2. The secret the document server presents when it reads Jobs on a visitor's behalf; 32–512 visible ASCII characters, no spaces. Absent or unusable: every delegated read gets the unlisted view. Server-only; never logged. See "Delegated Jobs reads (C6-T2)" |
 | `RATE_LIMIT_WINDOW_MS` | no | `60000` | Rate-limit window |
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
@@ -367,16 +368,67 @@ and status — never a client address (unchanged from C3).
   themselves. Whether a host appends the client address the way a hop count
   assumes can only be verified on that host (C6 plan §4.6.3, §4.6.5), before
   any synthetic Job is introduced there.
-- **The document server.** Pages, the sitemap and page-level caching are a
-  later task (C6-T2). In `closed` it already reports what the API tells it: no
-  Job. In `testers` the API sees the document server's own address, not the
-  visitor's, so the document server must not be exposed in `testers` mode on a
-  host until C6-T2 forwards the visitor's address. Local runs are unaffected:
-  browser, document server and API are all on loopback.
+- **The document server.** Superseded by C6-T2 (next section): the document
+  server now names the visitor on every Jobs read, and the API decides that
+  read for the visitor, not for the document server's own address.
 - **Review as a private environment** is a later task.
 
 Tests: `tests/c6-recruitment-config.test.js`, `tests/c6-recruitment-http.test.js`,
 `tests/db/c6-recruitment-api.test.js`.
+
+## Delegated Jobs reads (C6-T2)
+
+Record: [`docs/review/C6_T2_VISITOR_AWARE_DOCUMENTS.md`](../docs/review/C6_T2_VISITOR_AWARE_DOCUMENTS.md).
+
+The document server (`frontend/server/`) decides a Job page's status and head
+from its own server-side reads of `GET /api/v1/jobs…`. Without delegation the
+API would decide those reads for the document server's address — which may be
+listed. With delegation it decides them **for the visitor**.
+
+A read is a **delegation attempt** when it carries either header:
+
+| Header | Value |
+| --- | --- |
+| `X-Valida-Visitor-Address` | the visitor's address as the document server established it (the T1 rule, its own `TRUST_PROXY`), or the literal `unlisted` |
+| `X-Valida-Internal-Key` | `INTERNAL_SERVICE_KEY` |
+
+| The attempt | Outcome | Decided as |
+| --- | --- | --- |
+| `GET`/`HEAD`, key matches, visitor a plain address | `ACCEPTED` | that visitor's own direct request (listed or not) |
+| `GET`/`HEAD`, key matches, visitor `unlisted` | `ACCEPTED_UNLISTED` | an unlisted client |
+| no `INTERNAL_SERVICE_KEY` configured, or an unusable one | `REJECTED_DELEGATION_DISABLED` | an unlisted client |
+| key header missing / wrong | `REJECTED_KEY_ABSENT` / `REJECTED_KEY_MISMATCH` | an unlisted client |
+| visitor header missing / not a plain address (port, zone, list, name, over 64 characters) | `REJECTED_VISITOR_ABSENT` / `REJECTED_VISITOR_INVALID` | an unlisted client |
+| any other method | `REJECTED_METHOD` | **no Jobs access, in every mode** — delegation never carries a submission |
+
+- **Never the caller's address.** Once a request is a delegation attempt,
+  neither the socket peer nor `X-Forwarded-For` is consulted. A failed
+  delegation from a listed document server is still unlisted.
+- **Constant time.** The key is compared as SHA-256 digests with
+  `crypto.timingSafeEqual`; the configured key is held only as a
+  non-enumerable digest.
+- **Direct requests are unchanged.** A request with neither header is decided
+  exactly as in C6-T1. Browsers cannot send these headers cross-origin: CORS
+  does not allow them.
+- **Logged by code only.** A rejected delegation logs
+  `recruitment.delegation_rejected` with its outcome — never the key, the
+  visitor or the caller. `req.headers["x-valida-internal-key"]` is redacted.
+- **Start-up line** adds `recruitmentDelegation` (`enabled`/`disabled`) and
+  `recruitmentDelegationReason` (`DELEGATION_ENABLED`, `DELEGATION_KEY_ABSENT`,
+  `DELEGATION_KEY_INVALID`).
+- **No validators on Jobs.** `/api/v1/jobs…` keeps `Cache-Control: no-store`
+  (Doc 09 §58) and now also drops conditional request headers and strips
+  `ETag`/`Last-Modified` (`middleware/noValidators.js`): one URL answers
+  differently for different visitors, so no answer may be revalidated as
+  another's.
+
+Known and unchanged: the rate limiters key by `req.ip`, so every
+document-server read counts against the document server's address (as in C4).
+
+Tests: `tests/c6-delegation.test.js` (with the shared case table
+`tests/fixtures/clientAddressCases.js`, also run by
+`frontend/server/visitorDelegation.test.js`), and the stack check
+`e2e/c6/c6-t2-stack.mjs`.
 
 ---
 
@@ -683,7 +735,9 @@ Order is the design, not a preference:
 5. CORS — before the body is read, so preflight stays cheap
    - 5b. the recruitment access gate on `/api/v1/jobs` (C6-T1) — after CORS,
      so a refusal can be read by a browser; before body parsing, so a refused
-     request's body is never read
+     request's body is never read. It also decides delegated reads (C6-T2)
+   - 5c. no validators on `/api/v1/jobs` (C6-T2) — conditional headers
+     dropped, `ETag`/`Last-Modified` never sent
 6. JSON body parsing (100 KB limit)
 7. general rate limiting — after identity, before route work
 8. API routes

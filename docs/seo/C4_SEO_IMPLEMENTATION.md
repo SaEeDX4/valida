@@ -75,6 +75,9 @@ Other rules:
 **Sitemap** (Doc 16 §§103–109). The five static routes are listed, then every OPEN Job from `GET /api/v1/jobs`, page by page. The sitemap is built per request, so publishing, closing or archiving a Job changes it at once (SEO-012).
 - Excluded: Apply, 404, Draft, Archived and Closed Jobs, the API and review URLs.
 - No `<lastmod>`: the public API exposes no content-modification time (SEO-013).
+- **C6-T2: the public view, whoever asks.** The sitemap's Jobs reads always name the visitor `unlisted`, so a Job visible only to listed testers is never in it, even when a listed tester requests it. Its caching is unchanged (`no-cache`): every requester receives the same document.
+
+**Recruitment-dependent documents (C6-T2).** Careers, Job Detail and Apply depend on who is asking (the recruitment mode, [OD-2026-11-15-01](../review/OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md)). The document server reads Jobs on the visitor's behalf ([`../review/C6_T2_VISITOR_AWARE_DOCUMENTS.md`](../review/C6_T2_VISITOR_AWARE_DOCUMENTS.md)) and sends those three documents — 200, 404 and 503 alike — with `Cache-Control: private, no-store`, no `ETag`, no `Last-Modified`, and never a `304`. Every other document keeps `no-cache`; `/assets/` keeps `public, max-age=31536000, immutable`. Statuses, robots directives, heads, JobPosting and the C5 preload hint are unchanged.
 
 **robots.txt** (Doc 16 §§110–113).
 - Nothing public is disallowed: no page, CSS, JavaScript or image.

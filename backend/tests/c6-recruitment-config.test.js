@@ -241,8 +241,6 @@ describe('the decision for one request', () => {
   });
 
   it.each([
-    ['the address just below the IPv4 range', '203.0.112.255'],
-    ['the address just above the IPv4 range', '203.0.114.0'],
     ['the neighbour of a listed single address', '198.51.100.8'],
     ['an address outside the listed IPv6 range', '2001:db8:11::1'],
     ['another loopback address', '127.0.0.2'],
@@ -255,6 +253,15 @@ describe('the decision for one request', () => {
     ['an object', { toString: () => '203.0.113.7' }],
   ])('%s is nobody', (_label, address) => {
     expect(decideRecruitmentAudience(testers, address)).toBe(RECRUITMENT_AUDIENCE.NONE);
+  });
+
+  it('the edges of a range are exact: the first and last address are in, their neighbours are out', () => {
+    // A /26 inside a documentation range, so that its neighbours are documentation addresses too.
+    const access = resolveRecruitmentAccess({ mode: 'testers', allowlist: '192.0.2.64/26' });
+    expect(decideRecruitmentAudience(access, '192.0.2.63')).toBe(RECRUITMENT_AUDIENCE.NONE);
+    expect(decideRecruitmentAudience(access, '192.0.2.64')).toBe(RECRUITMENT_AUDIENCE.TESTER);
+    expect(decideRecruitmentAudience(access, '192.0.2.127')).toBe(RECRUITMENT_AUDIENCE.TESTER);
+    expect(decideRecruitmentAudience(access, '192.0.2.128')).toBe(RECRUITMENT_AUDIENCE.NONE);
   });
 
   it('an IPv4 entry never matches an IPv6 address with the same bits, and the reverse', () => {

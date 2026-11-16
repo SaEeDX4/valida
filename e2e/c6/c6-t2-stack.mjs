@@ -662,6 +662,26 @@ try {
   const rpj = await rendered(browser, 'public-unlisted-job', `/careers/${SLUGS.openEligible}`, 'job');
   check('E5', 'public', 'public fixture, unlisted visitor: rendered Careers lists the open Jobs; Job Detail shows the Job', 'list (2); job', { careers: rpc, job: rpj }, rpc.state === 'list' && rpc.roleLinks.length === 2 && rpj.state === 'job');
 
+  // E6 — SEO-012 in the public view: publishing, closing and archiving a Job
+  // change the sitemap at once. (Moved here from C4-09, whose stack runs in
+  // `testers` mode, where the sitemap's public view holds no Job at all.)
+  const LIFECYCLE = 'qa-c4-lifecycle';
+  const lifecycleEnv = { ...baseEnvironment(), APP_ENV: 'local', NODE_ENV: 'development', MONGODB_URI };
+  const lifecycleStates = [];
+  for (const [state, file] of [['OPEN', 'qa-c4-lifecycle.json'], ['CLOSED', 'qa-c4-lifecycle.closed.json'], ['ARCHIVED', 'qa-c4-lifecycle.archived.json']]) {
+    const run = await runNode(['scripts/provision-job.mjs', 'apply', '--file', path.join(FIXTURES_DIR, 'seo-jobs', file), '--confirm-lifecycle'], { cwd: BACKEND_DIR, env: lifecycleEnv, logFile: path.join(OUT, 'logs', 'setup.log'), label: `provision ${file}` });
+    const doc = await exchange(`public-lifecycle-${state.toLowerCase()}-job`, SITE.indexed, `/careers/${LIFECYCLE}`);
+    const map = await exchange(`public-lifecycle-${state.toLowerCase()}-sitemap`, SITE.indexed, '/sitemap.xml');
+    lifecycleStates.push({ state, provisioned: run.code, status: doc.status, robots: doc.headers['x-robots-tag'] ?? null, inSitemap: map.body.includes(`<loc>${SITE_URL}/careers/${LIFECYCLE}</loc>`) });
+  }
+  const expectedLifecycle = [
+    { state: 'OPEN', provisioned: 0, status: 200, robots: null, inSitemap: true },
+    { state: 'CLOSED', provisioned: 0, status: 200, robots: 'noindex, follow', inSitemap: false },
+    { state: 'ARCHIVED', provisioned: 0, status: 404, robots: 'noindex, follow', inSitemap: false },
+  ];
+  check('E6', 'public', 'public fixture: opening, closing and archiving a Job change its document and the sitemap at once (SEO-012)', expectedLifecycle, lifecycleStates,
+    JSON.stringify(lifecycleStates) === JSON.stringify(expectedLifecycle));
+
   /* ====================================================== FAILURE ==== */
   await stop(api);
   api = null;

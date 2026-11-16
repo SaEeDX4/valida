@@ -5,6 +5,7 @@ import path from 'node:path';
 import { buildRobotsTxt, buildSitemapXml } from '../src/seo/discovery.js';
 import { JOB_OUTCOME } from './jobsClient.js';
 import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocument.js';
+import { establishVisitorAddress } from './visitorAddress.js';
 
 /**
  * The local reference document server (C4).
@@ -32,6 +33,12 @@ import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocume
  *     index.html and SEO manifest are never served as files.
  *   - The only outbound requests are the public Jobs API reads (jobsClient.js).
  *   - Nothing from the request (query, headers, cookies) is logged or sent on.
+ *     C6-T2: the one thing derived from a request and sent on is the
+ *     visitor's ADDRESS, established by the API's own rule from the socket
+ *     and X-Forwarded-For under TRUST_PROXY (visitorAddress.js). The
+ *     X-Valida-* headers a request arrives with are never read and never
+ *     passed on, so a visitor cannot name another address or present a key.
+ *     The address is not logged.
  */
 
 const CONTENT_TYPES = Object.freeze({
@@ -104,7 +111,7 @@ function send(res, method, status, headers, body = '') {
  * `jobApiPreloadBase` the browser-facing API base for the Job preload hint
  * (renderDocument.js jobApiPreloadTag), null for none.
  */
-export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, log = () => {} }) {
+export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, log = () => {} }) {
   const distRoot = await realpath(distDir);
   const template = await loadTemplate(distRoot);
 
@@ -192,7 +199,9 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
         return;
       }
 
-      const document = await renderDocument(pathname, { template, config, jobs, jobApiPreloadBase });
+      // C6-T2: who is asking, for the API to decide what they may see.
+      const visitor = establishVisitorAddress(req, trustedHops);
+      const document = await renderDocument(pathname, { template, config, jobs, jobApiPreloadBase, visitor });
       routeKind = document.route.kind;
       send(res, method, document.status, document.headers, document.body);
     } catch {
@@ -203,8 +212,8 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
   };
 }
 
-export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, host = '127.0.0.1', port = 4173, log }) {
-  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, log });
+export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, host = '127.0.0.1', port = 4173, log }) {
+  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, trustedHops, log });
   const server = createServer((req, res) => {
     handle(req, res);
   });

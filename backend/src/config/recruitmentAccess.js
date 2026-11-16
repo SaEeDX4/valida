@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import net from 'node:net';
 
 /**
@@ -302,6 +303,144 @@ export function establishClientAddress({ trustedHops, socketAddress, forwardedFo
   return vouchedFor[0];
 }
 
+/**
+ * TRUST_PROXY — THE rule, used by config/env.js for the backend and by the
+ * frontend document server (C6-T2), so the two services cannot disagree:
+ * absent is `false` (the default); "false" is `false`; a value that Number()
+ * reads as a whole number from 1 to 10 is that number of hops; anything else,
+ * including the empty string, is `null` — invalid, and the service refuses to
+ * start. (This is exactly the rule config/env.js applied before C6-T2.)
+ */
+export function parseTrustedHops(value) {
+  if (value === undefined) return false;
+  if (typeof value !== 'string') return null;
+  if (value === 'false') return false;
+  const hops = Number(value);
+  return Number.isInteger(hops) && hops >= 1 && hops <= 10 ? hops : null;
+}
+
+/* ---------------------------------------------- delegated visitor (C6-T2) -- */
+
+/**
+ * DELEGATION — how the document server asks about Jobs on a visitor's behalf.
+ * C6 plan revision 3, section 4.6.3; owner decision OD-2026-11-15-01 and its
+ * C6-T2 addendum.
+ *
+ * The document server reads a Job to decide a page's status and head. It is a
+ * different client from the visitor, and its own address may well be on the
+ * allowlist. So it never asks as itself. Each of its reads carries:
+ *
+ *   X-Valida-Visitor-Address   the address IT established for the visitor (by
+ *                              the same rules as establishClientAddress), or
+ *                              the word `unlisted` when it has none or wants
+ *                              the public view (the sitemap);
+ *   X-Valida-Internal-Key      INTERNAL_SERVICE_KEY, a secret shared by the two
+ *                              services and nothing else.
+ *
+ * THE API'S RULE. A request that carries EITHER header is a delegation
+ * attempt, and is never decided from its own socket or forwarding chain:
+ *   - the key must be configured here, be present, and match (compared in
+ *     constant time over SHA-256 digests, so neither content nor length leaks);
+ *   - the visitor must be one plain address;
+ *   - the method must be GET or HEAD.
+ * If all hold, the visitor's address is decided against the allowlist like any
+ * client's. If anything fails, the address is UNKNOWN — the unlisted view. A
+ * delegation therefore never grants more than the visitor would get directly,
+ * and a failed one never grants more than the public. A request with neither
+ * header is an ordinary direct request: unchanged T1 behaviour.
+ *
+ * A delegation grants NO submission: a POST (or any method with a body) that
+ * carries either header is refused like an unlisted client's.
+ */
+export const DELEGATION_HEADERS = Object.freeze({ key: 'x-valida-internal-key', visitor: 'x-valida-visitor-address' });
+/** The visitor value that asks for the public view. */
+export const UNLISTED_VISITOR = 'unlisted';
+/** INTERNAL_SERVICE_KEY: 32 to 512 visible ASCII characters, no spaces. */
+export const SERVICE_KEY_MIN_LENGTH = 32;
+const SERVICE_KEY_MAX_LENGTH = 512;
+const SERVICE_KEY_PATTERN = /^[\x21-\x7e]+$/;
+const VISITOR_HEADER_MAX_LENGTH = 64;
+
+export const DELEGATION_REASONS = Object.freeze({
+  KEY_ABSENT: 'DELEGATION_KEY_ABSENT',
+  KEY_INVALID: 'DELEGATION_KEY_INVALID',
+  ENABLED: 'DELEGATION_ENABLED',
+});
+
+/** True for a value that may be used as INTERNAL_SERVICE_KEY. */
+export function isUsableServiceKey(value) {
+  return typeof value === 'string' && value.length >= SERVICE_KEY_MIN_LENGTH && value.length <= SERVICE_KEY_MAX_LENGTH && SERVICE_KEY_PATTERN.test(value);
+}
+
+const digestOf = (value) => createHash('sha256').update(value, 'utf8').digest();
+
+/**
+ * INTERNAL_SERVICE_KEY, resolved. Never throws and never stops the backend:
+ * an absent or unusable key disables delegation, so every delegated read gets
+ * the unlisted view. The key itself is kept only as a digest, in a
+ * non-enumerable property: it is in no serialised view and no log line.
+ */
+export function resolveServiceDelegation({ key } = {}) {
+  let result;
+  if (key === undefined || key === null || key === '') result = { enabled: false, reason: DELEGATION_REASONS.KEY_ABSENT, digest: null };
+  else if (!isUsableServiceKey(key)) result = { enabled: false, reason: DELEGATION_REASONS.KEY_INVALID, digest: null };
+  else result = { enabled: true, reason: DELEGATION_REASONS.ENABLED, digest: digestOf(key) };
+  const { digest, ...visible } = result;
+  const resolved = { ...visible };
+  Object.defineProperty(resolved, 'digest', { value: digest, enumerable: false });
+  return Object.freeze(resolved);
+}
+
+export const DISABLED_SERVICE_DELEGATION = resolveServiceDelegation({});
+
+/** Why a delegation attempt gave the unlisted view. Fixed strings, for the log. */
+export const DELEGATION_OUTCOMES = Object.freeze({
+  NOT_ATTEMPTED: 'NOT_ATTEMPTED',
+  ACCEPTED: 'ACCEPTED',
+  ACCEPTED_UNLISTED: 'ACCEPTED_UNLISTED',
+  REJECTED_DISABLED: 'REJECTED_DELEGATION_DISABLED',
+  REJECTED_KEY_ABSENT: 'REJECTED_KEY_ABSENT',
+  REJECTED_KEY_MISMATCH: 'REJECTED_KEY_MISMATCH',
+  REJECTED_VISITOR_ABSENT: 'REJECTED_VISITOR_ABSENT',
+  REJECTED_VISITOR_INVALID: 'REJECTED_VISITOR_INVALID',
+  REJECTED_METHOD: 'REJECTED_METHOD',
+});
+
+const DELEGATED_METHODS = new Set(['GET', 'HEAD']);
+
+/**
+ * Reads a request's delegation headers.
+ *
+ * @returns {{ attempted: boolean, outcome: string, clientAddress: string | null }}
+ *   attempted false: not a delegation — decide the request as a direct one.
+ *   attempted true:  decide it from `clientAddress` ONLY (null = unlisted).
+ */
+export function readDelegatedVisitor({ delegation, method, headers } = {}) {
+  const keyValue = headers?.[DELEGATION_HEADERS.key];
+  const visitorValue = headers?.[DELEGATION_HEADERS.visitor];
+  if (keyValue === undefined && visitorValue === undefined) {
+    return { attempted: false, outcome: DELEGATION_OUTCOMES.NOT_ATTEMPTED, clientAddress: null };
+  }
+  const reject = (outcome) => ({ attempted: true, outcome, clientAddress: null });
+  try {
+    if (!DELEGATED_METHODS.has(method)) return reject(DELEGATION_OUTCOMES.REJECTED_METHOD);
+    if (!delegation?.enabled || !(delegation.digest instanceof Buffer)) return reject(DELEGATION_OUTCOMES.REJECTED_DISABLED);
+    if (typeof keyValue !== 'string' || keyValue.length === 0) return reject(DELEGATION_OUTCOMES.REJECTED_KEY_ABSENT);
+    // A repeated header reaches Node joined with ", ": that is not the key.
+    if (keyValue.length > SERVICE_KEY_MAX_LENGTH || !timingSafeEqual(digestOf(keyValue), delegation.digest)) {
+      return reject(DELEGATION_OUTCOMES.REJECTED_KEY_MISMATCH);
+    }
+    if (typeof visitorValue !== 'string' || visitorValue.length === 0) return reject(DELEGATION_OUTCOMES.REJECTED_VISITOR_ABSENT);
+    if (visitorValue === UNLISTED_VISITOR) return { attempted: true, outcome: DELEGATION_OUTCOMES.ACCEPTED_UNLISTED, clientAddress: null };
+    if (visitorValue.length > VISITOR_HEADER_MAX_LENGTH || parseAddressValue(visitorValue) === null) {
+      return reject(DELEGATION_OUTCOMES.REJECTED_VISITOR_INVALID);
+    }
+    return { attempted: true, outcome: DELEGATION_OUTCOMES.ACCEPTED, clientAddress: visitorValue };
+  } catch {
+    return reject(DELEGATION_OUTCOMES.REJECTED_VISITOR_INVALID);
+  }
+}
+
 function closed(configured, reason) {
   return { mode: 'closed', configured, reason, authorisationRef: null, allowlist: null, allowlistEntries: 0 };
 }
@@ -394,12 +533,15 @@ export function decideRecruitmentAudience(access, clientAddress) {
  * it holds no address and no configured value except a well-formed decision
  * identifier, which is public by nature.
  */
-export function describeRecruitmentAccess(access) {
+export function describeRecruitmentAccess(access, delegation) {
   return {
     recruitmentMode: access?.mode ?? 'closed',
     recruitmentConfiguration: access?.configured ?? 'absent',
     recruitmentReason: access?.reason ?? RECRUITMENT_REASONS.MODE_ABSENT,
     recruitmentAuthorisation: access?.authorisationRef ?? null,
     recruitmentAllowlistEntries: access?.allowlistEntries ?? 0,
+    // C6-T2: whether delegated reads can be verified, and why not. Never the key.
+    recruitmentDelegation: delegation?.enabled === true ? 'enabled' : 'disabled',
+    recruitmentDelegationReason: delegation?.reason ?? DELEGATION_REASONS.KEY_ABSENT,
   };
 }

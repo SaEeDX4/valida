@@ -7,6 +7,7 @@ import { CANONICAL_ORIGIN, resolveSeoConfig } from '../src/seo/siteConfig.js';
 import { startDocumentServer } from './documentServer.js';
 import { createJobsClient } from './jobsClient.js';
 import { resolveJobApiPreloadBase } from './renderDocument.js';
+import { isUsableServiceKey, parseTrustedHops } from './visitorAddress.js';
 
 /**
  * Serves a production build with the C4 document behaviour (documentServer.js).
@@ -25,6 +26,17 @@ import { resolveJobApiPreloadBase } from './renderDocument.js';
  *                         Detail and Apply documents (renderDocument.js
  *                         jobApiPreloadTag). The hint always uses the API
  *                         base compiled into the build, never --api-origin.
+ *
+ * Environment (C6-T2; read from the environment, never from the command line,
+ * so the key is not visible in a process list):
+ *   TRUST_PROXY           "false" (default) or the number of proxy hops in
+ *                         front of this server, 1-10 — the same variable and
+ *                         rule as the backend's. Anything else: refused.
+ *   INTERNAL_SERVICE_KEY  the secret shared with the API, 32-512 visible ASCII
+ *                         characters. With none, or an unusable one, the
+ *                         server still starts; its Jobs reads are then
+ *                         unauthenticated, and the API answers every one of
+ *                         them with the unlisted (public) view.
  *
  * The SEO configuration (canonical origin, indexable or not) is NOT taken from
  * this process's environment: it is read from the build's valida-seo.json, so
@@ -64,12 +76,20 @@ if (manifest.indexing === true && !config.siteOrigin) {
   fail(`the build is indexable but has no valid canonical origin (${config.siteProblem}; only ${CANONICAL_ORIGIN} is accepted)`);
 }
 
+const trustedHops = parseTrustedHops(process.env.TRUST_PROXY);
+if (trustedHops === null) fail('TRUST_PROXY must be "false" or a hop count from 1 to 10');
+const serviceKey = process.env.INTERNAL_SERVICE_KEY;
+const keyState = serviceKey === undefined || serviceKey === '' ? 'absent' : isUsableServiceKey(serviceKey) ? 'usable' : 'unusable';
+
 const apiOrigin = values['api-origin'] ?? manifest.apiBaseUrl;
 let jobs;
 try {
-  jobs = createJobsClient({ apiOrigin });
+  jobs = createJobsClient({ apiOrigin, serviceKey });
 } catch {
   fail('an API origin is required (--api-origin), scheme, host and port only');
+}
+if (keyState !== 'usable') {
+  process.stderr.write(`serve: INTERNAL_SERVICE_KEY is ${keyState}: Jobs reads are unauthenticated and the API will give every visitor the public view\n`);
 }
 
 const port = Number(values.port);
@@ -77,7 +97,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) fail('--port must be a 
 
 const log = values.quiet ? () => {} : (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`);
 const jobApiPreloadBase = values['no-job-preload'] ? null : resolveJobApiPreloadBase(manifest.apiBaseUrl);
-const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, host: values.host, port, log });
+const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, trustedHops, host: values.host, port, log });
 const address = server.address();
 process.stdout.write(
   `READY ${JSON.stringify({
@@ -88,6 +108,10 @@ process.stdout.write(
     siteOrigin: config.siteOrigin,
     apiOrigin: jobs.origin,
     jobApiPreload: jobApiPreloadBase === null ? null : `${jobApiPreloadBase}/api/v1/jobs/{slug}`,
+    trustProxy: trustedHops,
+    // Whether reads are authenticated, and why not — never the key.
+    delegation: jobs.delegation,
+    serviceKey: keyState,
   })}\n`,
 );
 

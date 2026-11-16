@@ -126,22 +126,38 @@ function safeDecode(segment) {
  * Status and head input for a route. `jobs` is the server-side Jobs client
  * (jobsClient.js); it is only called for the two Job routes.
  */
-export async function resolveRouteHead(route, { jobs }) {
+export async function resolveRouteHead(route, { jobs, visitor = null }) {
   if (route.kind === 'static') return { status: 200, input: STATIC_HEAD_BY_PATH[route.path] };
   if (route.kind === 'notFound') return { status: 404, input: NOT_FOUND_HEAD };
 
   const slug = safeDecode(route.slug);
-  const result = slug === null ? { outcome: JOB_OUTCOME.NOT_FOUND } : await jobs.getJob(slug);
+  // C6-T2: the read is made for this visitor (jobsClient.js); the API decides what it may see.
+  const result = slug === null ? { outcome: JOB_OUTCOME.NOT_FOUND, tester: false } : await jobs.getJob(slug, { visitor });
+  const tester = result.tester === true;
 
   if (route.kind === 'job') {
-    if (result.outcome === JOB_OUTCOME.OK) return { status: 200, input: jobDetailHead(result.job), job: result.job };
-    if (result.outcome === JOB_OUTCOME.NOT_FOUND) return { status: 404, input: NOT_FOUND_HEAD };
-    return { status: 503, input: JOB_ERROR_HEAD };
+    if (result.outcome === JOB_OUTCOME.OK) return { status: 200, input: jobDetailHead(result.job), job: result.job, tester };
+    if (result.outcome === JOB_OUTCOME.NOT_FOUND) return { status: 404, input: NOT_FOUND_HEAD, tester };
+    return { status: 503, input: JOB_ERROR_HEAD, tester: false };
   }
   // Apply
-  if (result.outcome === JOB_OUTCOME.OK) return { status: 200, input: applyHead(result.job), job: result.job };
-  if (result.outcome === JOB_OUTCOME.NOT_FOUND) return { status: 404, input: APPLY_PENDING_HEAD };
-  return { status: 503, input: APPLY_PENDING_HEAD };
+  if (result.outcome === JOB_OUTCOME.OK) return { status: 200, input: applyHead(result.job), job: result.job, tester };
+  if (result.outcome === JOB_OUTCOME.NOT_FOUND) return { status: 404, input: APPLY_PENDING_HEAD, tester };
+  return { status: 503, input: APPLY_PENDING_HEAD, tester: false };
+}
+
+/**
+ * C6-T2 — the documents whose content depends on who asks, through the
+ * recruitment mode and the tester allowlist: Careers (the entry to the
+ * recruitment flow), Job Detail and Apply. In every mode and for every
+ * answer — 200, 404 or 503 — they are `private, no-store`, so no cache, shared
+ * or private, keeps one visitor's document for another. The document server
+ * never sends ETag or Last-Modified and never answers 304, so no conditional
+ * request can revalidate a copy either. Other documents keep `no-cache`.
+ */
+export const RECRUITMENT_DOCUMENT_CACHE_CONTROL = 'private, no-store';
+export function isRecruitmentRoute(route) {
+  return route.kind === 'job' || route.kind === 'apply' || (route.kind === 'static' && route.path === '/careers');
 }
 
 /**
@@ -208,16 +224,20 @@ export function injectHead(template, head, extra = '') {
  * Renders the document for a canonical path.
  * Returns { status, headers, body, head, route, preload } — `head`, `route` and `preload` for tests and evidence.
  */
-export async function renderDocument(pathname, { template, config, jobs, jobApiPreloadBase = null }) {
+export async function renderDocument(pathname, { template, config, jobs, jobApiPreloadBase = null, visitor = null }) {
   const route = matchRoute(pathname);
-  const resolved = await resolveRouteHead(route, { jobs });
+  const resolved = await resolveRouteHead(route, { jobs, visitor });
   const head = describeHead(resolved.input, config);
   const headers = {
     'content-type': 'text/html; charset=utf-8',
     // Doc 16 section 209: documents are revalidated, so a release is never stuck behind an old shell.
-    'cache-control': 'no-cache',
+    // C6-T2: the recruitment documents are never stored at all.
+    'cache-control': isRecruitmentRoute(route) ? RECRUITMENT_DOCUMENT_CACHE_CONTROL : 'no-cache',
     'x-content-type-options': 'nosniff',
   };
+  // C6-T2: the T1 diagnostic, carried through — only when the API answered
+  // the delegated read with the tester view for THIS visitor.
+  if (resolved.tester === true) headers['x-valida-audience'] = 'tester';
   // The same directive as the meta tag, for clients that read only headers.
   if (head.robots) headers['x-robots-tag'] = head.robots;
   if (resolved.status === 503) headers['retry-after'] = '60';

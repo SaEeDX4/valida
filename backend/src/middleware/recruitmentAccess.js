@@ -1,5 +1,12 @@
 import { applicationJobNotFound, notFound } from '../errors/AppError.js';
-import { RECRUITMENT_AUDIENCE, decideRecruitmentAudience, establishClientAddress } from '../config/recruitmentAccess.js';
+import {
+  DELEGATION_OUTCOMES,
+  DISABLED_SERVICE_DELEGATION,
+  RECRUITMENT_AUDIENCE,
+  decideRecruitmentAudience,
+  establishClientAddress,
+  readDelegatedVisitor,
+} from '../config/recruitmentAccess.js';
 
 /**
  * The recruitment access gate — Milestone C6, task C6-T1 (see
@@ -23,6 +30,9 @@ import { RECRUITMENT_AUDIENCE, decideRecruitmentAudience, establishClientAddress
  *      limiters keep using req.ip, unchanged. The controllers act on that record and treat a MISSING
  *      record as "none", so a route that is ever mounted without this gate is
  *      closed, not open.
+ *   1b. C6-T2: a request with the delegation headers of the document server is
+ *      decided from the visitor it names, after the key is verified; see
+ *      readDelegatedVisitor in config/recruitmentAccess.js.
  *   2. For a listed tester in `testers` mode, adds `X-Valida-Audience: tester`.
  *      It gives a visible difference to test against before any Job exists,
  *      and is sent to no one else.
@@ -66,22 +76,51 @@ export function submissionNotAvailable() {
   return error;
 }
 
-export function recruitmentAccessGate({ access, trustedHops = false }) {
+/**
+ * @param {object} options
+ * @param {object} options.access       config.recruitment (config/recruitmentAccess.js)
+ * @param {false|number} options.trustedHops  the validated TRUST_PROXY
+ * @param {object} [options.delegation] config.serviceDelegation (C6-T2): INTERNAL_SERVICE_KEY, resolved
+ * @param {function} [options.onDelegationRejected]  called with { outcome } for a rejected delegation; it carries no header value
+ */
+export function recruitmentAccessGate({ access, trustedHops = false, delegation = DISABLED_SERVICE_DELEGATION, onDelegationRejected = () => {} }) {
   return function recruitmentAccessMiddleware(req, res, next) {
     let audience = RECRUITMENT_AUDIENCE.NONE;
+    let outcome = DELEGATION_OUTCOMES.NOT_ATTEMPTED;
     try {
-      const clientAddress = establishClientAddress({
-        trustedHops,
-        socketAddress: req.socket?.remoteAddress,
-        forwardedFor: req.headers?.['x-forwarded-for'],
-      });
+      /*
+       * C6-T2 — a request carrying either delegation header is decided ONLY
+       * from the delegated visitor (or as unlisted when the delegation is not
+       * valid), never from its own socket or forwarding chain: the document
+       * server's own address may be listed. A request with neither header is
+       * a direct one, decided exactly as in T1.
+       */
+      const delegated = readDelegatedVisitor({ delegation, method: req.method, headers: req.headers });
+      outcome = delegated.outcome;
+      const clientAddress = delegated.attempted
+        ? delegated.clientAddress
+        : establishClientAddress({
+            trustedHops,
+            socketAddress: req.socket?.remoteAddress,
+            forwardedFor: req.headers?.['x-forwarded-for'],
+          });
       audience = decideRecruitmentAudience(access, clientAddress);
+      // A delegation grants no submission, in any mode: a delegated request
+      // with a body is refused like an unlisted client's.
+      if (outcome === DELEGATION_OUTCOMES.REJECTED_METHOD) audience = RECRUITMENT_AUDIENCE.NONE;
     } catch {
-      // Both functions are total; if reading the request itself throws, the
-      // request is answered as closed.
+      // Every function above is total; if reading the request itself throws,
+      // the request is answered as closed.
       audience = RECRUITMENT_AUDIENCE.NONE;
     }
-    req[RECRUITMENT_ACCESS] = Object.freeze({ audience });
+    req[RECRUITMENT_ACCESS] = Object.freeze({ audience, delegation: outcome });
+    if (outcome.startsWith('REJECTED_')) {
+      try {
+        onDelegationRejected({ outcome });
+      } catch {
+        // logging must never change the answer
+      }
+    }
 
     if (audience === RECRUITMENT_AUDIENCE.TESTER) res.set('X-Valida-Audience', 'tester');
 

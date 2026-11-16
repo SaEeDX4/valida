@@ -385,6 +385,9 @@ describe('the start-up description', () => {
       recruitmentReason: 'MODE_ABSENT',
       recruitmentAuthorisation: null,
       recruitmentAllowlistEntries: 0,
+      // C6-T2: no delegation object given — described as disabled.
+      recruitmentDelegation: 'disabled',
+      recruitmentDelegationReason: 'DELEGATION_KEY_ABSENT',
     });
     expect(describeRecruitmentAccess(resolveRecruitmentAccess({ mode: 'testers', allowlist: LISTED }))).toEqual({
       recruitmentMode: 'testers',
@@ -392,6 +395,8 @@ describe('the start-up description', () => {
       recruitmentReason: 'MODE_TESTERS',
       recruitmentAuthorisation: null,
       recruitmentAllowlistEntries: 2,
+      recruitmentDelegation: 'disabled',
+      recruitmentDelegationReason: 'DELEGATION_KEY_ABSENT',
     });
     expect(describeRecruitmentAccess(resolveRecruitmentAccess({ mode: 'public', authorisation: OD, appEnv: 'production' }))).toEqual({
       recruitmentMode: 'public',
@@ -399,6 +404,9 @@ describe('the start-up description', () => {
       recruitmentReason: 'MODE_PUBLIC',
       recruitmentAuthorisation: OD,
       recruitmentAllowlistEntries: 0,
+      // C6-T2: no delegation object given — described as disabled.
+      recruitmentDelegation: 'disabled',
+      recruitmentDelegationReason: 'DELEGATION_KEY_ABSENT',
     });
   });
 

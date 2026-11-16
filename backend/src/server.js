@@ -174,7 +174,7 @@ export async function startServer({
    * value: the allowlist entry is a count, the reason a fixed code. The field
    * names are prefixed so that they cannot be mistaken for another line's.
    */
-  const recruitment = describeRecruitmentAccess(config.recruitment);
+  const recruitment = describeRecruitmentAccess(config.recruitment, config.serviceDelegation);
   logger[recruitment.recruitmentConfiguration === 'invalid' ? 'warn' : 'info'](recruitment, 'recruitment access');
 
   /*

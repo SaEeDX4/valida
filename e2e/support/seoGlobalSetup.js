@@ -12,6 +12,7 @@ import {
   SEO_BACKEND_ORIGIN, SEO_BACKEND_PORT, SEO_INDEXED_ORIGIN, SEO_INDEXED_PORT, SEO_REVIEW_ORIGIN, SEO_REVIEW_PORT,
   SEO_SITE_URL, seoBackendEnvironment,
 } from './seoStack.js';
+import { documentServerEnvironment } from './stackConfig.js';
 
 /**
  * Starts the C4 SEO stack, once per run (playwright.seo.config.js):
@@ -147,7 +148,7 @@ export default async function seoGlobalSetup() {
     for (const [name, outDir, port] of [['indexed', dirs.dist, SEO_INDEXED_PORT], ['review', dirs.distReview, SEO_REVIEW_PORT]]) {
       const child = startNode([serve, '--dist', outDir, '--host', '127.0.0.1', '--port', String(port), '--api-origin', SEO_BACKEND_ORIGIN], {
         cwd: FRONTEND_DIR,
-        env: baseEnvironment(),
+        env: documentServerEnvironment(),
         logFile: path.join(dirs.logs, `documents-${name}.log`),
       });
       children.push(child);

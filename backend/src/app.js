@@ -10,7 +10,8 @@ import { apiNotFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { noStore } from './middleware/noStore.js';
 import { recruitmentAccessGate } from './middleware/recruitmentAccess.js';
-import { CLOSED_RECRUITMENT_ACCESS } from './config/recruitmentAccess.js';
+import { CLOSED_RECRUITMENT_ACCESS, DISABLED_SERVICE_DELEGATION } from './config/recruitmentAccess.js';
+import { noValidators } from './middleware/noValidators.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
 import { jobsRouter } from './modules/jobs/job.routes.js';
@@ -169,6 +170,9 @@ export function createApp({
    * limiter, which end the request before the Jobs router is reached.
    */
   app.use(`${API_BASE_PATH}/jobs`, noStore());
+  // C6-T2: Jobs responses depend on who asks. No ETag or Last-Modified is
+  // sent and no conditional request is answered 304 (middleware/noValidators.js).
+  app.use(`${API_BASE_PATH}/jobs`, noValidators());
 
   // 5. CORS, from the explicit allowlist.
   app.use(corsMiddleware(config.corsAllowedOrigins));
@@ -184,7 +188,14 @@ export function createApp({
    */
   app.use(
     `${API_BASE_PATH}/jobs`,
-    recruitmentAccessGate({ access: config.recruitment ?? CLOSED_RECRUITMENT_ACCESS, trustedHops: config.trustProxy ?? false }),
+    recruitmentAccessGate({
+      access: config.recruitment ?? CLOSED_RECRUITMENT_ACCESS,
+      trustedHops: config.trustProxy ?? false,
+      delegation: config.serviceDelegation ?? DISABLED_SERVICE_DELEGATION,
+      // C6-T2: a rejected delegated read is logged by its fixed reason code
+      // only — never a header value, a key or an address.
+      onDelegationRejected: ({ outcome }) => logger.warn({ event: 'recruitment.delegation_rejected', outcome }, 'delegated Jobs read rejected'),
+    }),
   );
 
   // 6. JSON body parsing with the general 100 KB limit. A malformed body or an

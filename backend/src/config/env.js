@@ -3,7 +3,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { resolveRecruitmentAccess } from './recruitmentAccess.js';
+import { parseTrustedHops, resolveRecruitmentAccess, resolveServiceDelegation } from './recruitmentAccess.js';
 import { parseMongoUri } from '../db/connectionString.js';
 import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
@@ -106,14 +106,12 @@ const originList = z
 const trustProxy = z
   .string()
   .default('false')
+  // C6-T2: the rule now lives in config/recruitmentAccess.js (parseTrustedHops),
+  // shared with the frontend document server. It is the same rule as before.
   .superRefine((value, ctx) => {
-    if (value === 'false') return;
-    const hops = Number(value);
-    if (!Number.isInteger(hops) || hops < 1 || hops > 10) {
-      ctx.addIssue({ code: 'custom', message: 'TRUST_PROXY_INVALID' });
-    }
+    if (parseTrustedHops(value) === null) ctx.addIssue({ code: 'custom', message: 'TRUST_PROXY_INVALID' });
   })
-  .transform((value) => (value === 'false' ? false : Number(value)));
+  .transform((value) => parseTrustedHops(value));
 
 /**
  * MONGODB_URI — Milestone B2.
@@ -1021,6 +1019,16 @@ export function loadConfig(env = process.env) {
       allowlist: env?.ACCESS_ALLOWLIST,
       appEnv: config.APP_ENV,
     }),
+    /*
+     * C6-T2 — INTERNAL_SERVICE_KEY, the secret the document server presents
+     * when it reads a Job on a visitor's behalf (config/recruitmentAccess.js,
+     * "DELEGATION"). Read from the raw environment for the same reason as the
+     * three variables above: an absent or unusable key must never stop the
+     * backend; it disables delegation, which gives every delegated read the
+     * unlisted view. Only a digest is kept, non-enumerable: the key is in no
+     * serialised view.
+     */
+    serviceDelegation: resolveServiceDelegation({ key: env?.INTERNAL_SERVICE_KEY }),
     port: config.PORT,
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,

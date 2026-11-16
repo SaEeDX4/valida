@@ -282,7 +282,14 @@ function startupProbe(label, command, cwd, env) {
       resolve({ outcome, output: sanitise(output), opened });
     };
     const poll = setInterval(async () => {
-      if (await portOpen(PORT.probe)) opened = true;
+      if (await portOpen(PORT.probe)) {
+        opened = true;
+        // `node src/server.js` (npm start) prints no READY line: a listening port is the start.
+        if (!ready) {
+          ready = true;
+          child.kill('SIGTERM');
+        }
+      }
     }, 25);
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
@@ -368,6 +375,10 @@ try {
     ['S8', 'api', 'review, private, a list broader than /8', { ...REVIEW_API, SITE_ACCESS: 'private', ACCESS_ALLOWLIST: '198.0.0.0/7' }, 'refused', 'ACCESS_ALLOWLIST'],
     ['S9', 'api', 'production, private', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: ALLOWLIST }, 'refused', 'SITE_ACCESS'],
     ['S10', 'api', 'local, "Private" (wrong case)', { APP_ENV: 'local', NODE_ENV: 'development', SITE_ACCESS: 'Private', ACCESS_ALLOWLIST: ALLOWLIST }, 'refused', 'SITE_ACCESS'],
+    // Correction 1 (plan 4.6.2): production requires the explicit literal "public".
+    ['S20', 'api', 'production, SITE_ACCESS absent', { APP_ENV: 'production', NODE_ENV: 'production' }, 'refused', 'SITE_ACCESS'],
+    ['S21', 'api', 'production, SITE_ACCESS empty', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: '' }, 'refused', 'SITE_ACCESS'],
+    ['S22', 'api', 'production, public, RECRUITMENT_MODE=public without its authorisation (independent: starts, recruitment closed)', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: 'public', RECRUITMENT_MODE: 'public' }, 'started'],
   ];
   const SITE_STARTUP = [
     ['S11', 'documents', 'local, SITE_ACCESS absent, indexable build', 'indexed', { }, 'started'],
@@ -379,6 +390,8 @@ try {
     ['S17', 'documents', 'review, private, an indexable build', 'indexed', { APP_ENV: 'review', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: ALLOWLIST }, 'refused', 'APP_ENV'],
     ['S18', 'documents', 'production, private', 'indexed', { APP_ENV: 'production', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: ALLOWLIST }, 'refused', 'SITE_ACCESS'],
     ['S19', 'documents', 'local, " private" (padded)', 'review', { SITE_ACCESS: ' private', ACCESS_ALLOWLIST: ALLOWLIST }, 'refused', 'SITE_ACCESS'],
+    ['S23', 'documents', 'production, SITE_ACCESS absent', 'indexed', { APP_ENV: 'production' }, 'refused', 'SITE_ACCESS'],
+    ['S24', 'documents', 'production, SITE_ACCESS empty', 'indexed', { APP_ENV: 'production', SITE_ACCESS: '' }, 'refused', 'SITE_ACCESS'],
   ];
   for (const [id, service, label, extra, expected, variable] of STARTUP) {
     const probe = await startupProbe(`${id}-api`, [launcher], BACKEND_DIR, apiProbe(extra));
@@ -389,6 +402,20 @@ try {
     const probe = await startupProbe(`${id}-documents`, [serve, '--dist', dist[build], '--host', '127.0.0.1', '--port', String(PORT.probe), '--api-origin', SERVICE], FRONTEND_DIR, siteProbe(extra));
     const ok = expected === 'started' ? probe.outcome === 'started' : probe.outcome.startsWith('refused') && !probe.opened && probe.output.includes(variable) && !probe.output.includes('203.0.113');
     check(id, 'start-up', `${service}: ${label}`, expected === 'started' ? 'starts' : `refused before listening, naming ${variable}, no value printed`, { outcome: probe.outcome, portEverOpened: probe.opened, log: `startup/${id}-documents.log` }, ok);
+  }
+
+  // The backend's own entry point, exactly as `npm start` runs it (node src/server.js), not the e2e launcher.
+  const ENTRY = [
+    ['S25', 'production, SITE_ACCESS absent', { APP_ENV: 'production', NODE_ENV: 'production' }, 'refused', 'SITE_ACCESS'],
+    ['S26', 'production, SITE_ACCESS empty', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: '' }, 'refused', 'SITE_ACCESS'],
+    ['S27', 'production, public (positive control)', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: 'public' }, 'started'],
+    ['S28', 'local, SITE_ACCESS absent (the accepted default)', { APP_ENV: 'local', NODE_ENV: 'development' }, 'started'],
+    ['S29', 'review, private, valid list', { ...REVIEW_API, SITE_ACCESS: 'private', ACCESS_ALLOWLIST: ALLOWLIST }, 'started'],
+  ];
+  for (const [id, label, extra, expected, variable] of ENTRY) {
+    const probe = await startupProbe(`${id}-api-npm-start`, ['src/server.js'], BACKEND_DIR, apiProbe(extra));
+    const ok = expected === 'started' ? probe.outcome === 'started' && probe.opened : probe.outcome.startsWith('refused') && !probe.opened && probe.output.includes(variable) && !probe.output.includes('203.0.113');
+    check(id, 'start-up', `api via node src/server.js (npm start): ${label}`, expected === 'started' ? 'listens' : `refused before listening, naming ${variable}, no value printed`, { outcome: probe.outcome, portEverOpened: probe.opened, log: `startup/${id}-api-npm-start.log` }, ok);
   }
 
   /* ========================================= R: PRIVATE REVIEW ======= */

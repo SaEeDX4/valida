@@ -43,7 +43,8 @@ import { describeSiteAccess, resolveDocumentSiteAccess } from './siteAccess.js';
  *                         backend/src/config/siteAccess.js). Review requires
  *                         private with a valid ACCESS_ALLOWLIST and a build
  *                         with indexing disabled; production requires public;
- *                         absent is public outside review. A wrong or unsafe
+ *                         production requires public written explicitly;
+ *                         absent is public only in a local run. A wrong or unsafe
  *                         combination: refused, before listening.
  *   ACCESS_ALLOWLIST      the addresses admitted to a private site (the API's
  *                         list and range policy). Never printed.

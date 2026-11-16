@@ -441,6 +441,8 @@ describe('public — everyone, exactly as accepted, and no tester header', () =>
       PORT: '4100',
       MONGODB_URI: OFFLINE_TEST_MONGODB_URI,
       CORS_ALLOWED_ORIGINS: 'https://qa-valida.example.test',
+      // C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+      SITE_ACCESS: 'public',
       RECRUITMENT_MODE: 'public',
       RECRUITMENT_PUBLIC_AUTHORISATION: OD,
     });

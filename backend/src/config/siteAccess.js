@@ -28,9 +28,13 @@ import {
  * service refuses to start, before it listens, with a fixed problem code:
  *
  *   APP_ENV       SITE_ACCESS absent   "public"            "private"
+ *                 or empty
  *   local         public (default)     public              private (needs a valid list)
  *   review        REFUSED              REFUSED             private (needs a valid list)
- *   production    public (default)     public              REFUSED
+ *   production    REFUSED              public              REFUSED
+ *
+ *   Production requires the explicit literal "public" (correction 1, plan
+ *   4.6.2): the public site is never the result of a missing variable.
  *
  *   Any value other than exactly "private" or "public" (case, padding, a
  *   typo) is refused in every environment. "private" with an absent or
@@ -57,7 +61,7 @@ export const SITE_ACCESS_PROBLEM_TEXT = Object.freeze({
   APP_ENV_INVALID: 'APP_ENV must be one of: local, review, production',
   SITE_ACCESS_INVALID: 'SITE_ACCESS must be exactly "private" or "public"',
   REVIEW_REQUIRES_PRIVATE: 'APP_ENV=review requires SITE_ACCESS=private',
-  PRODUCTION_REQUIRES_PUBLIC: 'APP_ENV=production requires SITE_ACCESS=public',
+  PRODUCTION_REQUIRES_PUBLIC: 'APP_ENV=production requires SITE_ACCESS=public, written explicitly',
   PRIVATE_ALLOWLIST_ABSENT: 'SITE_ACCESS=private requires ACCESS_ALLOWLIST',
   PRIVATE_ALLOWLIST_INVALID: 'SITE_ACCESS=private requires a valid ACCESS_ALLOWLIST (C6-T1 range policy)',
 });
@@ -92,9 +96,11 @@ export function resolveSiteAccess({ siteAccess, allowlist, appEnv = 'local' } = 
     if (!absent && (typeof siteAccess !== 'string' || !SITE_ACCESS_MODES.includes(siteAccess))) {
       return refused(SITE_ACCESS_PROBLEMS.SITE_ACCESS_INVALID);
     }
+    // Only a local run has a default (public). Review requires "private" and
+    // production requires "public", each written explicitly.
+    if (appEnv === 'review' && siteAccess !== 'private') return refused(SITE_ACCESS_PROBLEMS.REVIEW_REQUIRES_PRIVATE);
+    if (appEnv === 'production' && siteAccess !== 'public') return refused(SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC);
     const mode = absent ? 'public' : siteAccess;
-    if (appEnv === 'review' && mode !== 'private') return refused(SITE_ACCESS_PROBLEMS.REVIEW_REQUIRES_PRIVATE);
-    if (appEnv === 'production' && mode !== 'public') return refused(SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC);
 
     let ranges = null;
     let allowlistEntries = 0;

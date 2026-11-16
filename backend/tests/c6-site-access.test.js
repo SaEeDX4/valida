@@ -121,7 +121,10 @@ describe('configuration — APP_ENV x SITE_ACCESS x ACCESS_ALLOWLIST', () => {
     ['review', 'public', LIST, SITE_ACCESS_PROBLEMS.REVIEW_REQUIRES_PRIVATE],
     ['review', 'private', undefined, SITE_ACCESS_PROBLEMS.PRIVATE_ALLOWLIST_ABSENT],
     ['review', 'private', '10.0.0.0/7', SITE_ACCESS_PROBLEMS.PRIVATE_ALLOWLIST_INVALID],
-    ['production', undefined, undefined, 'public'],
+    // Correction 1 (plan 4.6.2): production requires the explicit literal "public".
+    ['production', undefined, undefined, SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC],
+    ['production', '', undefined, SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC],
+    ['production', 'public', undefined, 'public'],
     ['production', 'public', LIST, 'public'],
     ['production', 'private', LIST, SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC],
     ['local', 'Private', LIST, SITE_ACCESS_PROBLEMS.SITE_ACCESS_INVALID],
@@ -152,6 +155,8 @@ describe('configuration — APP_ENV x SITE_ACCESS x ACCESS_ALLOWLIST', () => {
     ['review private without a list', { ...reviewBase, SITE_ACCESS: 'private' }, 'ACCESS_ALLOWLIST'],
     ['review private with a list that breaks the range policy', { ...reviewBase, SITE_ACCESS: 'private', ACCESS_ALLOWLIST: '198.51.100.250/4' }, 'ACCESS_ALLOWLIST'],
     ['production private', { ...reviewBase, APP_ENV: 'production', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: REMOTE_LIST }, 'SITE_ACCESS'],
+    ['production without SITE_ACCESS', { ...reviewBase, APP_ENV: 'production' }, 'SITE_ACCESS'],
+    ['production with an empty SITE_ACCESS', { ...reviewBase, APP_ENV: 'production', SITE_ACCESS: '' }, 'SITE_ACCESS'],
     ['an invalid value', { ...base, SITE_ACCESS: 'priv4te-marker' }, 'SITE_ACCESS'],
   ])('loadConfig refuses %s, naming the variable and never the value', (_label, input, variable) => {
     let error;
@@ -195,6 +200,8 @@ describe('start-up refuses before listening', () => {
   it.each([
     ['review, no SITE_ACCESS', { APP_ENV: 'review', NODE_ENV: 'production' }],
     ['production, private', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: 'private', ACCESS_ALLOWLIST: REMOTE_LIST }],
+    ['production, SITE_ACCESS absent', { APP_ENV: 'production', NODE_ENV: 'production' }],
+    ['production, SITE_ACCESS empty', { APP_ENV: 'production', NODE_ENV: 'production', SITE_ACCESS: '' }],
     ['local, private without a list', { SITE_ACCESS: 'private' }],
   ])('%s: startServer rejects and the port is never bound', async (_label, extra) => {
     const port = await freePort();

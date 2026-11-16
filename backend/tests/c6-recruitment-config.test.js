@@ -312,6 +312,8 @@ describe('loadConfig — the three variables never stop the backend and never ap
     PORT: '4100',
     MONGODB_URI: OFFLINE_TEST_MONGODB_URI,
     CORS_ALLOWED_ORIGINS: 'https://qa-valida.example.test',
+    // C6-T3 correction 1: production requires SITE_ACCESS=public explicitly. RECRUITMENT_MODE stays independent of it.
+    SITE_ACCESS: 'public',
   };
 
   it('with none of them set, the configuration loads and recruitment is closed', () => {

@@ -11,7 +11,8 @@ import { loadConfig, ConfigurationError, checkLocalStorageRoot, APPLICATION_ROOT
  * and no failure message may echo the path.
  */
 const base = { NODE_ENV: 'development', APP_ENV: 'local', MONGODB_URI: 'mongodb://127.0.0.1:27017/valida_dev' };
-const production = { NODE_ENV: 'production', APP_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://valida.example', MONGODB_URI: 'mongodb://127.0.0.1:27017/valida' };
+// C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+const production = { NODE_ENV: 'production', APP_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://valida.example', MONGODB_URI: 'mongodb://127.0.0.1:27017/valida', SITE_ACCESS: 'public' };
 const privateRoot = path.resolve(APPLICATION_ROOT, '..', 'valida-private-storage-qa');
 
 const failureOf = (env) => {

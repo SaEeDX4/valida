@@ -209,7 +209,7 @@ node tests/diagnostics/localhost-addressing.mjs
 | `RECRUITMENT_MODE` | no | — (**closed**) | C6-T1. Exactly `closed`, `testers` or `public`. Anything else, or nothing, is `closed`. See "Recruitment access (C6-T1)" |
 | `ACCESS_ALLOWLIST` | with `testers` | — | C6-T1. Comma-separated addresses or CIDR ranges (IPv4, IPv6; 1–50). Never logged |
 | `RECRUITMENT_PUBLIC_AUTHORISATION` | with `public` | — | C6-T1. The owner decision that opens recruitment, as `OD-YYYY-MM-DD-NN` |
-| `SITE_ACCESS` | **yes, `private`, in review** | — (**public** outside review) | C6-T3. `private` or `public`, exactly. Review requires `private` with a valid `ACCESS_ALLOWLIST`; production requires `public`. A wrong or unsafe value **stops the backend** before it listens. See "Private site access (C6-T3)" |
+| `SITE_ACCESS` | **yes: `private` in review, `public` in production** | — (**public**, local only) | C6-T3. `private` or `public`, exactly. Review requires `private` with a valid `ACCESS_ALLOWLIST`; production requires `public`, written explicitly (C6-T3 correction 1). A wrong or unsafe value **stops the backend** before it listens. See "Private site access (C6-T3)" |
 | `INTERNAL_SERVICE_KEY` | no | — (delegation **disabled**) | C6-T2. The secret the document server presents when it reads Jobs on a visitor's behalf; 32–512 visible ASCII characters, no spaces. Absent or unusable: every delegated read gets the unlisted view. Server-only; never logged. See "Delegated Jobs reads (C6-T2)" |
 | `RATE_LIMIT_WINDOW_MS` | no | `60000` | Rate-limit window |
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
@@ -446,7 +446,7 @@ server.
 | --- | --- | --- | --- |
 | `local` | public (the development default) | public | private — needs a valid list |
 | `review` | **refused** | **refused** | private — needs a valid list |
-| `production` | public | public | **refused** |
+| `production` | **refused** (correction 1) | public | **refused** |
 
 Anything other than exactly `private` or `public` is refused everywhere. A
 refusal stops start-up before the socket is opened and names the variable and

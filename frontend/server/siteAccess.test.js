@@ -102,6 +102,9 @@ describe('start-up configuration', () => {
     [{ appEnv: 'local', siteAccess: 'private', allowlist: '203.0.113.0/24', indexing: true }, 'private'],
     [{ appEnv: 'review', siteAccess: 'private', allowlist: '203.0.113.0/24', indexing: false }, 'private'],
     [{ appEnv: 'production', siteAccess: 'public', indexing: true }, 'public'],
+    // Correction 1 (plan 4.6.2): production requires the explicit literal "public".
+    [{ appEnv: 'production', siteAccess: undefined, indexing: true }, SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC],
+    [{ appEnv: 'production', siteAccess: '', indexing: true }, SITE_ACCESS_PROBLEMS.PRODUCTION_REQUIRES_PUBLIC],
     [{ appEnv: 'review', siteAccess: 'private', allowlist: '203.0.113.0/24', indexing: true }, REVIEW_REQUIRES_NOINDEX_BUILD],
     [{ appEnv: 'review', siteAccess: undefined, indexing: false }, SITE_ACCESS_PROBLEMS.REVIEW_REQUIRES_PRIVATE],
     [{ appEnv: 'review', siteAccess: 'public', indexing: false }, SITE_ACCESS_PROBLEMS.REVIEW_REQUIRES_PRIVATE],

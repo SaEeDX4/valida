@@ -6,7 +6,7 @@
 | Authorised by | [Owner record 2026-11-16](OWNER_RECORD_2026-11-16_C6_T2_ACCEPTANCE_AND_C6_T3_AUTHORISATION.md), §2 — local implementation only; the three private-Review choices and the whole-site cache rule approved |
 | Builds on | C6-T1 ([OD-2026-11-15-01](OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md)) and C6-T2 ([record](C6_T2_VISITOR_AWARE_DOCUMENTS.md)), accepted at `faf4571` |
 | Recorded against | **Doc 13** (access control, fail-safe configuration), **Doc 15** (environment configuration), **Doc 09** / **Doc 11** (error code), **Doc 16** (caching, Review indexing), **Doc 17** (evidence) |
-| Status | Implemented and tested locally on `c6-work`. **Not accepted** — acceptance is the owner's, after Astra's review. Nothing pushed |
+| Status | Implemented and tested locally on `c6-work`; **correction 1** (production requires explicit `public`) applied. **Not accepted** — acceptance is the owner's, after Astra's review. Nothing pushed |
 
 ## 1. What was built
 
@@ -18,7 +18,7 @@ One module, `backend/src/config/siteAccess.js`, holds the configuration rule and
 | --- | --- | --- | --- |
 | `local` | public | public | private (a valid `ACCESS_ALLOWLIST` required) |
 | `review` | refused | refused | private (a valid list required) |
-| `production` | public | public | refused |
+| `production` | **refused** (correction 1) | public | refused |
 
 Any other value (wrong case, padding, a typo) is refused; `private` with an absent or invalid list (the T1 range policy) is refused; the document server also refuses `APP_ENV=review` with an indexable build. A refusal names the variable and a fixed rule, never the value. The local development workflow is unchanged: with nothing set, both services are public.
 
@@ -37,7 +37,7 @@ Any other value (wrong case, padding, a typo) is refused; `private` with an abse
 
 | Detail | What was built | Why |
 | --- | --- | --- |
-| `SITE_ACCESS` absent in production | Treated as `public` (as in local); only review requires an explicit value | "Production requires public": an absent value cannot make production private. Requiring the variable explicitly in production is a one-line change if preferred |
+| `SITE_ACCESS` absent or empty in production | **Correction 1:** refused at start-up in both services, like `private` or an invalid value. Only the explicit literal `public` starts production. A local run keeps its public default; Review keeps requiring `private`; `RECRUITMENT_MODE` is independent | C6 plan r3 §4.6.2: "With `APP_ENV=production` both refuse to start with any other value". The original implementation (`5272c08`) defaulted an absent value to `public`; Astra/the owner returned it for this correction |
 | The allowlist | The same `ACCESS_ALLOWLIST` as `testers` | Plan §4.6: one list per environment; Review uses `testers` with it |
 | A Review document server without `INTERNAL_SERVICE_KEY` | Starts (as in T2); its Job-page reads are then rejected delegations, so the API denies them and Job Detail/Apply documents are 503 for listed testers | Consistent with "a rejected delegation is denied"; the start-up warning of T2 says so. Careers and static pages are unaffected |
 | `/healthz` in public mode | Also 200, empty, `no-store` | The host's health check needs the same path in Review and Production |

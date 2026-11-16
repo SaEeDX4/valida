@@ -136,7 +136,8 @@ afterEach(async () => {
 });
 
 const LOCAL = { NODE_ENV: 'test', APP_ENV: 'local', PORT: '4100', MONGODB_URI: TEST_URI, CORS_ALLOWED_ORIGINS: 'http://localhost:5173' };
-const PRODUCTION = { NODE_ENV: 'production', APP_ENV: 'production', PORT: '4100', MONGODB_URI: TEST_URI, CORS_ALLOWED_ORIGINS: 'https://qa-valida.example.test' };
+// C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+const PRODUCTION = { NODE_ENV: 'production', APP_ENV: 'production', PORT: '4100', MONGODB_URI: TEST_URI, CORS_ALLOWED_ORIGINS: 'https://qa-valida.example.test', SITE_ACCESS: 'public' };
 
 /**
  * The configurations under test, each produced by the REAL loader from an

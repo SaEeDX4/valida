@@ -247,6 +247,8 @@ async function startApi({ mode, production = false, key = KEY, label }) {
     RECRUITMENT_MODE: mode,
     ACCESS_ALLOWLIST: ALLOWLIST,
     RECRUITMENT_PUBLIC_AUTHORISATION: production ? FIXTURE_AUTHORISATION : '',
+    // C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+    ...(production ? { SITE_ACCESS: 'public' } : {}),
     ...(key ? { INTERNAL_SERVICE_KEY: key } : {}),
     ...(production ? {} : { RESUME_STORAGE_DRIVER: 'local', RESUME_STORAGE_LOCAL_ROOT: storage }),
     TRANSACTIONAL_EMAIL_PROVIDER: 'none',

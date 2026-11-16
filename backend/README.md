@@ -219,7 +219,13 @@ node tests/diagnostics/localhost-addressing.mjs
 | `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4` / `verify:b5` / `verify:b6`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
 | `MONGODB_TEST_DISPOSABLE_TOPOLOGY` | tests only (B7) | unset | `1` lets the suppression read-preference cases RP-4 and RP-5 step the replica set's primary down and pause a secondary's replication. **Set it only for a replica set created for the test.** Unset, those two cases report NOT RUN |
 | `MONGODB_TEST_PARTITION_NODES` | tests only (B7 r6) | unset | Three `127.0.0.1:<port>` addresses of **fresh, disposable** `mongod --replSet rs2 --setParameter enableTestCommands=1` processes, comma-separated. Lets the stale-primary cases SP-1…SP-3 (`tests/db/b7-suppression-stale-primary.test.js`) initiate `rs2` behind a TCP partition bridge (each member at its port + 1000) and partition it. `MONGODB_TEST_URI` must then name the bridge addresses with `replicaSet=rs2`. A set already initiated with other members is refused. Unset, those cases report NOT RUN |
-| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. The production provider is selected at deployment (C6, AWAITING INPUT) |
+| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `s3` (C6-T4, S3-compatible private object storage — any environment), `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. There is never a fallback from `s3` to disk |
+| `RESUME_STORAGE_S3_ENDPOINT` | with `s3` | — | C6-T4. The S3 API origin only (`https://host[:port]`; no credentials, path or query). **`https` is required**; plain `http` is accepted only for a loopback test endpoint with `APP_ENV=local` and `NODE_ENV` not production |
+| `RESUME_STORAGE_S3_REGION` | with `s3` | — | C6-T4. The signing region, e.g. `eu-central-1`, or `auto` where the provider says so |
+| `RESUME_STORAGE_S3_BUCKET` | with `s3` | — | C6-T4. The private bucket for this environment only |
+| `RESUME_STORAGE_S3_ACCESS_KEY_ID` / `RESUME_STORAGE_S3_SECRET_ACCESS_KEY` | with `s3` | — | C6-T4. **Secrets.** A credential scoped to object put, read (head), delete and list in that bucket only (Doc 13 §101). Held non-enumerably; in no log, error or configuration view |
+| `RESUME_STORAGE_S3_URL_STYLE` | no | `path` | C6-T4. `path` or `virtual` (bucket in the host name) |
+| `RESUME_STORAGE_S3_TIMEOUT_MS` | no | `15000` | C6-T4. Timeout of one storage request, 1000–120000 ms |
 | `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
 | `APPLICATION_RATE_LIMIT_WINDOW_MS` | no (B5) | `900000` | 1000–86400000. Apply rate-limit window (Doc 09 section 34: 15 minutes) |
 | `APPLICATION_RATE_LIMIT_MAX` | no (B5) | `10` | 1–100000. Apply **attempts** per window per client IP — counted separately from, and in addition to, the general limit |
@@ -1476,6 +1482,65 @@ lookup and on every race path that answers with the winner. A record visible to
 an ordinary read but not (yet) majority-confirmed is answered `503`
 (`application_replay_unconfirmed`), with nothing stored for the request; the
 same key replays once the record is confirmed.
+
+### S3-compatible storage (C6-T4)
+
+Record: [`docs/review/OWNER_RECORD_2026-11-16_C6_T3_ACCEPTANCE_AND_C6_T4_AUTHORISATION.md`](../docs/review/OWNER_RECORD_2026-11-16_C6_T3_ACCEPTANCE_AND_C6_T4_AUTHORISATION.md) (authorisation).
+
+`RESUME_STORAGE_DRIVER=s3` selects `integrations/storage/s3PrivateStorage.js`:
+managed private object storage over the S3 API (Doc 15 §§97–106), behind the
+same B4 interface as the local driver. Apply, compensation, readiness and
+reconciliation are unchanged; Applications record `storageProvider:
+S3_COMPATIBLE` (Doc 10 §95). **No new npm dependency**: SigV4 signing
+(`s3/sigv4.js`) and the requests (`s3/s3Http.js`) use Node's `crypto`,
+`http` and `https` only, so every storage request is exactly one attempt
+with an explicit timeout — no hidden retry.
+
+| | |
+| --- | --- |
+| Keys, length, SHA-256 | As the local driver: `resumes/<32 hex>/<32 hex>` from the CSPRNG; the bytes are counted and hashed again while sent; the PUT carries the SHA-256 as `x-amz-content-sha256`, `x-amz-checksum-sha256` and `x-amz-meta-sha256`; after the answer the object is checked with HEAD (length and SHA-256) |
+| Never overwrite | `If-None-Match: *` on every PUT; a 412 is a key collision and a new key is generated |
+| No read | The driver has no GET of an object, no URL and no presigned operation (Doc 09 §170) |
+| TLS | `https` with Node's default certificate verification; there is no option to disable it. An untrusted certificate is `TLS_FAILURE`, and nothing is sent |
+| Start-up (`init`) | Writes a probe object under `probes/`, checks it with HEAD, checks that an **anonymous** read of it is refused (`PUBLIC_ACCESS` otherwise), deletes it. Any failure stops the backend before it listens, with a fixed reason: `PERMISSION_DENIED`, `BUCKET_NOT_FOUND`, `UNAVAILABLE`, `TLS_FAILURE`, `PUBLIC_ACCESS`, `PROVIDER_ERROR` |
+| Readiness | Set by that start-up probe, as for the local driver. A storage outage **after** start-up is not reflected in readiness: each submission fails with 503 until the store answers again (observed in the stack check, A7) |
+
+**The outcome of a write** (object-first persistence is unchanged):
+
+| What happened | Driver | Apply | Object | Reconciliation |
+| --- | --- | --- | --- | --- |
+| 200, verified | stored | continues to the insert | referenced once inserted | — |
+| a definite refusal (4xx) or no connection | `PERMISSION_DENIED`, `UNAVAILABLE`, … — **proven** nothing written | 503, no Application | none | nothing to do |
+| the answer lost after sending (reset, timeout, 5xx) | asks the store (HEAD of its own unique key): present and matching → **stored**; absent → `UNAVAILABLE`; no answer → `OUTCOME_UNKNOWN` | 201, or 503 with no Application | present-and-matching, absent, or **possibly present and unreferenced** | the unreferenced object is listed by its one-way reference (logged as `storage_write_outcome_unknown`), kept while younger than the 24 h floor, deleted only by the confirmed command after that |
+
+The driver deletes only an object under the key it generated for the current
+write, and only when that object is proven wrong (integrity). Compensation
+after a proven database failure deletes that submission's own object; a
+concurrent submission that wins the Idempotency-Key keeps its object (tested
+against the real database unique index).
+
+**Tests.**
+
+- **Offline (`npm test`):**
+  - `tests/s3-storage-units.test.js`: the signer against AWS's published example, the configuration rules, TLS refusal, and the classification of store answers;
+  - `tests/storage-contract-local.test.js`: the shared B4 contract (`tests/fixtures/storageContract.shared.js`) against the local driver.
+- **`npm run test:s3`:**
+  - the same contract and the S3 driver against a local S3-compatible test double, moto server with signature checking and a scoped policy;
+  - a fault-injecting proxy for lost answers, resets and refusals;
+  - the Apply service end to end.
+  - It needs Python with `moto[server]` (tested with moto 5.2.5), named by `VALIDA_TEST_MOTO_PYTHON`. Windows (PowerShell):
+
+    ```powershell
+    py -m venv $env:LOCALAPPDATA\valida-moto
+    & $env:LOCALAPPDATA\valida-moto\Scripts\pip install "moto[server]==5.2.5"
+    $env:VALIDA_TEST_MOTO_PYTHON = "$env:LOCALAPPDATA\valida-moto\Scripts\python.exe"
+    npm run test:s3
+    ```
+- **The real stack:** `e2e/c6/c6-t4-stack.mjs` (`npm run test:c6t4:stack` in `e2e/`).
+
+**Not shown locally:** the real provider's access policy, encryption at rest,
+region or jurisdiction, durability and restore. These are hosted verification
+(C6 plan §§3.4, 5).
 
 ### Failures — what happens to the stored object
 

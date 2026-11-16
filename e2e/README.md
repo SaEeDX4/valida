@@ -280,3 +280,36 @@ one refused with no record, object or notification, a closed-Job submission
 still refused; K the key and addresses in no evidence or log. Ports start at
 4360 (`C6T3_BASE_PORT`).
 
+## C6-T4 — S3-compatible private résumé storage (`c6/c6-t4-stack.mjs`)
+
+The real backend with `RESUME_STORAGE_DRIVER=s3`, a disposable MongoDB
+database and the local S3-compatible test double (moto server, behind a
+fault-injecting proxy). The local SMTP test server is used so readiness can be
+fully ready. Objects are read back by an independent reader (botocore), never
+by the driver. It needs `VALIDA_TEST_MOTO_PYTHON` (see `backend/README.md`,
+"S3-compatible storage (C6-T4)").
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t4"
+$env:VALIDA_TEST_MOTO_PYTHON = "$env:LOCALAPPDATA\valida-moto\Scripts\python.exe"
+npm run test:c6t4:stack -- --label local --out C:\Temp\valida-c6t4
+```
+
+Cases:
+
+- **S, start-up refusals:** no permission, wrong secret, unreachable store, incomplete configuration, plain `http` in review. Plus readiness 200 with a working store.
+- **A, submissions:**
+  - accepted, checked byte for byte;
+  - not publicly readable;
+  - a proven storage refusal;
+  - a lost answer resolved as stored;
+  - a lost answer left unknown (503, an unreferenced object, logged);
+  - concurrent submissions with one Idempotency-Key;
+  - an outage, then recovery;
+  - every record matched to its object.
+- **R, the reconciliation CLI:** a dry run, then a confirmed delete that respects the 24 h floor.
+- **K, evidence hygiene:** no credential, storage key or applicant field in the evidence.
+
+Ports start at 4380 (`C6T4_BASE_PORT`).
+

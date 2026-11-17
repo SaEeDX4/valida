@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { parseTrustedHops, resolveRecruitmentAccess, resolveServiceDelegation } from './recruitmentAccess.js';
 import { SITE_ACCESS_PROBLEM_TEXT, SITE_ACCESS_PROBLEM_VARIABLE, resolveSiteAccess } from './siteAccess.js';
 import { resolveReleaseIdentity } from './releaseIdentity.js';
+import { resolveErrorMonitoring } from './errorMonitoring.js';
 import { parseMongoUri } from '../db/connectionString.js';
 import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
@@ -971,6 +972,13 @@ export function loadConfig(env = process.env) {
    */
   const release = resolveReleaseIdentity(env);
   if (!release.ok) missing.push({ variable: release.variable, rule: release.rule });
+  /*
+   * C6-T6 — error monitoring (config/errorMonitoring.js; D-4a). Absent:
+   * disabled, nothing is sent. Malformed: the backend refuses to start,
+   * reported by fixed text only — the DSN is never printed.
+   */
+  const monitoring = resolveErrorMonitoring({ dsn: env?.SENTRY_DSN, appEnv: config.APP_ENV, nodeEnv: config.NODE_ENV });
+  if (!monitoring.ok) missing.push({ variable: monitoring.variable, rule: monitoring.rule });
   if (isProduction && (!config.CORS_ALLOWED_ORIGINS || config.CORS_ALLOWED_ORIGINS.length === 0)) {
     missing.push({ variable: 'CORS_ALLOWED_ORIGINS', rule: RULE_TEXT.CORS_REQUIRED_IN_PRODUCTION });
   }
@@ -1147,6 +1155,12 @@ export function loadConfig(env = process.env) {
      * X-Valida-Release on every response; never taken from a request.
      */
     release,
+    /*
+     * C6-T6 — error monitoring: { state: 'disabled' } or { state: 'enabled',
+     * transport }, with the DSN as a NON-enumerable property (in no
+     * serialised view of this object).
+     */
+    monitoring,
     port: config.PORT,
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,

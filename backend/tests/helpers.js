@@ -90,6 +90,8 @@ export function buildApp(options = {}) {
     // repository and the real clock).
     jobRepository: options.jobRepository,
     clock: options.clock,
+    // C6-T6: undefined keeps createApp's default (no monitoring).
+    errorMonitor: options.errorMonitor,
   });
 }
 

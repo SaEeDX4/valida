@@ -7,6 +7,7 @@ import { JOB_OUTCOME } from './jobsClient.js';
 import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocument.js';
 import { establishVisitorAddress } from './visitorAddress.js';
 import { applyDocumentSecurityHeaders, documentSecurityHeaders } from './securityHeaders.js';
+import { DISABLED_ERROR_MONITOR } from '../../backend/src/lib/monitoring/errorMonitor.js';
 import {
   CONDITIONAL_REQUEST_HEADERS,
   DOCUMENT_LIVENESS_PATH,
@@ -134,7 +135,14 @@ function send(res, method, status, headers, body = '') {
  */
 const BODILESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, log = () => {} }) {
+/*
+ * C6-T6: `errorMonitor` (backend/src/lib/monitoring/errorMonitor.js) records
+ * each unexpected failure — the 500 below — with the release and
+ * environment, and nothing about the request: no path, query, header or
+ * visitor address. Capture returns at once and never throws, so the response
+ * is the same with monitoring enabled, disabled or unreachable.
+ */
+export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, log = () => {}, errorMonitor = DISABLED_ERROR_MONITOR }) {
   const privateSite = isPrivateSite(site);
   // C6-T5: computed once; a build API base the policy cannot name is refused here.
   const securityHeaders = documentSecurityHeaders({ browserApiBase });
@@ -264,16 +272,17 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
       const document = await renderDocument(pathname, { template, config, jobs, jobApiPreloadBase, visitor });
       routeKind = document.route.kind;
       send(res, method, document.status, document.headers, document.body);
-    } catch {
+    } catch (error) {
       routeKind = 'error';
+      errorMonitor.captureUnexpected(error, { kind: 'request', status: 500 });
       if (!res.headersSent) send(res, method, 500, { 'content-type': 'text/plain; charset=utf-8' }, 'Internal Server Error');
       else res.destroy();
     }
   };
 }
 
-export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, host = '127.0.0.1', port = 4173, log }) {
-  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, browserApiBase, release, trustedHops, site, log });
+export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, host = '127.0.0.1', port = 4173, log, errorMonitor }) {
+  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, browserApiBase, release, trustedHops, site, log, errorMonitor });
   const server = createServer((req, res) => {
     handle(req, res);
   });

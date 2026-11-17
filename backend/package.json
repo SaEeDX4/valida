@@ -28,11 +28,13 @@
     "ops:notifications:smoke": "node --env-file-if-exists=.env scripts/notifications-smoke.mjs",
     "ops:notifications:suppression": "node --env-file-if-exists=.env scripts/ops-notifications-suppression.mjs",
     "ops:storage:reconcile": "node --env-file-if-exists=.env scripts/storage-reconcile.mjs",
+    "ops:monitoring:test-event": "node --env-file-if-exists=.env scripts/monitoring-test-event.mjs",
     "verify:b6": "node scripts/verify-b6.mjs",
     "verify:b7": "node scripts/verify-b7.mjs"
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.2",
+    "@sentry/core": "11.10.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",

@@ -27,6 +27,7 @@ import { createApplicationNotifier } from './modules/applications/application.no
 import { createSuppressionGate } from './modules/suppression/suppressionGate.js';
 import { createSuppressionRegister } from './modules/suppression/suppressionRegister.js';
 import { keyringFromConfig } from './modules/suppression/suppressionKeys.js';
+import { DISABLED_ERROR_MONITOR } from './lib/monitoring/errorMonitor.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -129,6 +130,11 @@ export function createApp({
    * current key every acknowledgement fails closed. Offline tests inject a
    * stand-in; the register itself is proven by the real-database suite.
    */
+  /**
+   * C6-T6 — error monitoring (lib/monitoring/errorMonitor.js). server.js
+   * passes the monitor built from SENTRY_DSN; the default sends nothing.
+   */
+  errorMonitor = DISABLED_ERROR_MONITOR,
   suppressionGate = createSuppressionGate({
     register: createSuppressionRegister({ timeoutMs: config?.suppression?.lookupTimeoutMs ?? 2_000, writeTimeoutMs: config?.databaseQueryTimeoutMs }),
     keyring: keyringFromConfig(config?.suppression),
@@ -286,7 +292,7 @@ export function createApp({
   app.use(apiNotFound());
 
   // 10. Central error handler.
-  app.use(errorHandler(logger));
+  app.use(errorHandler(logger, errorMonitor));
 
   return app;
 }

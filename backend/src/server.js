@@ -5,6 +5,9 @@ import { loadConfig, ConfigurationError } from './config/env.js';
 import { describeRecruitmentAccess } from './config/recruitmentAccess.js';
 import { describeSiteAccess } from './config/siteAccess.js';
 import { describeReleaseIdentity } from './config/releaseIdentity.js';
+import { describeErrorMonitoring } from './config/errorMonitoring.js';
+import { createErrorMonitor, installCrashCapture } from './lib/monitoring/errorMonitor.js';
+import { SENTRY_SDK } from './lib/monitoring/sentrySdk.js';
 import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
@@ -182,6 +185,22 @@ export async function startServer({
   logger.info(describeSiteAccess(config.siteAccess), 'site access');
   // C6-T5 — the commit this process states in X-Valida-Release (plan §8.4).
   logger.info(describeReleaseIdentity(config.release), 'release identity');
+  /*
+   * C6-T6 — error monitoring (D-4a; lib/monitoring/errorMonitor.js). Built
+   * before anything can fail at run time. The line states enabled/disabled
+   * and the transport kind, never the DSN. Its delivery is flushed at
+   * shutdown, within the shutdown budget.
+   */
+  const errorMonitor = createErrorMonitor({
+    monitoring: config.monitoring,
+    release: config.release,
+    environment: config.appEnv,
+    service: 'valida-api',
+    sdk: SENTRY_SDK,
+    logger,
+  });
+  logger.info(describeErrorMonitoring(config.monitoring), 'error monitoring');
+  if (errorMonitor.state === 'enabled') onShutdown('errorMonitor', () => errorMonitor.close(2_000));
 
   /*
    * B4 — private resume storage, before anything else is opened.
@@ -337,7 +356,7 @@ export async function startServer({
      * The storage and upload area are handed to the application for the Apply
      * route (B5). No B4 route uses them: B4 adds no public upload endpoint.
      */
-    app = createApp({ config, logger, readiness, resumeStorage, uploadArea, notificationService });
+    app = createApp({ config, logger, readiness, resumeStorage, uploadArea, notificationService, errorMonitor });
     /*
      * B4 r3: a request pipelined behind an upload refused before its body was
      * read (413/503, connection closed in stages) never reaches the app
@@ -496,7 +515,7 @@ export async function startServer({
     return { reason, clean, http, dependencies };
   }
 
-  return { app, server, config, logger, readiness, shutdown, onShutdown, resumeStorage, uploadArea };
+  return { app, server, config, logger, readiness, shutdown, onShutdown, resumeStorage, uploadArea, errorMonitor };
 }
 
 /**
@@ -626,6 +645,8 @@ if (isMainModule()) {
   try {
     const started = await startServer();
     installSignalHandlers(started);
+    // C6-T6: an uncaught exception is logged by classification, captured, and the process exits 1.
+    installCrashCapture({ monitor: started.errorMonitor, logger: started.logger });
   } catch (error) {
     console.error(formatStartupFailure(error));
     process.exit(1);

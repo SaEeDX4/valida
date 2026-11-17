@@ -90,6 +90,7 @@ The rule lives once, in `backend/src/config/releaseIdentity.js`, and the documen
 | `backend/tests/security.test.js` | The exact API CSP; no HSTS |
 | `frontend/server/securityHeaders.test.js` (new) | The policy, every kind of document-server response, the release header, start-up through `serve.mjs` (valid/absent/malformed; an API base the policy cannot name) |
 | `e2e/c6/c6-t5-stack.mjs` (new) | The real HTTP entry points and Chromium, including the browser blocking what the policy disallows (see `e2e/README.md`) |
+| `e2e/support/pageInstruments.js` (new); `e2e/c5/c5-02-accessibility.e2e.js`, `e2e/c5/c5Support.js` | The C5 suite runs against the document server, so it now runs under the enforced policy. Its own instruments had been inserted as inline `<script>`/`<style>` (Playwright `addScriptTag`/`addStyleTag`), which the browser refused, so seven C5 cases failed at the first run. They now enter without weakening the policy: axe-core is evaluated through the DevTools protocol (the channel `@axe-core/playwright` uses), and test styles are constructable stylesheets (CSSOM). `bypassCSP` is not used, and no assertion changed |
 
 ## 7. Open after this task
 

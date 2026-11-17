@@ -3,6 +3,8 @@ import path from 'node:path';
 import { expect } from '@playwright/test';
 import { FIXTURES_DIR, BACKEND_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { runNode } from '../support/processes.js';
+// C6-T5: axe-core enters through the DevTools protocol, not as an inline script the enforced CSP refuses.
+import { injectScriptFile } from '../support/pageInstruments.js';
 import { C5_BACKEND_ORIGIN, C5_JOB_STEPS, C5_SITE_ORIGIN, C5_SLUGS, c5BackendEnvironment, readC5Run } from '../support/c5Stack.js';
 
 /**
@@ -84,7 +86,7 @@ export async function shot(page, name, { fullPage = true } = {}) {
 const AXE = path.join(FRONTEND_DIR, 'node_modules', 'axe-core', 'axe.min.js');
 /** axe-core WCAG 2.0/2.1/2.2 A and AA on the current state, with the failing selectors (synthetic pages only). */
 export async function axe(page) {
-  await page.addScriptTag({ path: AXE });
+  await injectScriptFile(page, AXE);
   return page.evaluate(async () => {
     const result = await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'], resultTypes: ['violations', 'incomplete'] });
     const view = (v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, targets: v.nodes.slice(0, 8).map((n) => n.target.join(' ')) });

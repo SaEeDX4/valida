@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { BACKEND_DIR, FIXTURES_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { C5_SITE_ORIGIN, C5_SLUGS } from '../support/c5Stack.js';
+// C6-T5: instruments that enter without weakening the enforced CSP (see the module).
+import { addTestStyle, injectScriptFile } from '../support/pageInstruments.js';
 import { effectProblems, judgeReducedMotion } from './motionJudge.js';
 import {
   ROUTES, axe, ensureJobs, openRoute, publishedJobs, waitForStill, focusProbe, headingProblems, layoutProbe, motionObserve, motionProbe, MOTION_RECORDER, record, settle, shot, structureProbe, writeText,
@@ -146,14 +148,14 @@ test('C5-06 axe-core (WCAG 2.0/2.1/2.2 A and AA) on every public route at 360 an
     for (const width of [360, 1440]) {
       await page.setViewportSize({ width, height: width === 360 ? 800 : 900 });
       await openRoute(page, pathname);
-      await page.addScriptTag({ path: AXE_PATH });
+      await injectScriptFile(page, AXE_PATH);
       labelInName[`${name}@${width}`] = await labelFindings();
     }
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await openRoute(page, '/');
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.addScriptTag({ path: AXE_PATH });
+  await injectScriptFile(page, AXE_PATH);
   labelInName['mobile-menu-open@390'] = await labelFindings();
 
   // ------------------------------------------------------------------------------------------ negative controls
@@ -183,7 +185,7 @@ test('C5-06 axe-core (WCAG 2.0/2.1/2.2 A and AA) on every public route at 360 an
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await openRoute(page, '/careers');
-  await page.addScriptTag({ path: AXE_PATH });
+  await injectScriptFile(page, AXE_PATH);
   const careersBaseline = await labelFindings();
   const relabelFirstRow = (label) => { const a = document.querySelector('ul[data-testid="careers-job-list"] > li > a'); a.setAttribute('data-c5-restore-label', a.getAttribute('aria-label') ?? '__c5_none__'); a.setAttribute('aria-label', label); };
   // (a) a regression in a JobRow's name: unrelated wording, the title dropped, another role's title, the name removed.
@@ -519,12 +521,12 @@ test('C5-11 Screen-reader proxies: accessibility tree of every route and Apply s
 async function text200Shot(page, name) {
   const read = () => page.evaluate(() => ({ root: getComputedStyle(document.documentElement).fontSize, body: getComputedStyle(document.body).fontSize, h1: getComputedStyle(document.querySelector('h1')).fontSize }));
   const viaSetting = await read();
-  const tag = await page.addStyleTag({ content: 'html { font-size: 32px !important; }' });
+  const tag = await addTestStyle(page, 'html { font-size: 32px !important; }');
   await settle(page);
   const viaCss = await read();
   const layoutViaCss = await layoutProbe(page);
   const screenshot = await shot(page, name);
-  await tag.evaluate((node) => node.remove());
+  await tag.remove();
   return { screenshot, capture: 'html { font-size: 32px } (equivalent root size; see text200Shot)', sizesEqual: JSON.stringify(viaSetting) === JSON.stringify(viaCss), sizesViaCss: viaCss, layoutViaCss };
 }
 
@@ -681,7 +683,7 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await openRoute(page, `/careers/${C5_SLUGS.open}`);
-  await page.addStyleTag({ content: '@keyframes c5blink { from { opacity: 1; } to { opacity: 0.4; } }' });
+  await addTestStyle(page, '@keyframes c5blink { from { opacity: 1; } to { opacity: 0.4; } }');
   const controls = {};
   const control = async (id, description, inject, { mustFail, reason }) => {
     const mark = (await frameNow()) + 1;
@@ -947,7 +949,7 @@ test('C5-15b Text contrast where axe needs review (text over the Home gradients)
   for (const [width, height] of [[360, 800], [1440, 900]]) {
     await page.setViewportSize({ width, height });
     await openRoute(page, '/');
-    await page.addScriptTag({ path: AXE_PATH });
+    await injectScriptFile(page, AXE_PATH);
     const targets = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'rule', values: ['color-contrast'] }, resultTypes: ['incomplete'] })).incomplete.flatMap((v) => v.nodes.map((n) => n.target.join(' '))));
     const rows = [];
     for (const target of targets) {
@@ -971,9 +973,9 @@ test('C5-15b Text contrast where axe needs review (text over the Home gradients)
       const clip = { x: Math.max(0, info.x), y: Math.max(0, info.y), width: Math.max(1, Math.min(info.width, width - Math.max(0, info.x))), height: Math.max(1, info.height) };
       // animations: 'disabled' ends running transitions (buttons fade their colour over 180 ms).
       const withText = await page.screenshot({ clip, animations: 'disabled' });
-      const hide = await page.addStyleTag({ content: '* { color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' });
+      const hide = await addTestStyle(page, '* { color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }');
       const background = await page.screenshot({ clip, animations: 'disabled' });
-      await hide.evaluate((tag) => tag.remove());
+      await hide.remove();
       const ratio = await page.evaluate(async ({ a64, b64, color }) => {
         const pixels = async (b) => {
           const img = new Image();

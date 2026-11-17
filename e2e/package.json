@@ -18,6 +18,7 @@
     "test:c6t4:stack": "node c6/c6-t4-stack.mjs",
     "test:c6t5:stack": "node c6/c6-t5-stack.mjs",
     "test:c6t6:rehearsal": "node c6/c6-t6-backup-rehearsal.mjs",
+    "test:c6t6:checker": "node c6/c6-t6-review-checker.mjs",
     "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {

@@ -29,6 +29,11 @@
     "ops:notifications:suppression": "node --env-file-if-exists=.env scripts/ops-notifications-suppression.mjs",
     "ops:storage:reconcile": "node --env-file-if-exists=.env scripts/storage-reconcile.mjs",
     "ops:monitoring:test-event": "node --env-file-if-exists=.env scripts/monitoring-test-event.mjs",
+    "ops:backup:copy": "node --env-file-if-exists=.env scripts/backup.mjs copy",
+    "ops:backup:manifest": "node --env-file-if-exists=.env scripts/backup.mjs manifest",
+    "ops:backup:delete-application": "node --env-file-if-exists=.env scripts/backup.mjs delete-application",
+    "ops:backup:restore": "node --env-file-if-exists=.env scripts/backup.mjs restore",
+    "test:backup": "vitest run --config vitest.backup.config.js",
     "verify:b6": "node scripts/verify-b6.mjs",
     "verify:b7": "node scripts/verify-b7.mjs"
   },

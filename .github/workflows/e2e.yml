@@ -1,0 +1,75 @@
+# C6-T6 — critical browser E2E (C6 plan r3 §6). Secret-free, like ci.yml.
+# Advisory at first (D-10). Lab performance (c5-03, c5-04) and the manual
+# hold (c5-99) are not run here; lab performance is never a required check.
+name: e2e
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'e2e/**'
+      - '.github/workflows/e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: critical browser E2E (Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mongodb:
+        # Digest pin: to be added when the registry can be read (C6-T6 handoff, hosted gates).
+        image: mongo:8.0
+        ports: ['27017:27017']
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: e2e
+      - name: Chromium for Playwright (the version e2e/package-lock.json pins)
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: npm run test:e2e
+        working-directory: e2e
+      - run: npm run test:e2e:seo
+        working-directory: e2e
+      - run: npm run test:e2e:c5 -- c5/c5-01-layout-states.e2e.js c5/c5-02-accessibility.e2e.js c5/c5-05-continuity.e2e.js c5/c5-06-job-preload.e2e.js
+        working-directory: e2e
+      - name: Collect the JSON test reports only (never a run directory, log or capture)
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/reports"
+          i=0
+          for f in "${RUNNER_TEMP:-/tmp}"/valida-e2e/*/output/report.json /tmp/valida-e2e/*/output/report.json; do
+            [ -f "$f" ] || continue
+            i=$((i+1)); cp "$f" "$RUNNER_TEMP/reports/report-$i.json"
+          done
+          echo "reports: $i"
+      - name: Upload the reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-reports
+          path: ${{ runner.temp }}/reports/
+          if-no-files-found: ignore
+          retention-days: 14

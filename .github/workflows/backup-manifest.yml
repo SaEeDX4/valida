@@ -1,0 +1,65 @@
+# C6-T6 — the per-snapshot manifest (C6 plan r3 §5.2 with r3 correction 1;
+# backend/src/ops/backup/manifest.js). PRELIMINARY by construction: it is
+# built from the live database; only a restore verifies a snapshot.
+#
+# Manual for now: the operator enters the snapshot id and time the database
+# provider reports. Reading them from the provider's API, on a schedule after
+# the daily snapshot, is a hosted item (C6-T6 handoff).
+#
+# NOT ACTIVE until the owner authorises it (the `backup` environment, the
+# manifest role's token and its READ-ONLY database user). Any state other
+# than "PRELIMINARY: NO DEFECT FOUND" fails the job: the same-day alert.
+name: backup-manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot-id:
+        description: The provider's snapshot id
+        required: true
+        type: string
+      snapshot-time:
+        description: The provider's snapshot time (ISO 8601)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-manifest
+  cancel-in-progress: false
+
+jobs:
+  manifest:
+    name: write the snapshot manifest (preliminary)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: backup
+    env:
+      APP_ENV: production
+      NODE_ENV: production
+      BACKUP_S3_ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+      BACKUP_S3_REGION: ${{ vars.BACKUP_S3_REGION }}
+      BACKUP_PRIMARY_BUCKET: ${{ vars.BACKUP_PRIMARY_BUCKET }}
+      BACKUP_COPY_BUCKET: ${{ vars.BACKUP_COPY_BUCKET }}
+      BACKUP_LOG_BUCKET: ${{ vars.BACKUP_LOG_BUCKET }}
+      BACKUP_MANIFEST_ACCESS_KEY_ID: ${{ secrets.BACKUP_MANIFEST_ACCESS_KEY_ID }}
+      BACKUP_MANIFEST_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_MANIFEST_SECRET_ACCESS_KEY }}
+      BACKUP_MANIFEST_MONGODB_URI: ${{ secrets.BACKUP_MANIFEST_MONGODB_URI }}
+      # Inputs reach the command through the environment, never interpolated into the script.
+      SNAPSHOT_ID: ${{ inputs.snapshot-id }}
+      SNAPSHOT_TIME: ${{ inputs.snapshot-time }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci --omit=dev
+      - run: npm run ops:backup:manifest -- --snapshot-id "$SNAPSHOT_ID" --snapshot-time "$SNAPSHOT_TIME"

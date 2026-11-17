@@ -1,0 +1,55 @@
+# C6-T6 — the hourly résumé copy (D-9; C6 plan r3 §5.1; backend/src/ops/backup/copyJob.js).
+#
+# NOT ACTIVE until the owner authorises it: it needs the protected `backup`
+# environment, its two variables sets and the copier's token (below), all
+# created by the owner at GitHub and at the storage provider. Scheduled
+# workflows run only from the default branch.
+#
+# Least privilege: the GitHub token reads contents only. The storage token is
+# the COPIER's: read the primary, write NEW objects in the locked copy bucket
+# and copy-run records in the log bucket; it can delete nothing. It is never
+# the API's token. A failed or incomplete run fails the job — GitHub's
+# failure notification to the owner is the alert.
+name: backup-copy
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-copy
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    name: copy new résumé objects into the locked copy bucket
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: backup
+    env:
+      APP_ENV: production
+      NODE_ENV: production
+      BACKUP_S3_ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+      BACKUP_S3_REGION: ${{ vars.BACKUP_S3_REGION }}
+      BACKUP_PRIMARY_BUCKET: ${{ vars.BACKUP_PRIMARY_BUCKET }}
+      BACKUP_COPY_BUCKET: ${{ vars.BACKUP_COPY_BUCKET }}
+      BACKUP_LOG_BUCKET: ${{ vars.BACKUP_LOG_BUCKET }}
+      BACKUP_COPIER_ACCESS_KEY_ID: ${{ secrets.BACKUP_COPIER_ACCESS_KEY_ID }}
+      BACKUP_COPIER_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_COPIER_SECRET_ACCESS_KEY }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci --omit=dev
+      - run: npm run ops:backup:copy

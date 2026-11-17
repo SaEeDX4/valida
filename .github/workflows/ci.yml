@@ -1,0 +1,111 @@
+# C6-T6 — continuous integration (C6 plan r3 §6). Secret-free: it runs for
+# pull requests from forks too, so it holds no secret and grants the token
+# read access to the repository contents only.
+#
+# Not a deployment: no job here deploys or holds a host credential (the
+# host's auto-deploy stays Off; deployment is a separate, owner-authorised act).
+# Actions are pinned to full commit SHAs (the tag is a comment).
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (unit, database, audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mongodb:
+        # Digest pin: to be added when the registry can be read (C6-T6 handoff, hosted gates).
+        image: mongo:8.0
+        ports: ['27017:27017']
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_ci
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:db
+      - run: npm audit --audit-level=high
+
+  storage-double:
+    name: backend (S3 driver and backup tooling, local S3 double)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: The S3 test double (exact versions)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/moto"
+          "$RUNNER_TEMP/moto/bin/pip" install --no-input -r tests/s3/requirements-moto.txt
+          echo "VALIDA_TEST_MOTO_PYTHON=$RUNNER_TEMP/moto/bin/python" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run test:s3
+      - run: npm run test:backup
+
+  frontend:
+    name: frontend (build, budgets, tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run verify:quality
+
+  e2e-guards:
+    name: e2e guards and C5 statistics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run test:guards
+      - run: npm run test:c5:stats
+      - run: npm run test:c5:motion

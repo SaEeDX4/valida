@@ -57,4 +57,17 @@ The restored system starts and stays **`RECRUITMENT_MODE=closed`**.
 
 ## 6. A deletion that someone asked for
 
-Only with a named authorisation: `npm run ops:backup:delete-application -- --application <id> --authorisation <decision id> --confirm`, with the API's own configuration and the log-writer role. The log entry is written **first**; if it cannot be, nothing is deleted. A repeated run is safe.
+Only with a named authorisation: `npm run ops:backup:delete-application -- --application <id> --authorisation <decision id> --confirm`, with the API's own configuration and the log-writer role.
+
+The order (corrected at C6-T6 after Astra's review): **log entry → object → record**. The Application record is removed only after the store has confirmed the object absent, so the record is the durable to-do until the deletion is finished.
+
+| Result (`status`; exit) | Meaning | Do |
+| --- | --- | --- |
+| `COMPLETE`; 0 | The object is confirmed absent (`object`: `DELETED` now, or `ABSENT` already) and the record is removed | Nothing |
+| `INCOMPLETE`; 1, `object: UNCERTAIN` | The log entry is written; the store gave no definite answer (refused, unreachable, or the answer was lost — the deletion may or may not have happened) | **Run the same command again.** The record is still there, so the retry finds the object; a 404 then counts as done |
+| `INCOMPLETE`; 1, `reason: DATABASE_UNAVAILABLE` | The object is removed; the record could not be | Run it again: the store answers 404, then the record is removed |
+| `OBJECT_MISMATCH`; 1 | The object under the key is **not** the one the record states (size or SHA-256 differ). Nothing was removed; the record is kept | **Incident.** Never delete it by hand; find out how the key came to hold other bytes |
+| `NO_RECORD`; 0 | No such Application: nothing touched, nothing logged | Either an earlier run completed, or the id is wrong — check the id |
+| Error before any result; 1 | The log entry could not be written | Nothing was deleted. Restore access to the log bucket; run it again |
+
+Each run that gets past the log appends its own entry; a restore applies every entry and is repeatable, so the duplicates are harmless. The command's output holds the Application id and the one-way object reference, never the storage key.

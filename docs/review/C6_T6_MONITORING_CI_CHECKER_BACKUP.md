@@ -75,6 +75,8 @@ Everywhere: `permissions: contents: read`; no `pull_request_target`; actions pin
 
 The API's own storage permissions are unchanged. The authorised deletion uses the API's version-bound delete (T4 correction 2), **after** its log entry.
 
+**Correction after Astra's review (authorised deletion).** As first delivered, the command removed the record before the object; a storage failure then left an object that no retry could reach (a retry found no record, logged an entry without an object reference and touched nothing). The order is now **log entry → object → record**: the record is removed only once the store has confirmed the object absent, so a retry always finishes. The object deletion is also bound to the record's size and SHA-256 (`deletePrivateObject(key, { expect })`, checked on the same HEAD whose version the DELETE names), so an unrelated object under the key is never removed. Outcomes: `COMPLETE`, `INCOMPLETE` (run again), `OBJECT_MISMATCH` (an incident), `NO_RECORD`. Without `expect`, the driver behaves exactly as accepted at C6-T4.
+
 **The copy** reads each primary object, computes SHA-256 from the bytes, checks it against the primary's checksum, writes a new object (If-None-Match) with that checksum and the source version, reads the metadata back, and only at the end writes one copy-run record (`complete: true` only when every object was confirmed). Never overwrites or deletes. **An interrupted or failed run cannot make a snapshot assessable**: the manifest requires a complete run that started after the snapshot.
 
 **States:** UNASSESSED; PRELIMINARY: NO DEFECT FOUND; PRELIMINARY: DEFECT FOUND (n) — from the **live** database, preliminary by construction; RECOVERY VERIFIED and RECOVERY FAILED — only from a restore. "Recoverable" is not used.
@@ -91,6 +93,8 @@ The API's own storage permissions are unchanged. The authorised deletion uses th
 | `backend/tests/backup/` (`npm run test:backup`, moto) | each role's permissions at the store, the retention lock, the copy (complete, repeated, interrupted by SIGKILL, failed), the deletion log, the manifest |
 | `e2e/c6/c6-t6-backup-rehearsal.mjs` | rehearsals D and H on the full stack; MongoDB with access control |
 | `e2e/c6/c6-t6-review-checker.mjs` | the checker against the local stack, nine scenarios |
+| `backend/tests/c6-t6-authorised-deletion.test.js`, `backend/tests/backup/authorised-deletion.test.js` | the correction: storage failure, lost answer, database failure — each finished by a retry; repeated completion; an unrelated object never removed (failing before the correction, passing after) |
+| `e2e/c6/c6-t6-deletion-retry.mjs` | the deletion command itself, interrupted and retried, on the moto double and a MongoDB with access control |
 | `ops/review-host/check.test.mjs` | the refusals and the mapping |
 
 Results, commits and environments: the C6-T6 handoff (outside the repository).

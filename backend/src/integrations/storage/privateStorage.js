@@ -41,12 +41,16 @@ export {
  *                                  durably accepted:
  *                                  { storageProvider, storageKey, sizeBytes,
  *                                    checksumSha256, storedAt }
- *   deletePrivateObject(storageKey)
+ *   deletePrivateObject(storageKey, { expect }?)
  *                                  removes ONE object named by a valid resume
  *                                  key — the only deletion there is (B5
  *                                  compensation, Doc 09 section 119):
  *                                  { deleted: true } | { deleted: false,
- *                                  reason: 'NOT_FOUND' }
+ *                                  reason: 'NOT_FOUND' }. C6-T6: with
+ *                                  `expect` ({ sizeBytes, checksumSha256 }),
+ *                                  an object that is not that one is left
+ *                                  alone: { deleted: false, reason:
+ *                                  'NOT_THE_EXPECTED_OBJECT' }
  *   statPrivateObject(storageKey)  { exists, sizeBytes } — integrity and
  *                                  reconciliation only
  *   close()

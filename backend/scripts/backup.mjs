@@ -16,6 +16,7 @@
  *   copy      0 complete, 1 incomplete or failed
  *   manifest  0 PRELIMINARY: NO DEFECT FOUND, 1 any other state (the CI job fails: the alert)
  *   restore   0 RECOVERY VERIFIED, 1 RECOVERY FAILED
+ *   delete-application  0 COMPLETE or NO_RECORD, 1 INCOMPLETE (run it again) or OBJECT_MISMATCH
  *   any       2 configuration refused (the variable is named, never its value)
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -95,6 +96,8 @@ try {
     try {
       const result = await deleteApplicationAuthorised({ applicationId: values.application, authorisation: values.authorisation, applications: connection.db.collection('applications'), storage, log: endpoints.log });
       print({ command, ...result });
+      // COMPLETE or NO_RECORD: done. INCOMPLETE: run again. OBJECT_MISMATCH: an incident.
+      process.exitCode = result.status === 'COMPLETE' || result.status === 'NO_RECORD' ? 0 : 1;
     } finally {
       await connection.close();
       await storage.close();

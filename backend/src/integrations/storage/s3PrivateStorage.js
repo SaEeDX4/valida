@@ -514,13 +514,23 @@ export class S3PrivateStorage {
     }
   }
 
-  async deletePrivateObject(storageKey) {
+  /**
+   * C6-T6 correction: `expect` ({ sizeBytes, checksumSha256 }), when given,
+   * binds the deletion to the object the caller's record describes — checked
+   * on the SAME HEAD whose version the DELETE then names, so an object under
+   * the key that is not that one is never removed (NOT_THE_EXPECTED_OBJECT).
+   * Without `expect` the behaviour is exactly C6-T4's.
+   */
+  async deletePrivateObject(storageKey, { expect } = {}) {
     this.#assertReady('delete');
     if (!isResumeStorageKey(storageKey)) throw new PrivateStorageError('delete', 'INVALID_KEY');
     const head = await s3Request(this.#endpoint, { method: 'HEAD', key: storageKey });
     if (head.kind !== 'response') throw new PrivateStorageError('delete', reasonForTransport(head));
     if (head.status === 404) return { deleted: false, reason: 'NOT_FOUND' };
     if (head.status !== 200) throw new PrivateStorageError('delete', reasonForStatus(head.status, null));
+    if (expect && (Number(head.headers['content-length']) !== expect.sizeBytes || head.headers['x-amz-meta-sha256'] !== expect.checksumSha256)) {
+      return { deleted: false, reason: 'NOT_THE_EXPECTED_OBJECT' };
+    }
     // Correction 2: the deletion removes the generation the HEAD saw (and so,
     // on a versioned store, leaves no noncurrent copy behind); without a
     // version to bind to it is refused rather than made unconditional.

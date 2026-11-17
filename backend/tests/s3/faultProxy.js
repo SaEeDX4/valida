@@ -36,7 +36,8 @@ export async function startFaultProxy({ upstream }) {
   };
   const server = createServer((req, res) => {
     const mode = next(req);
-    const entry = { method: req.method, mode: typeof mode === 'string' ? mode : Object.keys(mode)[0], anonymous: !req.headers.authorization, versionId: new URL(req.url, 'http://x').searchParams.get('versionId'), upstreamStatus: null };
+    // C6-T6: `path` (the request path, test-side only) lets a check name the object a request was for.
+    const entry = { method: req.method, path: new URL(req.url, 'http://x').pathname, mode: typeof mode === 'string' ? mode : Object.keys(mode)[0], anonymous: !req.headers.authorization, versionId: new URL(req.url, 'http://x').searchParams.get('versionId'), upstreamStatus: null };
     state.log.push(entry);
     if (mode === 'hang') {
       req.resume();

@@ -280,6 +280,34 @@ one refused with no record, object or notification, a closed-Job submission
 still refused; K the key and addresses in no evidence or log. Ports start at
 4360 (`C6T3_BASE_PORT`).
 
+## C6-T6 — the backup rehearsals and the review-host checker
+
+**`c6/c6-t6-backup-rehearsal.mjs`** (`npm run test:c6t6:rehearsal`) runs both
+approved restore rehearsals through the real commands (`backend/scripts/backup.mjs`):
+**D**, a damaged snapshot (an unexplained missing résumé → RECOVERY FAILED, the
+restored API closed), and **H**, a healthy snapshot (the snapshot itself
+restored, the deletion log replayed, every remaining résumé verified by length
+and SHA-256, deleted data still deleted, RECOVERY VERIFIED; then the same with
+the deletion log unavailable → FAILED). It starts its own MongoDB 8 **with
+access control** (one user per role) and a fresh moto double per rehearsal,
+and records the snapshot used, the exposure between copies and the local
+RPO/RTO (`reports/measured.json`). The provider's snapshot is a stated
+stand-in: a copy of the live database at T.
+
+```powershell
+cd e2e
+$env:VALIDA_TEST_MOTO_PYTHON = "<python with moto[server]>"
+$env:VALIDA_TEST_MONGOD = "<path to mongod 8>"
+node c6/c6-t6-backup-rehearsal.mjs --out <folder outside the repository>
+```
+
+**`c6/c6-t6-review-checker.mjs`** (`npm run test:c6t6:checker`, needs
+`MONGODB_TEST_URI`) exercises `ops/review-host/check.mjs` against the local
+stack: listed and unlisted perspectives (the allowlist decides, on loopback),
+header spoofing, a missing, mismatched or absent release SHA, and a
+misconfigured Review detected by its access and cache responses. Ports start
+at 4420 (`C6T6_CHECKER_BASE_PORT`).
+
 ## C6-T5 — enforced CSP, security headers and release identity (`c6/c6-t5-stack.mjs`)
 
 The real API and document server over real production builds (an ordinary

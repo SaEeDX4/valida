@@ -946,6 +946,8 @@ test('C5-15 Non-text contrast of form controls, buttons and the focus ring (comp
 test('C5-15b Text contrast where axe needs review (text over the Home gradients): measured from rendered pixels', async ({ page }) => {
   await ensureJobs();
   const results = {};
+  const analysis = await page.context().newPage();
+  await page.bringToFront();
   for (const [width, height] of [[360, 800], [1440, 900]]) {
     await page.setViewportSize({ width, height });
     await openRoute(page, '/');
@@ -976,7 +978,9 @@ test('C5-15b Text contrast where axe needs review (text over the Home gradients)
       const hide = await addTestStyle(page, '* { color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }');
       const background = await page.screenshot({ clip, animations: 'disabled' });
       await hide.remove();
-      const ratio = await page.evaluate(async ({ a64, b64, color }) => {
+      // C6-T5: the two captures are decoded in a blank page of the same context (no policy), because the site's
+      // enforced CSP (img-src 'self') rightly refuses a data: image inside the page under test.
+      const ratio = await analysis.evaluate(async ({ a64, b64, color }) => {
         const pixels = async (b) => {
           const img = new Image();
           img.src = `data:image/png;base64,${b}`;
@@ -1008,6 +1012,7 @@ test('C5-15b Text contrast where axe needs review (text over the Home gradients)
     }
     results[width] = rows;
   }
+  await analysis.close();
   record('C5-15b', { observation: 'REAL rendered pixels in Chromium: the ratio between the text colour and the background at each pixel where text is drawn (rendered minus text-hidden capture of the content box); worst, 5th percentile and median', results });
   for (const [width, rows] of Object.entries(results)) for (const r of rows) expect.soft(r.worst, `${width} ${r.target}`).toBeGreaterThanOrEqual(r.required);
 });

@@ -9,6 +9,8 @@ import { createJobsClient } from './jobsClient.js';
 import { resolveJobApiPreloadBase } from './renderDocument.js';
 import { isUsableServiceKey, parseTrustedHops } from './visitorAddress.js';
 import { describeSiteAccess, resolveDocumentSiteAccess } from './siteAccess.js';
+import { buildContentSecurityPolicy } from './securityHeaders.js';
+import { describeReleaseIdentity, resolveReleaseIdentity } from '../../backend/src/config/releaseIdentity.js';
 
 /**
  * Serves a production build with the C4 document behaviour (documentServer.js).
@@ -48,6 +50,17 @@ import { describeSiteAccess, resolveDocumentSiteAccess } from './siteAccess.js';
  *                         combination: refused, before listening.
  *   ACCESS_ALLOWLIST      the addresses admitted to a private site (the API's
  *                         list and range policy). Never printed.
+ *   RENDER_GIT_COMMIT     C6-T5: the commit this server runs, stated in the
+ *                         X-Valida-Release header of every response (the
+ *                         API's rule, backend/src/config/releaseIdentity.js).
+ *                         Absent or empty: no header (an ordinary local
+ *                         run). Not a full 40-character lowercase SHA:
+ *                         refused, before listening.
+ *
+ * C6-T5: every response carries the enforced Content-Security-Policy and the
+ * security headers of securityHeaders.js; the policy's connect-src names the
+ * build's own API base (valida-seo.json apiBaseUrl). A build whose API base is
+ * neither empty nor a plain origin is refused, before listening.
  *
  * The SEO configuration (canonical origin, indexable or not) is NOT taken from
  * this process's environment: it is read from the build's valida-seo.json, so
@@ -110,12 +123,22 @@ if (keyState !== 'usable') {
   process.stderr.write(`serve: INTERNAL_SERVICE_KEY is ${keyState}: Jobs reads are unauthenticated and the API will give every visitor the public view\n`);
 }
 
+const release = resolveReleaseIdentity(process.env);
+if (!release.ok) fail(`${release.variable}: ${release.rule}`);
+const browserApiBase = manifest.apiBaseUrl ?? '';
+let contentSecurityPolicy;
+try {
+  contentSecurityPolicy = buildContentSecurityPolicy(browserApiBase);
+} catch {
+  fail("the build's API base (VITE_API_BASE_URL) is neither empty nor a plain origin: the Content-Security-Policy cannot name it");
+}
+
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 0 || port > 65535) fail('--port must be a port number');
 
 const log = values.quiet ? () => {} : (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`);
 const jobApiPreloadBase = values['no-job-preload'] ? null : resolveJobApiPreloadBase(manifest.apiBaseUrl);
-const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, trustedHops, site: access.site, host: values.host, port, log });
+const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, browserApiBase, release, trustedHops, site: access.site, host: values.host, port, log });
 const address = server.address();
 process.stdout.write(
   `READY ${JSON.stringify({
@@ -133,6 +156,9 @@ process.stdout.write(
     appEnv: access.appEnv,
     // C6-T3: never the allowlist, only how many entries it has.
     ...describeSiteAccess(access.site),
+    // C6-T5: the commit stated in X-Valida-Release, and the enforced policy.
+    ...describeReleaseIdentity(release),
+    contentSecurityPolicy,
   })}\n`,
 );
 

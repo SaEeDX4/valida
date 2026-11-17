@@ -14,6 +14,7 @@ import { CLOSED_RECRUITMENT_ACCESS, DISABLED_SERVICE_DELEGATION } from './config
 import { noValidators } from './middleware/noValidators.js';
 import { siteAccessGate } from './middleware/siteAccess.js';
 import { PUBLIC_SITE_ACCESS } from './config/siteAccess.js';
+import { stampRelease } from './config/releaseIdentity.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
 import { jobsRouter } from './modules/jobs/job.routes.js';
@@ -141,6 +142,18 @@ export function createApp({
   // Never advertise the framework (Doc 13).
   app.disable('x-powered-by');
 
+  /*
+   * 1a. Release identity — C6-T5 (config/releaseIdentity.js; plan §8.4,
+   * D-6). First, so every response carries it: health, refusals, redirects,
+   * 404, errors and CORS preflights. The value comes from configuration only;
+   * a request's own X-Valida-Release is never read.
+   */
+  const release = config.release ?? null;
+  app.use((req, res, next) => {
+    stampRelease(res, release);
+    next();
+  });
+
   // 2. Request id, and X-Request-ID on the response.
   app.use(requestId());
 
@@ -153,10 +166,22 @@ export function createApp({
    * This API serves JSON only, never HTML, so a restrictive CSP costs nothing
    * and blocks any attempt to render an injected document. crossOriginResourcePolicy
    * stays same-origin: nothing here is meant to be embedded by another site.
+   *
+   * C6-T5:
+   *   - the CSP is exactly the four directives below (`useDefaults: false`).
+   *     Helmet's defaults had added broad sources (`https:`, `data:`,
+   *     'unsafe-inline' for styles) and `upgrade-insecure-requests`, none of
+   *     which a JSON API uses (Doc 13 §35);
+   *   - Strict-Transport-Security is NOT sent. Helmet sends a one-year,
+   *     includeSubDomains policy by default; HSTS is activated deliberately, at
+   *     plan step P9 by the owner (Doc 13 §31: not before the domain topology
+   *     is known).
    */
   app.use(
     helmet({
+      strictTransportSecurity: false,
       contentSecurityPolicy: {
+        useDefaults: false,
         directives: {
           defaultSrc: ["'none'"],
           frameAncestors: ["'none'"],

@@ -280,6 +280,32 @@ one refused with no record, object or notification, a closed-Job submission
 still refused; K the key and addresses in no evidence or log. Ports start at
 4360 (`C6T3_BASE_PORT`).
 
+## C6-T5 — enforced CSP, security headers and release identity (`c6/c6-t5-stack.mjs`)
+
+The real API and document server over real production builds (an ordinary
+and an indexable one), a disposable MongoDB database, local résumé storage,
+Chromium, and a probe server on another origin that records every request it
+receives. Both services get `RENDER_GIT_COMMIT` = the commit under test
+(`git rev-parse HEAD`; `C6T5_RELEASE` overrides it for a work-in-progress run).
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t5"
+npm run test:c6t5:stack -- --label local --out C:\Temp\valida-c6t5
+```
+
+Parts: **S** start-up with `RENDER_GIT_COMMIT` absent, valid and malformed,
+for the API (launcher and `node src/server.js`) and the document server;
+**H** the headers on every kind of response of both services, the accepted
+cache rules, a forged release header ignored; **B** Chromium — every route
+with no CSP violation and its fonts and stylesheet loaded, the synthetic
+Careers → Job → Apply flow (record and object checked), the JobPosting data
+block on an indexable build, and the browser **blocking** an image, a script,
+a fetch, an inline script, `eval` and framing that the policy disallows, with
+the probe showing that nothing reached it (and a positive control); **E** the
+document server's 503 with the API stopped; **R** private-Review refusals;
+**K** the service key in no evidence. Ports start at 4390 (`C6T5_BASE_PORT`).
+
 ## C6-T4 — S3-compatible private résumé storage (`c6/c6-t4-stack.mjs`)
 
 The real backend with `RESUME_STORAGE_DRIVER=s3`, a disposable MongoDB

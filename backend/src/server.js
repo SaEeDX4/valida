@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { loadConfig, ConfigurationError } from './config/env.js';
 import { describeRecruitmentAccess } from './config/recruitmentAccess.js';
 import { describeSiteAccess } from './config/siteAccess.js';
+import { describeReleaseIdentity } from './config/releaseIdentity.js';
 import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
@@ -179,6 +180,8 @@ export async function startServer({
   logger[recruitment.recruitmentConfiguration === 'invalid' ? 'warn' : 'info'](recruitment, 'recruitment access');
   // C6-T3 — whether the whole API is private (a refused configuration never starts).
   logger.info(describeSiteAccess(config.siteAccess), 'site access');
+  // C6-T5 — the commit this process states in X-Valida-Release (plan §8.4).
+  logger.info(describeReleaseIdentity(config.release), 'release identity');
 
   /*
    * B4 — private resume storage, before anything else is opened.

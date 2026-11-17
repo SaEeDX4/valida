@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseTrustedHops, resolveRecruitmentAccess, resolveServiceDelegation } from './recruitmentAccess.js';
 import { SITE_ACCESS_PROBLEM_TEXT, SITE_ACCESS_PROBLEM_VARIABLE, resolveSiteAccess } from './siteAccess.js';
+import { resolveReleaseIdentity } from './releaseIdentity.js';
 import { parseMongoUri } from '../db/connectionString.js';
 import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
@@ -964,6 +965,12 @@ export function loadConfig(env = process.env) {
   if (!site.ok) {
     missing.push({ variable: SITE_ACCESS_PROBLEM_VARIABLE[site.problem], rule: SITE_ACCESS_PROBLEM_TEXT[site.problem] });
   }
+  /*
+   * C6-T5 — release identity (config/releaseIdentity.js). Absent: no header.
+   * Malformed: the backend refuses to start, reported by fixed text only.
+   */
+  const release = resolveReleaseIdentity(env);
+  if (!release.ok) missing.push({ variable: release.variable, rule: release.rule });
   if (isProduction && (!config.CORS_ALLOWED_ORIGINS || config.CORS_ALLOWED_ORIGINS.length === 0)) {
     missing.push({ variable: 'CORS_ALLOWED_ORIGINS', rule: RULE_TEXT.CORS_REQUIRED_IN_PRODUCTION });
   }
@@ -1134,6 +1141,12 @@ export function loadConfig(env = process.env) {
      * configuration never gets here). The allowlist is non-enumerable.
      */
     siteAccess: site,
+    /*
+     * C6-T5 — the commit this process runs, from RENDER_GIT_COMMIT at start-up
+     * (config/releaseIdentity.js); { sha: null } when unset. Sent as
+     * X-Valida-Release on every response; never taken from a request.
+     */
+    release,
     port: config.PORT,
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,

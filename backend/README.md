@@ -211,6 +211,7 @@ node tests/diagnostics/localhost-addressing.mjs
 | `RECRUITMENT_PUBLIC_AUTHORISATION` | with `public` | — | C6-T1. The owner decision that opens recruitment, as `OD-YYYY-MM-DD-NN` |
 | `SITE_ACCESS` | **yes: `private` in review, `public` in production** | — (**public**, local only) | C6-T3. `private` or `public`, exactly. Review requires `private` with a valid `ACCESS_ALLOWLIST`; production requires `public`, written explicitly (C6-T3 correction 1). A wrong or unsafe value **stops the backend** before it listens. See "Private site access (C6-T3)" |
 | `INTERNAL_SERVICE_KEY` | no | — (delegation **disabled**) | C6-T2. The secret the document server presents when it reads Jobs on a visitor's behalf; 32–512 visible ASCII characters, no spaces. Absent or unusable: every delegated read gets the unlisted view. Server-only; never logged. See "Delegated Jobs reads (C6-T2)" |
+| `RENDER_GIT_COMMIT` | no (set by the host) | — (no release header) | C6-T5. The full 40-character lowercase commit SHA this process runs, stated as `X-Valida-Release` on every response (C6 plan §8.4). Anything else **stops the backend** before it listens; the value is never printed. The document server reads the same variable with the same rule |
 | `RATE_LIMIT_WINDOW_MS` | no | `60000` | Rate-limit window |
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
@@ -772,8 +773,16 @@ while any other startup exception prints its classification only.
 ## Security
 
 - `X-Powered-By` disabled
-- Helmet: CSP `default-src 'none'`, `frame-ancestors 'none'`, `nosniff`,
-  `no-referrer`, HSTS, same-origin resource policy
+- Helmet: CSP exactly `default-src 'none'; frame-ancestors 'none'; base-uri 'none';
+  form-action 'none'` (C6-T5: Helmet's default directives are not merged in),
+  `nosniff`, `no-referrer`, same-origin resource policy
+- **No Strict-Transport-Security** (C6-T5). Helmet sends a one-year,
+  `includeSubDomains` policy by default; it is switched off because HSTS is
+  activated deliberately by the owner at C6 plan step P9 (Doc 13 §31)
+- **`X-Valida-Release`** on every response (C6-T5, D-6): the full commit SHA
+  from `RENDER_GIT_COMMIT`, read once at start-up — never from a request (an
+  incoming `X-Valida-Release` is ignored). Absent: no header. Malformed: the
+  backend refuses to start. See `src/config/releaseIdentity.js`
 - CORS from an explicit allowlist; no wildcard, no credentials
 - 100 KB JSON body limit
 - General rate limit: 120 requests / 60 s / client IP, configurable

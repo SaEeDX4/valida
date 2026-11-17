@@ -6,6 +6,7 @@ import { buildRobotsTxt, buildSitemapXml } from '../src/seo/discovery.js';
 import { JOB_OUTCOME } from './jobsClient.js';
 import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocument.js';
 import { establishVisitorAddress } from './visitorAddress.js';
+import { applyDocumentSecurityHeaders, documentSecurityHeaders } from './securityHeaders.js';
 import {
   CONDITIONAL_REQUEST_HEADERS,
   DOCUMENT_LIVENESS_PATH,
@@ -30,9 +31,14 @@ import {
  * section 63). This server is the host-independent, tested implementation of
  * the behaviour; C6 either deploys it or reproduces it on the chosen host
  * (edge function / HTML transformation) from the same src/seo modules, and the
- * production checks are repeated there. Compression, TLS, the www/apex
- * redirect and the frontend Content-Security-Policy are C6 hosting concerns and
- * are not done here.
+ * production checks are repeated there. Compression, TLS and the www/apex
+ * redirect are C6 hosting concerns and are not done here.
+ *
+ * C6-T5: every response — documents, assets, redirects, robots.txt, the
+ * sitemap, liveness, 403/404/405/500 — carries the enforced
+ * Content-Security-Policy and the other security headers of
+ * securityHeaders.js, and X-Valida-Release when the commit is configured.
+ * They are set first, before site access and before any other decision.
  *
  * SAFETY
  *   - GET and HEAD only; anything else is 405.
@@ -128,8 +134,10 @@ function send(res, method, status, headers, body = '') {
  */
 const BODILESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, log = () => {} }) {
+export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, log = () => {} }) {
   const privateSite = isPrivateSite(site);
+  // C6-T5: computed once; a build API base the policy cannot name is refused here.
+  const securityHeaders = documentSecurityHeaders({ browserApiBase });
   const distRoot = await realpath(distDir);
   const template = await loadTemplate(distRoot);
 
@@ -140,6 +148,7 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
     const finish = () =>
       log({ event: 'request', method, status: res.statusCode, route: routeKind, ms: Number((process.hrtime.bigint() - started) / 1_000_000n) });
     res.on('finish', finish);
+    applyDocumentSecurityHeaders(res, securityHeaders, release);
 
     try {
       const rawTarget = typeof req.url === 'string' ? req.url : '';
@@ -263,8 +272,8 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
   };
 }
 
-export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, host = '127.0.0.1', port = 4173, log }) {
-  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, trustedHops, site, log });
+export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, host = '127.0.0.1', port = 4173, log }) {
+  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, browserApiBase, release, trustedHops, site, log });
   const server = createServer((req, res) => {
     handle(req, res);
   });

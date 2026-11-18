@@ -27,8 +27,8 @@ jobs:
     timeout-minutes: 60
     services:
       mongodb:
-        # Digest pin: to be added when the registry can be read (C6-T6 handoff, hosted gates).
-        image: mongo:8.0
+        # Pinned by digest (owner record 2026-11-18-01): retrieved by Astra directly from Docker Registry.
+        image: mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
         ports: ['27017:27017']
     env:
       MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_e2e

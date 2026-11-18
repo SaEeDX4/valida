@@ -27,8 +27,8 @@ jobs:
     timeout-minutes: 30
     services:
       mongodb:
-        # Digest pin: to be added when the registry can be read (C6-T6 handoff, hosted gates).
-        image: mongo:8.0
+        # Pinned by digest (owner record 2026-11-18-01): retrieved by Astra directly from Docker Registry.
+        image: mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
         ports: ['27017:27017']
     env:
       MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_ci
@@ -46,7 +46,21 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:db
-      - run: npm audit --audit-level=high
+      # Dependency audit (Doc 13 §136): npm audit --json over ALL dependencies, decided by
+      # ops/ci/audit-policy.json — fail at high or above, except an owner-approved, dated,
+      # exactly scoped exception, which the gate names on every run.
+      - name: Audit gate controls
+        run: node --test ../ops/ci/audit-gate.test.mjs
+      - name: Audit gate (backend)
+        run: node ../ops/ci/audit-gate.mjs --package backend --out "$RUNNER_TEMP/audit"
+      - name: Keep the raw audit report and the gate's decision
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: audit-backend
+          path: ${{ runner.temp }}/audit/
+          if-no-files-found: error
+          retention-days: 30
 
   storage-double:
     name: backend (S3 driver and backup tooling, local S3 double)
@@ -89,6 +103,16 @@ jobs:
           package-manager-cache: false
       - run: npm ci
       - run: npm run verify:quality
+      - name: Audit gate (frontend)
+        run: node ../ops/ci/audit-gate.mjs --package frontend --out "$RUNNER_TEMP/audit"
+      - name: Keep the raw audit report and the gate's decision
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: audit-frontend
+          path: ${{ runner.temp }}/audit/
+          if-no-files-found: error
+          retention-days: 30
 
   e2e-guards:
     name: e2e guards and C5 statistics

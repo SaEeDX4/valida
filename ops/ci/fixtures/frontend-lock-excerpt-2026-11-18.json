@@ -1,0 +1,34 @@
+{
+  "name": "valida-frontend",
+  "lockfileVersion": 3,
+  "note": "C6-T6 audit-gate test fixture: an excerpt of the package lock (version and dev flag of the reviewed packages)",
+  "packages": {
+    "node_modules/picomatch": {
+      "version": "4.0.7",
+      "dev": true
+    },
+    "node_modules/fdir": {
+      "version": "6.5.0",
+      "dev": true
+    },
+    "node_modules/tinyglobby": {
+      "version": "0.2.17",
+      "dev": true
+    },
+    "node_modules/vite": {
+      "version": "8.2.4",
+      "dev": true
+    },
+    "node_modules/vitest": {
+      "version": "5.0.3",
+      "dev": true
+    },
+    "node_modules/@vitejs/plugin-react": {
+      "version": "6.1.1",
+      "dev": true
+    },
+    "node_modules/react": {
+      "version": "19.3.0"
+    }
+  }
+}

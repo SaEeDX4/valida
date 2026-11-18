@@ -9,7 +9,7 @@
 
 | Where | Do |
 | --- | --- |
-| `npm audit` | Known: GHSA-fc5q-39xc-vjpf (`picomatch` <=4.0.7, development tooling, no fix released). When a patched release appears, update within range and re-run. A new finding: check `npm audit --omit=dev` first (production exposure), apply the smallest supported fix, record it. Never `--force`, never a downgrade, never a silent exception |
+| Audit gate `FAIL` | Read the gate's lines and the `audit-*` artifact (the raw report and npm's exit code). `BLOCKING_ADVISORY`: a new finding at high or above — check production exposure, apply the smallest supported fix, record it. `REMEDIATION AVAILABLE`: a patched `picomatch` exists — follow the removal procedure in owner record 2026-11-18-01. `EXPIRED`: the exception ended on 2026-12-18T05:31:00Z — remediate, or obtain a **new** owner decision (never edit the dates). `PATH_EXPANSION`, `UNREVIEWED_VERSION`, `PRODUCTION_EXPOSURE`: the reviewed scope no longer matches — review before anything else. `AUDIT_ERROR`, `MALFORMED_REPORT`, registry unreadable: re-run once; if it persists, it is a CI fault, not a pass. Never `--force`, never a downgrade, never `--omit=dev` or `continue-on-error` |
 | Any test | Re-run **once** to rule out a runner fault; if it fails again it is a defect: reproduce locally on the same SHA, fix by a new commit. A test is never loosened to pass |
 | `storage-double` | Usually the moto install: compare the versions with `backend/tests/s3/requirements-moto.txt` |
 | A workflow file | `actionlint` and `zizmor` locally (both were clean at C6-T6) |

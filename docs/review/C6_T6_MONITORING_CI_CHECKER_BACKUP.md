@@ -45,7 +45,7 @@ Frames are parsed only after the error's own first line, and only when that line
 
 Everywhere: `permissions: contents: read`; no `pull_request_target`; actions pinned to commit SHAs; `persist-credentials: false`; Node from `.nvmrc`; the package-manager cache off. **No workflow deploys.** `ci` and `e2e` hold no secret.
 
-**Validated:** actionlint 1.7.12 — clean; zizmor 1.32.0 (auditor persona) — exit 14, two high `unpinned-images` findings, `mongo:8.0` in `ci.yml` and `e2e.yml`. Every command the workflows run was run locally (handoff §3).
+**Validated:** at the final C6-T6 commit, actionlint 1.7.12 — clean (exit 0); zizmor 1.32.0 (auditor persona) — **no findings (exit 0)**. Earlier rounds: exit 14 with two `unpinned-images` findings, resolved by the pin below. Every command the workflows run was run locally (handoffs).
 
 **The image digest — not pinned, and why.** Read-only registry access has been refused every time it was tried, on 2026-11-17 (correction 1) and again on 2026-11-18 05:16 UTC (the CI remediation). The egress gateway answers **HTTP 403 to CONNECT** for `auth.docker.io`, `registry-1.docker.io` and `index.docker.io` (curl exit 56, "CONNECT tunnel failed, response 403"; the gateway lists each as `connect_rejected`). Earlier, the same was seen for `hub.docker.com`, `mirror.gcr.io` and `public.ecr.aws`, and the web-fetch tool refused `hub.docker.com`. A secondary source, GitHub's `docker-library/repo-info` (`repos/mongo/remote/8.0.md`, commit `6472840a`), lists `mongo:8.0` as `sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361`. That is **not registry-verified**, and the workflows are not pinned to it.
 
@@ -56,6 +56,8 @@ $t=(Invoke-RestMethod "https://auth.docker.io/token?service=registry.docker.io&s
 ```
 
 Then pin both references as `mongo:8.0@<that digest>` (`ci.yml`, `e2e.yml`) and re-run zizmor. The tag moves, so the digest is the one the owner reads, whether or not it equals the secondary value.
+
+**Pinned (owner record 2026-11-18-01).** Both service images are now `mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361`. **Astra retrieved this digest directly from Docker Registry**; it equals the secondary-source value above. Claude did not verify it against the registry: the refusals above stand.
 
 **Dependency remediation (authorised 2026-11-17, third record).**
 
@@ -72,19 +74,41 @@ Then pin both references as `mongo:8.0@<that digest>` (`ci.yml`, `e2e.yml`) and 
 
 There was no `audit fix --force`, no downgrade and no exception. The resolution was done with npm 11.21.1, the npm Node 24 ships (the container's npm 10.9.9 crashes in its peer-set resolution on the frontend tree); the lock files stay version 3. **The production build of the frontend is byte-identical before and after** (39 files, SHA-256 compared).
 
-**After:** `npm audit --omit=dev` finds **0** in all four packages. The full `npm audit --audit-level=high` still exits **1** in `backend` and `frontend`, with 6 high findings each. All six are the one `picomatch` advisory and the tooling packages that depend on it, and npm's only offered "fix" is a semver-major *downgrade* (vite 6.2.7 / vitest 3.1.4). **`ci / backend` therefore stays red at its audit step.**
+**After:** `npm audit --omit=dev` finds **0** in all four packages. The full `npm audit` still reports 6 high findings each in `backend` and `frontend`: the one `picomatch` advisory and the tooling packages that depend on it. npm's only offered "fix" is a semver-major *downgrade* (vite 6.2.7 / vitest 3.1.4).
 
-**`picomatch` — no supported fix; the decision needed.**
+**`picomatch` — no supported fix.**
 
 - **Upstream status:**
-  - npm's latest release is 4.0.7 (2026-08-24).
+  - npm's latest release is 4.0.7 (2026-08-24), unchanged when re-checked on 2026-11-18.
   - The advisory came out on 2026-10-19 (CVE-2026-112366, Red Hat: Important, 7.5).
   - The upstream `master` has 19 commits since 4.0.7, the last on 2026-08-27, and none touches the affected code.
   - The referenced pull request (micromatch/picomatch#194) is not in any branch.
-- **Exposure:** development and build tooling only. `vite` and `vitest` match globs that come from this repository's own configuration, never from a request. Nothing from `picomatch` is in the API's runtime or the browser bundle. The document server's host runs `vite build` once, on the repository's own configuration.
-- **Smallest decision:** a **dated, scoped risk acceptance** for GHSA-fc5q-39xc-vjpf in development tooling, until upstream publishes a fix. It needs a way to express it that keeps the gate whole for everything else. The workflow cannot simply audit with `--omit=dev`: that would hide every future development-only advisory. The alternative is to accept `ci / backend` (and, if one is added, a frontend audit) red until `picomatch` is released. Either is the owner's call; neither is applied here.
+- **Exposure:** development and build tooling only. Globs come from the repository's own configuration, never from a request. Nothing from it is in the API runtime or the browser bundle.
 
-**Needs a real Actions run:** the runner environment (Ubuntu 24.04 image, the service container, the Python on the runner), the `upload-artifact` behaviour, the schedule, the protected environment, fork behaviour. **Expected at the first run:** `ci / backend` red at `npm audit` because of the `picomatch` development-tooling advisory (no fix released). The `mongoose` advisories are resolved (9.11.4).
+**The audit gate and the approved exception (owner record 2026-11-18-01).** `ops/ci/audit-gate.mjs` with `ops/ci/audit-policy.json` replaces `npm audit --audit-level=high` in the `backend` CI job and adds the same check to the `frontend` job.
+
+It runs `npm audit --json` over **all** dependencies, keeps the complete raw report and npm's own exit code (uploaded as the `audit-backend` / `audit-frontend` artifacts), and applies the existing policy: **fail at high or above**.
+
+The one exception is **GHSA-fc5q-39xc-vjpf**, and only for:
+- `picomatch` 4.0.7 at `node_modules/picomatch`;
+- the reviewed dependent packages, node paths and versions, each a development dependency;
+- the period **2026-11-18T05:31:00Z → 2026-12-18T05:31:00Z**, never extended automatically.
+
+Within that, the gate reports **PASS WITH APPROVED EXCEPTION**, naming the advisory and the period.
+
+It **fails** on:
+- any other finding at high or above;
+- a path, version or dependent-package expansion;
+- production exposure;
+- a changed advisory range;
+- a patched `picomatch` release appearing (remediate instead);
+- audit, registry or network errors;
+- malformed or unsupported reports or lock files;
+- before the start, or at or after the expiry.
+
+It uses no `--omit=dev`, no `continue-on-error` and no unconditional success. The 20 controls are in `ops/ci/audit-gate.test.mjs` and run in the backend job. The removal procedure is in the owner record.
+
+**Needs a real Actions run:** the runner environment (Ubuntu 24.04 image, the service container, the Python on the runner), the `upload-artifact` behaviour, the schedule, the protected environment, fork behaviour. **Expected at the first run:** both audit gates report `PASS WITH APPROVED EXCEPTION` (GHSA-fc5q-39xc-vjpf), as they do locally; they fail from 2026-12-18T05:31:00Z, or earlier if a patched `picomatch` is released. The `mongoose` advisories are resolved (9.11.4).
 
 ## 3. The review-host checker (plan §7.1)
 

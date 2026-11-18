@@ -21,9 +21,9 @@ Pushing `c6-work` runs **no** workflow (plan §6). CI first runs when a pull req
 
 | Job | Expected | Why |
 | --- | --- | --- |
-| `ci / backend` | **red at `npm audit --audit-level=high`**: the `picomatch` advisory GHSA-fc5q-39xc-vjpf in development tooling, no fix released | `mongoose` resolved (9.11.4); production dependencies audit clean; every other step green |
+| `ci / backend` | green; the audit gate prints **`PASS WITH APPROVED EXCEPTION`** for GHSA-fc5q-39xc-vjpf (until 2026-12-18T05:31:00Z) | `mongoose` resolved (9.11.4); the raw audit report is the `audit-backend` artifact. A FAIL here is real: runbook 2 §1 |
 | `ci / storage-double` | green | moto from `backend/tests/s3/requirements-moto.txt` |
-| `ci / frontend` | green | |
+| `ci / frontend` | green; the same audit gate result | the `audit-frontend` artifact |
 | `ci / e2e guards and C5 statistics` | green | |
 | `e2e` | green (advisory) | first run on GitHub's runners: if a timing-sensitive case differs from local, record it; do not loosen it |
 

@@ -13,8 +13,9 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.js'],
     // tests/db needs MongoDB (npm run test:db); tests/s3 needs the S3 test double (npm run test:s3, C6-T4);
-    // tests/backup needs the backup double (npm run test:backup, C6-T6).
-    exclude: ['tests/db/**', 'tests/s3/**', 'tests/backup/**', 'node_modules/**'],
+    // tests/backup needs the backup double (npm run test:backup, C6-T6); tests/mongo-roles needs an auth-enabled
+    // MongoDB admin URI (npm run test:mongo-roles, proposed MongoDB-native change).
+    exclude: ['tests/db/**', 'tests/s3/**', 'tests/backup/**', 'tests/mongo-roles/**', 'tests/recovery/**', 'tests/scanner/**', 'node_modules/**'],
     // Integration tests bind sockets and exercise a shared rate limiter;
     // running files sequentially keeps them deterministic.
     fileParallelism: false,

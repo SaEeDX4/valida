@@ -26,8 +26,8 @@ const failureOf = (env) => {
 
 describe('storage is optional, and absent means absent', () => {
   it('no storage variables -> driver null (the service still starts; readiness reports it)', () => {
-    expect(loadConfig(base).resumeStorage).toEqual({ driver: null, localRoot: null, s3: null });
-    expect(loadConfig(production).resumeStorage).toEqual({ driver: null, localRoot: null, s3: null });
+    expect(loadConfig(base).resumeStorage).toEqual({ driver: null, localRoot: null, s3: null, mongodb: null });
+    expect(loadConfig(production).resumeStorage).toEqual({ driver: null, localRoot: null, s3: null, mongodb: null });
   });
 
   it('empty values copied from a template are treated as unset', () => {
@@ -36,13 +36,13 @@ describe('storage is optional, and absent means absent', () => {
 
   it('the local driver with a valid root is accepted for local development', () => {
     const config = loadConfig({ ...base, RESUME_STORAGE_DRIVER: 'local', RESUME_STORAGE_LOCAL_ROOT: privateRoot });
-    expect(config.resumeStorage).toEqual({ driver: 'local', localRoot: privateRoot, s3: null });
+    expect(config.resumeStorage).toEqual({ driver: 'local', localRoot: privateRoot, s3: null, mongodb: null });
   });
 
   it('the root is never serialised', () => {
     const config = loadConfig({ ...base, RESUME_STORAGE_DRIVER: 'local', RESUME_STORAGE_LOCAL_ROOT: privateRoot });
     expect(JSON.stringify(config)).not.toContain(privateRoot);
-    expect(JSON.parse(JSON.stringify(config)).resumeStorage).toEqual({ driver: 'local', localRoot: '[redacted]', s3: null });
+    expect(JSON.parse(JSON.stringify(config)).resumeStorage).toEqual({ driver: 'local', localRoot: '[redacted]', s3: null, mongodb: null });
   });
 });
 

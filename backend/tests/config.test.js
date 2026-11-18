@@ -120,7 +120,7 @@ describe('configuration', () => {
     );
     expect(Object.keys(config).filter((key) => key.toLowerCase().includes('storage'))).toEqual(['resumeStorage']);
     // C6-T4: the S3 settings are read only under their own names; RESUME_STORAGE_BUCKET is still ignored.
-    expect(config.resumeStorage).toEqual({ driver: null, localRoot: null, s3: null });
+    expect(config.resumeStorage).toEqual({ driver: null, localRoot: null, s3: null, mongodb: null });
     expect(JSON.stringify(config)).not.toMatch(/unused/);
   });
 

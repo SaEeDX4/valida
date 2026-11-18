@@ -43,6 +43,14 @@ export const BACKUP_ROLES = Object.freeze({
   manifest: { prefix: 'BACKUP_MANIFEST', buckets: ['primary', 'copy', 'log'] },
   'log-writer': { prefix: 'BACKUP_LOG_WRITER', buckets: ['log'] },
   restorer: { prefix: 'BACKUP_RESTORER', buckets: ['copy', 'log', 'restore'] },
+  // Proposed (MongoDB-native r2): the durable deletion journal in the locked log bucket
+  // (deletionJournal.js). Writer: create/read/list under deletion-journal/ only. Reader: read/list.
+  'journal-writer': { prefix: 'BACKUP_JOURNAL_WRITER', buckets: ['log'] },
+  'journal-reader': { prefix: 'BACKUP_JOURNAL_READER', buckets: ['log'] },
+  // r3 (D-MN-2): the encrypted recovery copies, in their own locked bucket (BACKUP_COPY_BUCKET), prefix
+  // encrypted-backups/. Writer: create/read only (no delete, no listing needed); reader: read.
+  'backup-dump-writer': { prefix: 'BACKUP_DUMP_WRITER', buckets: ['copy'] },
+  'backup-dump-reader': { prefix: 'BACKUP_DUMP_READER', buckets: ['copy'] },
 });
 const BUCKET_VARIABLE = Object.freeze({ primary: 'BACKUP_PRIMARY_BUCKET', copy: 'BACKUP_COPY_BUCKET', log: 'BACKUP_LOG_BUCKET', restore: 'BACKUP_RESTORE_BUCKET' });
 

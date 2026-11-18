@@ -86,6 +86,114 @@ jobs:
       - run: npm run test:s3
       - run: npm run test:backup
 
+  mongo-roles:
+    # Proposed (MongoDB-native): the least-privilege database roles and the recovery
+    # commands, against an auth-enabled disposable MongoDB (same pinned image).
+    # The admin password is generated per run and masked; nothing is persisted.
+    name: backend (MongoDB roles and recovery commands, auth-enabled MongoDB)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: An auth-enabled disposable MongoDB
+        run: |
+          pwd="$(openssl rand -hex 24)"
+          echo "::add-mask::$pwd"
+          docker run -d --name qa-mongo-auth -p 127.0.0.1:27018:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=qa_admin -e MONGO_INITDB_ROOT_PASSWORD="$pwd" \
+            mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
+          for i in $(seq 1 60); do docker exec qa-mongo-auth mongosh --quiet -u qa_admin -p "$pwd" --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
+          echo "MONGODB_ROLES_ADMIN_URI=mongodb://qa_admin:$pwd@127.0.0.1:27018/admin?authSource=admin" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run test:mongo-roles
+
+  recovery:
+    # Proposed (MongoDB-native r2): the durable deletion journal (S3 double, compliance-locked log bucket)
+    # and the restore-target identification between TWO auth-enabled disposable replica sets.
+    name: backend (durable deletion journal and restore-target safety, two replica sets + S3 double)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: The S3 test double (exact versions)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/moto"
+          "$RUNNER_TEMP/moto/bin/pip" install --no-input -r tests/s3/requirements-moto.txt
+          echo "VALIDA_TEST_MOTO_PYTHON=$RUNNER_TEMP/moto/bin/python" >> "$GITHUB_ENV"
+      - name: Two auth-enabled disposable replica sets (rslive, rsrestore)
+        run: |
+          openssl rand -base64 48 > "$RUNNER_TEMP/keyfile" && chmod 400 "$RUNNER_TEMP/keyfile" && sudo chown 999:999 "$RUNNER_TEMP/keyfile"
+          for spec in rslive:27048 rsrestore:27049; do
+            n=${spec%:*}; p=${spec#*:}; pwd="$(openssl rand -hex 24)"; echo "::add-mask::$pwd"
+            docker run -d --name "$n" --network host -v "$RUNNER_TEMP/keyfile:/keyfile:ro" \
+              mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361 \
+              --replSet "$n" --port "$p" --bind_ip 127.0.0.1 --auth --keyFile /keyfile
+            for i in $(seq 1 60); do docker exec "$n" mongosh --quiet --port "$p" --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
+            docker exec "$n" mongosh --quiet --port "$p" --eval "rs.initiate({_id:'$n',members:[{_id:0,host:'127.0.0.1:$p'}]})"
+            for i in $(seq 1 60); do docker exec "$n" mongosh --quiet --port "$p" --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -q true && break; sleep 1; done
+            docker exec "$n" mongosh --quiet --port "$p" admin --eval "db.createUser({user:'qa_admin',pwd:'$pwd',roles:['root']})"
+            var=$([ "$n" = rslive ] && echo LIVE || echo TARGET)
+            echo "MONGODB_RECOVERY_${var}_ADMIN_URI=mongodb://qa_admin:$pwd@127.0.0.1:$p/admin?replicaSet=$n&authSource=admin" >> "$GITHUB_ENV"
+          done
+      - run: npm ci
+      - run: npm run test:recovery
+
+  scanner:
+    # Proposed (MongoDB-native r2, finding 3): the real ClamAV daemon. On the runner freshclam fetches the
+    # OFFICIAL signatures (not reachable from the local evidence environment) [A]; the suite fails, never skips,
+    # when clamd does not answer.
+    name: backend (résumé scanning with the real ClamAV daemon)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
+        ports:
+          - 27017:27017
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_scanner
+      CLAMD_TEST_SIGNATURES: official
+      TZ: UTC
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: ClamAV with the official signatures
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q clamav clamav-daemon
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam --quiet
+          printf 'TCPSocket 3310\nTCPAddr 127.0.0.1\nStreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\nDatabaseDirectory /var/lib/clamav\nForeground no\n' | sudo tee /etc/clamav/clamd-ci.conf
+          sudo clamd -c /etc/clamav/clamd-ci.conf
+          for i in $(seq 1 120); do printf 'zVERSION\0' | timeout 2 nc 127.0.0.1 3310 | grep -q ClamAV && break; sleep 2; done
+      - run: npm ci
+      - run: npm run test:scanner
+
   frontend:
     name: frontend (build, budgets, tests)
     runs-on: ubuntu-24.04

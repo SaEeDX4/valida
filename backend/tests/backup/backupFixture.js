@@ -10,7 +10,7 @@ import { startMoto } from '../s3/motoServer.js';
  * creating restore targets) use the test-only `qa-fixture` user through
  * botocore in the double's own Python — never the tooling under test.
  */
-export const BACKUP_SETUP_ACTIONS = 27;
+export const BACKUP_SETUP_ACTIONS = 39;
 const PYTHON = () => process.env.VALIDA_TEST_MOTO_PYTHON;
 
 export async function startBackupMoto(options = {}) {

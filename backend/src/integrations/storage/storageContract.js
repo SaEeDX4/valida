@@ -11,6 +11,8 @@ export const STORAGE_PROVIDERS = Object.freeze({
   LOCAL_DEVELOPMENT: 'LOCAL_DEVELOPMENT',
   // C6-T4: managed private object storage over the S3 API (Doc 10 section 95's example value).
   S3_COMPATIBLE: 'S3_COMPATIBLE',
+  // Proposed (MongoDB-native): one immutable BSON document per résumé version, in MongoDB.
+  MONGODB: 'MONGODB',
 });
 
 /**

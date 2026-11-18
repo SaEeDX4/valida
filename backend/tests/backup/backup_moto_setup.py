@@ -76,12 +76,30 @@ users = {
         {'Effect': 'Allow', 'Action': APP_ACTIONS, 'Resource': [obj(RESTORE)]},
         {'Effect': 'Allow', 'Action': ['s3:ListBucket'], 'Resource': [bucket(RESTORE)]},
     ],
+    # Proposed (MongoDB-native r2): the durable deletion journal (deletionJournal.js), in the locked log bucket.
+    'qa-journal-writer': [
+        {'Effect': 'Allow', 'Action': ['s3:PutObject', 's3:GetObject'], 'Resource': [obj(LOG, 'deletion-journal/*')]},
+        {'Effect': 'Allow', 'Action': ['s3:ListBucket'], 'Resource': [bucket(LOG)]},
+    ],
+    'qa-journal-reader': [
+        {'Effect': 'Allow', 'Action': ['s3:GetObject'], 'Resource': [obj(LOG, 'deletion-journal/*')]},
+        {'Effect': 'Allow', 'Action': ['s3:ListBucket'], 'Resource': [bucket(LOG)]},
+    ],
+    # Proposed (MongoDB-native r3, D-MN-2): the encrypted recovery copies, in the locked copy bucket.
+    'qa-dump-writer': [
+        {'Effect': 'Allow', 'Action': ['s3:PutObject', 's3:GetObject'], 'Resource': [obj(COPY, 'encrypted-backups/*')]},
+        {'Effect': 'Allow', 'Action': ['s3:ListBucket'], 'Resource': [bucket(COPY)]},
+    ],
+    'qa-dump-reader': [
+        {'Effect': 'Allow', 'Action': ['s3:GetObject'], 'Resource': [obj(COPY, 'encrypted-backups/*')]},
+        {'Effect': 'Allow', 'Action': ['s3:ListBucket'], 'Resource': [bucket(COPY)]},
+    ],
     'qa-fixture': [
         {'Effect': 'Allow', 'Action': ['s3:*'], 'Resource': ['arn:aws:s3:::*']},
     ],
 }
 keys = {}
-for name, statements in users.items():                                                # 7 users x 3 = 21 (7..27)
+for name, statements in users.items():                                                # 11 users x 3 = 33 (7..39)
     iam.create_user(UserName=name)
     key = iam.create_access_key(UserName=name)['AccessKey']
     iam.put_user_policy(UserName=name, PolicyName=f'{name}-policy', PolicyDocument=json.dumps({'Version': '2012-10-17', 'Statement': statements}))

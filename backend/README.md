@@ -221,13 +221,14 @@ node tests/diagnostics/localhost-addressing.mjs
 | `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4` / `verify:b5` / `verify:b6`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
 | `MONGODB_TEST_DISPOSABLE_TOPOLOGY` | tests only (B7) | unset | `1` lets the suppression read-preference cases RP-4 and RP-5 step the replica set's primary down and pause a secondary's replication. **Set it only for a replica set created for the test.** Unset, those two cases report NOT RUN |
 | `MONGODB_TEST_PARTITION_NODES` | tests only (B7 r6) | unset | Three `127.0.0.1:<port>` addresses of **fresh, disposable** `mongod --replSet rs2 --setParameter enableTestCommands=1` processes, comma-separated. Lets the stale-primary cases SP-1…SP-3 (`tests/db/b7-suppression-stale-primary.test.js`) initiate `rs2` behind a TCP partition bridge (each member at its port + 1000) and partition it. `MONGODB_TEST_URI` must then name the bridge addresses with `replicaSet=rs2`. A set already initiated with other members is refused. Unset, those cases report NOT RUN |
-| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `s3` (C6-T4, S3-compatible private object storage — any environment), `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. There is never a fallback from `s3` to disk |
+| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `mongodb` (proposed launch driver: private résumé documents in MongoDB — any environment), `s3` (C6-T4, S3-compatible private object storage — any environment), `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. There is never a fallback from `s3` to disk |
 | `RESUME_STORAGE_S3_ENDPOINT` | with `s3` | — | C6-T4. The S3 API origin only (`https://host[:port]`; no credentials, path or query). **`https` is required**; plain `http` is accepted only for a loopback test endpoint with `APP_ENV=local` and `NODE_ENV` not production |
 | `RESUME_STORAGE_S3_REGION` | with `s3` | — | C6-T4. The signing region, e.g. `eu-central-1`, or `auto` where the provider says so |
 | `RESUME_STORAGE_S3_BUCKET` | with `s3` | — | C6-T4. The private bucket for this environment only |
 | `RESUME_STORAGE_S3_ACCESS_KEY_ID` / `RESUME_STORAGE_S3_SECRET_ACCESS_KEY` | with `s3` | — | C6-T4. **Secrets.** A credential scoped to object put, read (head), delete and list in that bucket only (Doc 13 §101). Held non-enumerably; in no log, error or configuration view |
 | `RESUME_STORAGE_S3_URL_STYLE` | no | `path` | C6-T4. `path` or `virtual` (bucket in the host name) |
 | `RESUME_STORAGE_S3_TIMEOUT_MS` | no | `15000` | C6-T4. Timeout of one storage request, 1000–120000 ms |
+| `RESUME_STORAGE_MONGODB_URI` | with `mongodb` | — | Proposed (MongoDB-native launch). **Secret.** The résumé store's OWN database user (role `valida_resume_storage`: find, insert, remove on `resume_files` only; no update). Refused without `RESUME_STORAGE_DRIVER=mongodb`; in production refused when equal to `MONGODB_URI`. One immutable document per résumé version (≤ 5 MiB, one atomic insert, write concern majority + journal). Held non-enumerably; in no log, error or configuration view |
 | `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
 | `APPLICATION_RATE_LIMIT_WINDOW_MS` | no (B5) | `900000` | 1000–86400000. Apply rate-limit window (Doc 09 section 34: 15 minutes) |
 | `APPLICATION_RATE_LIMIT_MAX` | no (B5) | `10` | 1–100000. Apply **attempts** per window per client IP — counted separately from, and in addition to, the general limit |
@@ -270,6 +271,25 @@ production value depends on how many proxies actually sit in front of the app
 and must be confirmed per deployment.
 
 ---
+
+## MongoDB-native storage, recovery and scanning (proposed r3)
+
+The launch design stores each résumé version as one private document in MongoDB
+(`RESUME_STORAGE_DRIVER=mongodb`). Three operational commands run **outside the
+API** with their own least-privilege credentials. None of these variables is set
+on the API service.
+
+| Command | Purpose | Its own credentials |
+| --- | --- | --- |
+| `npm run ops:recovery:*` (`scripts/mongo-recovery.mjs`) | authorised durable deletion; deletion journal; restore-target preparation; snapshot restore gate; encrypted recovery copy (create / restore) | `RECOVERY_OPERATOR_MONGODB_URI` (valida_deletion_operator), `RECOVERY_BACKUP_READER_MONGODB_URI` (valida_backup_reader), `RECOVERY_RESTORED_MONGODB_URI` (the restore writer/loader made by `prepare-target`), `RECOVERY_TARGET_ADMIN_MONGODB_URI` (owner only, the temporary target), `BACKUP_JOURNAL_WRITER_*` / `BACKUP_JOURNAL_READER_*` (journal, `BACKUP_LOG_BUCKET`), `BACKUP_DUMP_WRITER_*` / `BACKUP_DUMP_READER_*` (encrypted copies, `BACKUP_COPY_BUCKET`), `BACKUP_RECIPIENT_PUBLIC_KEYS` (≥ 2 PEM public keys), `RECOVERY_PRIVATE_KEY_PASSPHRASE` (owner's terminal only) |
+| `npm run ops:resume:scan` (`scripts/resume-scan.mjs`) | the ClamAV scan worker: new work first, bounded retries with backoff, exit 3 on backlog | `RESUME_SCANNER_MONGODB_URI` (valida_resume_scanner), `CLAMD_HOST`, `CLAMD_PORT`, `SCANNER_*` |
+| `scripts/atlas-snapshot-freshness.mjs` | the Flex backup alert | Atlas service account, Project Read Only |
+
+The restore gates write **only** to a target the owner has prepared and
+authorised (`prepare-target`, mode `snapshot` or `load`), after the target,
+the deletion history and — for a recovery copy — the encrypted material have
+all been verified. Their tests: `npm run test:recovery`, `test:mongo-roles`,
+`test:scanner`.
 
 ## Recruitment access (C6-T1)
 

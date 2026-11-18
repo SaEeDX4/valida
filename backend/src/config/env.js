@@ -575,7 +575,10 @@ const baseSchema = z.object({
   MONGODB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5_000),
 
   // Private resume storage — Milestone B4. See the section above.
-  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local', 's3']).optional()),
+  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local', 's3', 'mongodb']).optional()),
+  // Proposed (MongoDB-native): the storage credential — a DEDICATED database user
+  // whose role grants insert/find/remove on resume_files only. Never logged.
+  RESUME_STORAGE_MONGODB_URI: emptyAsUnset(mongodbUri.optional()),
   // C6-T4 — the S3-compatible driver. Presence only here; the rules (and the
   // refusal messages, which never echo a value) are applied below.
   RESUME_STORAGE_S3_ENDPOINT: emptyAsUnset(z.string().optional()),
@@ -739,6 +742,9 @@ const RULE_TEXT = {
   RESUME_STORAGE_DRIVER:
     'must be "s3" (S3-compatible private object storage), "local" (development only) or left unset',
   RESUME_STORAGE_S3_REQUIRED: 'is required when RESUME_STORAGE_DRIVER=s3',
+  RESUME_STORAGE_MONGODB_REQUIRED: 'is required when RESUME_STORAGE_DRIVER=mongodb (a dedicated storage database user)',
+  RESUME_STORAGE_MONGODB_WITHOUT_DRIVER: 'is set but RESUME_STORAGE_DRIVER is not "mongodb"; set the driver, or remove it',
+  RESUME_STORAGE_MONGODB_SHARED_CREDENTIAL: 'must not equal MONGODB_URI in production: the storage credential is a separate, least-privilege database user',
   RESUME_STORAGE_S3_WITHOUT_DRIVER: 'is set but RESUME_STORAGE_DRIVER is not "s3"; set the driver, or remove the S3 settings',
   RESUME_STORAGE_S3_ENDPOINT_INVALID:
     'must be an https:// origin only (scheme, host and optional port; no credentials, path, query or fragment)',
@@ -1017,6 +1023,14 @@ export function loadConfig(env = process.env) {
   // no fallback to disk. A broken setting stops the service (Doc 09 section 159).
   const s3Settings = checkS3Settings(config, storageDriver === 's3');
   missing.push(...s3Settings.problems);
+  // Proposed (MongoDB-native): résumés in MongoDB, through a dedicated storage credential.
+  const storageMongoUri = config.RESUME_STORAGE_MONGODB_URI ?? null;
+  if (storageDriver === 'mongodb') {
+    if (storageMongoUri === null) missing.push({ variable: 'RESUME_STORAGE_MONGODB_URI', rule: RULE_TEXT.RESUME_STORAGE_MONGODB_REQUIRED });
+    else if (isProduction && storageMongoUri === config.MONGODB_URI) missing.push({ variable: 'RESUME_STORAGE_MONGODB_URI', rule: RULE_TEXT.RESUME_STORAGE_MONGODB_SHARED_CREDENTIAL });
+  } else if (storageMongoUri !== null) {
+    missing.push({ variable: 'RESUME_STORAGE_MONGODB_URI', rule: RULE_TEXT.RESUME_STORAGE_MONGODB_WITHOUT_DRIVER });
+  }
 
   // B6 — transactional email (see checkNotificationSettings).
   const notificationSettings = {
@@ -1221,6 +1235,8 @@ export function loadConfig(env = process.env) {
       // C6-T4: the S3 settings. The credentials are a NON-ENUMERABLE property:
       // in no serialised view, log line or inspection of the configuration.
       s3: storageDriver === 's3' ? s3Settings.value : null,
+      // Proposed (MongoDB-native): the storage credential, redacted in every serialised view.
+      mongodb: storageDriver === 'mongodb' ? Object.freeze(withRedactedSerialisation({ uri: storageMongoUri }, ['uri'])) : null,
     }),
     /*
      * B7 — recipient suppression (design rev 8 §4.2, §5). The key bytes are

@@ -1,5 +1,6 @@
 import { LocalPrivateStorage } from './localPrivateStorage.js';
 import { S3PrivateStorage } from './s3PrivateStorage.js';
+import { MongoPrivateStorage } from './mongoPrivateStorage.js';
 import { StorageInitializationError } from './storageContract.js';
 
 export {
@@ -91,6 +92,10 @@ export function createPrivateStorage({ config, logger, clock } = {}) {
   if (driver === 's3') {
     // C6-T4 — managed private object storage over the S3 API. Never a fallback to disk.
     return new S3PrivateStorage({ s3: config.resumeStorage.s3, logger, clock });
+  }
+  if (driver === 'mongodb') {
+    // Proposed (MongoDB-native): résumés in MongoDB, through the dedicated storage credential.
+    return new MongoPrivateStorage({ uri: config.resumeStorage.mongodb.uri, logger, clock });
   }
   // Unreachable through loadConfig, which accepts only the drivers above.
   throw new StorageInitializationError('INVALID_REQUEST');

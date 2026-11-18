@@ -174,6 +174,62 @@ test('a clean report → PASS, and no exception is claimed', () => {
   assert.equal(run('frontend', { reportText: clean, auditExit: 1 }).status, 'FAIL'); // exit 1 with no findings: inconsistent
 });
 
+// Correction (Astra, 2026-11-18): every entry must be explained by the
+// advisories it reaches, at its own severity. An entry with no advisory root,
+// or whose roots do not account for its severity, fails closed.
+const qaEntry = (name, severity, via) => ({ name, severity, isDirect: false, via, effects: [], range: '*', nodes: [`node_modules/${name}`], fixAvailable: false });
+const addEntries = (...list) => (rep) => {
+  for (const e of list) rep.vulnerabilities[e.name] = e;
+  rep.metadata.vulnerabilities.total += list.length;
+};
+const qaAdvisory = (name, severity, id) => ({ source: 9, name, dependency: name, title: 'QA', url: `https://github.com/advisories/${id}`, severity, cwe: [], cvss: {}, range: '<1.0.0' });
+
+test('an entry with an empty via (no advisory at all) fails closed — the reproduced fail-open', () => {
+  // Astra's control, exactly: the only entry, high, via [], total 1, npm exit 1.
+  const only = JSON.stringify({ auditReportVersion: 2, vulnerabilities: { unexpected: { name: 'unexpected', severity: 'high', via: [], nodes: ['node_modules/unexpected'] } }, metadata: { vulnerabilities: { total: 1 } } });
+  for (const pkg of ['backend', 'frontend']) {
+    const r = run(pkg, { reportText: only, auditExit: 1 });
+    assert.equal(r.status, 'FAIL');
+    assert.deepEqual(reasons(r), ['MALFORMED_REPORT']);
+    assert.deepEqual(r.exceptionsApplied, []);
+  }
+  // Critical, and beside the approved finding: the exception does not cover it.
+  const r = run('backend', { report: addEntries(qaEntry('unexpected', 'critical', [])) });
+  assert.equal(r.status, 'FAIL');
+  assert.deepEqual(reasons(r), ['MALFORMED_REPORT']);
+});
+
+test('a cyclic via chain with no advisory root fails closed; a real cycle that reaches the advisory still passes', () => {
+  const r = run('backend', { report: addEntries(qaEntry('qa-a', 'high', ['qa-b']), qaEntry('qa-b', 'high', ['qa-a'])) });
+  assert.equal(r.status, 'FAIL');
+  assert.deepEqual(reasons(r), ['MALFORMED_REPORT', 'MALFORMED_REPORT']);
+  const self = run('frontend', { report: addEntries(qaEntry('qa-self', 'critical', ['qa-self'])) });
+  assert.deepEqual(reasons(self), ['MALFORMED_REPORT']);
+  // The backend report really contains vitest ⇄ @vitest/coverage-v8; both reach picomatch's advisory.
+  const real = JSON.parse(fixture('backend').reportText).vulnerabilities;
+  assert.ok(real.vitest.via.includes('@vitest/coverage-v8') && real['@vitest/coverage-v8'].via.includes('vitest'));
+  assert.equal(run('backend').status, 'PASS WITH APPROVED EXCEPTION');
+});
+
+test('a high/critical entry whose reachable roots do not explain its severity fails closed', () => {
+  // High, but its only advisory is moderate.
+  const direct = run('backend', { report: addEntries(qaEntry('qa-up', 'high', [qaAdvisory('qa-up', 'moderate', 'GHSA-mmmm-mmmm-mmmm')])) });
+  assert.equal(direct.status, 'FAIL');
+  assert.deepEqual(reasons(direct), ['MALFORMED_REPORT']);
+  // High, through an entry whose only advisory is moderate (consistent itself).
+  const chain = run('frontend', { report: addEntries(qaEntry('qa-top', 'high', ['qa-mid']), qaEntry('qa-mid', 'moderate', [qaAdvisory('qa-mid', 'moderate', 'GHSA-mmmm-mmmm-mmmm')])) });
+  assert.equal(chain.status, 'FAIL');
+  assert.deepEqual(reasons(chain), ['MALFORMED_REPORT']);
+  // An in-scope path whose severity was raised beyond the approved advisory.
+  const raised = run('backend', { report: (rep) => (rep.vulnerabilities.vite.severity = 'critical') });
+  assert.equal(raised.status, 'FAIL');
+  assert.deepEqual(reasons(raised), ['MALFORMED_REPORT']);
+  // An entry labelled below the threshold that in fact reaches the high advisory.
+  const lowered = run('frontend', { report: (rep) => (rep.vulnerabilities.tinyglobby.severity = 'moderate') });
+  assert.equal(lowered.status, 'FAIL');
+  assert.deepEqual(reasons(lowered), ['MALFORMED_REPORT']);
+});
+
 test('the policy refuses a period that is not exactly 30 days, or a range form it cannot evaluate', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'valida-audit-policy-'));
   const bad = (change) => {

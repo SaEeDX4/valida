@@ -104,9 +104,10 @@ It **fails** on:
 - a patched `picomatch` release appearing (remediate instead);
 - audit, registry or network errors;
 - malformed or unsupported reports or lock files;
+- any entry the report does not explain — no advisory reachable through its `via` (empty, or a cycle with no advisory root), or a severity its reachable advisories do not account for (`MALFORMED_REPORT`; correction of 2026-11-18 after Astra reproduced a fail-open on an entry with an empty `via`);
 - before the start, or at or after the expiry.
 
-It uses no `--omit=dev`, no `continue-on-error` and no unconditional success. The 20 controls are in `ops/ci/audit-gate.test.mjs` and run in the backend job. The removal procedure is in the owner record.
+It uses no `--omit=dev`, no `continue-on-error` and no unconditional success. The 23 controls are in `ops/ci/audit-gate.test.mjs` and run in the backend job. The removal procedure is in the owner record.
 
 **Needs a real Actions run:** the runner environment (Ubuntu 24.04 image, the service container, the Python on the runner), the `upload-artifact` behaviour, the schedule, the protected environment, fork behaviour. **Expected at the first run:** both audit gates report `PASS WITH APPROVED EXCEPTION` (GHSA-fc5q-39xc-vjpf), as they do locally; they fail from 2026-12-18T05:31:00Z, or earlier if a patched `picomatch` is released. The `mongoose` advisories are resolved (9.11.4).
 

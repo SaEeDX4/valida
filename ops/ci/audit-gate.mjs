@@ -22,6 +22,9 @@
  *     - before the start or at/after the expiry (never extended automatically)
  *     - npm audit errors, network errors, an unexpected exit code, or a
  *       malformed or unsupported report or lock file
+ *     - any entry the report does not explain: no advisory reachable through
+ *       its `via` (empty, or a cycle with no advisory root), or a severity
+ *       that its reachable advisories do not account for
  *
  * Findings below the threshold are listed and do not fail the gate (the
  * existing `--audit-level=high` policy). Exit: 0 PASS or PASS WITH APPROVED
@@ -176,20 +179,36 @@ export function evaluate({ packageName, reportText, auditExit, lock, now, policy
     }
   }
 
-  // 2. Every entry at or above the threshold must be explained: either a
-  //    direct blocking advisory (already failed), or an approved exception's
-  //    reviewed scope — exact name, node paths and version, development only.
+  // 2. Every entry must be explained by the advisories it reaches (npm sets an
+  //    entry's severity to the highest of them). Fail closed when an entry
+  //    reaches no advisory (an empty `via`, or a cycle with no advisory root),
+  //    refers to an entry not in the report, or carries a severity its roots
+  //    do not account for. Then each entry at or above the threshold is either
+  //    a blocking advisory (failed in step 1) or inside an approved
+  //    exception's reviewed scope — exact name, node paths and version,
+  //    development only.
   for (const [name, v] of entries) {
-    if (rank(v.severity) < threshold) continue;
     const reachable = roots(name);
     const unknown = reachable.filter((r) => r.unknown);
     if (unknown.length) {
       fail.push({ reason: 'MALFORMED_REPORT', detail: `${name} refers to ${unknown.map((u) => u.unknown).join(', ')}` });
       continue;
     }
+    if (reachable.length === 0) {
+      fail.push({ reason: 'MALFORMED_REPORT', package: name, detail: `${name} (${v.severity}) reaches no advisory: unexplained finding` });
+      continue;
+    }
+    const explained = Math.max(...reachable.map((r) => rank(r.advisory.severity)));
+    if (explained !== rank(v.severity)) {
+      fail.push({ reason: 'MALFORMED_REPORT', package: name, detail: `${name} is ${v.severity}, but the advisories it reaches are at most ${SEVERITIES[explained] ?? 'invalid'}: unexplained severity` });
+      continue;
+    }
+    if (rank(v.severity) < threshold) continue;
     const highRoots = reachable.filter((r) => rank(r.advisory.severity) >= threshold);
     const viaException = highRoots.filter((r) => exceptionFor(r.advisory.url));
-    if (viaException.length === 0) continue; // a blocking advisory, already reported
+    // A blocking root is itself a direct advisory of some entry, and step 1
+    // has failed it; nothing here can turn that into a pass.
+    if (viaException.length === 0) continue;
     for (const r of viaException) {
       const e = exceptionFor(r.advisory.url);
       const reviewed = e.scope?.[packageName]?.[name];

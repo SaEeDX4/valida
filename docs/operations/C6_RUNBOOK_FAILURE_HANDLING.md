@@ -9,7 +9,7 @@
 
 | Where | Do |
 | --- | --- |
-| `npm audit` | Known: the `mongoose` advisory. Record; the owner decides upgrade or a dated risk acceptance. Never `--force` |
+| `npm audit` | Known: GHSA-fc5q-39xc-vjpf (`picomatch` <=4.0.7, development tooling, no fix released). When a patched release appears, update within range and re-run. A new finding: check `npm audit --omit=dev` first (production exposure), apply the smallest supported fix, record it. Never `--force`, never a downgrade, never a silent exception |
 | Any test | Re-run **once** to rule out a runner fault; if it fails again it is a defect: reproduce locally on the same SHA, fix by a new commit. A test is never loosened to pass |
 | `storage-double` | Usually the moto install: compare the versions with `backend/tests/s3/requirements-moto.txt` |
 | A workflow file | `actionlint` and `zizmor` locally (both were clean at C6-T6) |

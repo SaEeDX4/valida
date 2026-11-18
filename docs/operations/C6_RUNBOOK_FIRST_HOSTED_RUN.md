@@ -21,7 +21,7 @@ Pushing `c6-work` runs **no** workflow (plan §6). CI first runs when a pull req
 
 | Job | Expected | Why |
 | --- | --- | --- |
-| `ci / backend` | **red at `npm audit --audit-level=high`** until the `mongoose` advisory is resolved | known open item; every other step green |
+| `ci / backend` | **red at `npm audit --audit-level=high`**: the `picomatch` advisory GHSA-fc5q-39xc-vjpf in development tooling, no fix released | `mongoose` resolved (9.11.4); production dependencies audit clean; every other step green |
 | `ci / storage-double` | green | moto from `backend/tests/s3/requirements-moto.txt` |
 | `ci / frontend` | green | |
 | `ci / e2e guards and C5 statistics` | green | |

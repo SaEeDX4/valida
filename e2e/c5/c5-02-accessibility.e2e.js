@@ -5,7 +5,7 @@ import { BACKEND_DIR, FIXTURES_DIR, FRONTEND_DIR } from '../support/paths.js';
 import { C5_SITE_ORIGIN, C5_SLUGS } from '../support/c5Stack.js';
 // C6-T5: instruments that enter without weakening the enforced CSP (see the module).
 import { addTestStyle, injectScriptFile } from '../support/pageInstruments.js';
-import { effectProblems, judgeReducedMotion } from './motionJudge.js';
+import { classifyEffects, effectProblems, judgeReducedMotion } from './motionJudge.js';
 import {
   ROUTES, axe, ensureJobs, openRoute, publishedJobs, waitForStill, focusProbe, headingProblems, layoutProbe, motionObserve, motionProbe, MOTION_RECORDER, record, settle, shot, structureProbe, writeText,
 } from './c5Support.js';
@@ -708,6 +708,10 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
       offenders: verdict.offenders.filter((x) => mine(x.where)), unreadable: observation.unreadable,
       // What judging only the FIRST timing seen on each key would have said (the defect corrected in this round).
       firstTimingOnlyWouldSay: observation.effects.filter((e) => mine(e.where)).map((e) => effectProblems(e, observation.rule)),
+      // Font faces freshly loaded, and already loaded when first seen, from the control's start (C5-14 correction).
+      fontLoads: observation.fontLoads.filter((l) => l.frame >= mark - 1), fontsAlreadyLoaded: observation.fontsAlreadyLoaded.filter((l) => l.frame >= mark - 1),
+      // How the cascade assertions sort the injected effect (C5-14 correction).
+      sortedAs: (() => { const s = classifyEffects(observation); return { visibilityOutsideTheFooter: s.visibilityOutsideTheFooter.filter(mine), fontReflow: s.fontReflow.filter((e) => mine(e.where)), unexplained: s.unexplained.filter((e) => mine(e.where)) }; })(),
     };
     await page.evaluate((controlId) => document.getElementById(`c5-injected-${controlId}`)?.remove(), id);
   };
@@ -736,6 +740,93 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   await control('intended-instant-transition', 'an ordinary element whose opacity changes: the reduced-motion rule makes it a 0.01 ms transition',
     (el) => { getComputedStyle(el).opacity; el.style.opacity = '0.5'; },
     { mustFail: false });
+  // The cascade assertions (C5-14 correction). Each of these is instantaneous under the rule, so the judge permits
+  // it; what is checked is how the reading's cascade assertions sort it. A FontFace is made from one of the page's
+  // own @font-face sources, under a family name of its own, so that its loading is the control's alone.
+  const swapFace = () => {
+    let src = null;
+    for (const sheet of document.styleSheets) for (const r of sheet.cssRules) if (r instanceof CSSFontFaceRule && /Space Grotesk/.test(r.style.getPropertyValue('font-family'))) src = src ?? r.style.getPropertyValue('src');
+    return src;
+  };
+  await page.evaluate(`window.__c5swapSource = (${swapFace.toString()})();`);
+  // Each face fetches its own URL (a query added), so none is served from an earlier control's memory cache.
+  // Each style change below is made in a task of its own and its style computed at once (as timing-changes-on-one-key
+  // does): a 0.01 ms transition started in a frame's rendering step, after its callbacks, is over before the next
+  // frame's reading, so it would be invisible to the recorder instead of judged.
+  // Recognised: the face is added (the recorder sees it not loaded), the element is styled in it (its ch measure
+  // resolves in the fallback), then the face loads and the measure, still 20ch, re-resolves.
+  await control('font-swap-ch-measure', 'an element in a web font that loads after paint (font-display: swap), its max-inline-size 20ch throughout: the swap re-resolves the measure',
+    async (el) => {
+      const frame = () => new Promise((resolve) => { requestAnimationFrame(resolve); });
+      const task = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+      const face = new FontFace('QAC5Swap', window.__c5swapSource.replace(/\.woff2(?=["')])/, '.woff2?qa=QAC5Swap'));
+      document.fonts.add(face);
+      await frame(); await frame(); await task();
+      el.style.fontFamily = 'QAC5Swap, monospace'; el.style.maxInlineSize = '20ch'; getComputedStyle(el).maxWidth;
+      await face.load(); getComputedStyle(el).maxWidth;
+      await frame(); await frame();
+    },
+    { mustFail: false });
+  // Not recognised: the declared measure changes (68ch to 60ch) in the same style change as the same family's load.
+  await control('ch-measure-changed-during-font-load', 'an element at 68ch in a web font that loads after paint; when the face has loaded, its max-inline-size is set to 60ch before the next frame',
+    async (el) => {
+      const frame = () => new Promise((resolve) => { requestAnimationFrame(resolve); });
+      const task = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+      const face = new FontFace('QAC5Measure', window.__c5swapSource.replace(/\.woff2(?=["')])/, '.woff2?qa=QAC5Measure'));
+      document.fonts.add(face);
+      await frame(); await frame(); await task();
+      el.style.fontFamily = 'QAC5Measure, monospace'; el.style.maxInlineSize = '68ch'; getComputedStyle(el).maxWidth;
+      await face.load();
+      el.style.maxInlineSize = '60ch'; getComputedStyle(el).maxWidth;
+      await frame(); await frame();
+    },
+    { mustFail: false });
+  // Not recognised: a face already loaded before it is added to the document is not a fresh load.
+  await control('font-face-already-loaded', 'an element at 20ch in its fallback font; a face of its family, loaded beforehand outside the document, is then added',
+    async (el) => {
+      const frame = () => new Promise((resolve) => { requestAnimationFrame(resolve); });
+      const task = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+      const face = new FontFace('QAC5Preloaded', window.__c5swapSource.replace(/\.woff2(?=["')])/, '.woff2?qa=QAC5Preloaded'));
+      await face.load();
+      el.style.fontFamily = 'QAC5Preloaded, monospace'; el.style.maxInlineSize = '20ch'; getComputedStyle(el).maxWidth;
+      await frame(); await frame(); await task();
+      document.fonts.add(face); getComputedStyle(el).maxWidth;
+      await frame(); await frame();
+    },
+    { mustFail: false });
+  // A repeated width transition is judged run by run: run 1 is a genuine swap, run 2 the measure re-resolved in the
+  // fallback again (font-family is not animatable, so the width is the only effect).
+  await control('repeated-width-transition', 'an element at 20ch: the swap of its web font (run 1), then its font-family set back to the fallback alone (run 2, no font load)',
+    async (el) => {
+      const frame = () => new Promise((resolve) => { requestAnimationFrame(resolve); });
+      const task = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+      const face = new FontFace('QAC5Repeat', window.__c5swapSource.replace(/\.woff2(?=["')])/, '.woff2?qa=QAC5Repeat'));
+      document.fonts.add(face);
+      await frame(); await frame(); await task();
+      el.style.fontFamily = 'QAC5Repeat, monospace'; el.style.maxInlineSize = '20ch'; getComputedStyle(el).maxWidth;
+      await face.load(); getComputedStyle(el).maxWidth;
+      for (let i = 0; i < 4; i += 1) await frame();
+      await task();
+      el.style.fontFamily = 'monospace'; getComputedStyle(el).maxWidth;
+      await frame(); await frame();
+    },
+    { mustFail: false });
+  // Not recognised: a max-width change of a px measure, outside the footer.
+  await control('max-width-px-outside-footer', 'an element outside the footer whose max-width (declared in px) changes from 300px to 200px',
+    (el) => { el.style.maxWidth = '300px'; getComputedStyle(el).maxWidth; el.style.maxWidth = '200px'; },
+    { mustFail: false });
+  // Not recognised: a ch measure re-resolved by a font-size change, with no font load.
+  await control('ch-measure-without-font-load', 'an element outside the footer with max-inline-size 20ch whose font-size changes from 16px to 24px, no font loading',
+    (el) => { el.style.fontFamily = 'monospace'; el.style.fontSize = '16px'; el.style.maxInlineSize = '20ch'; getComputedStyle(el).maxWidth; el.style.fontSize = '24px'; },
+    { mustFail: false });
+  // Not recognised: a visibility transition outside the footer.
+  await control('visibility-outside-footer', 'an element outside the footer hidden, then shown again',
+    async (el) => { el.style.visibility = 'hidden'; getComputedStyle(el).visibility; await new Promise((resolve) => { requestAnimationFrame(() => requestAnimationFrame(resolve)); }); el.style.visibility = 'visible'; },
+    { mustFail: false });
+  // Still judged: a ch measure transition that is not instantaneous fails the judge whatever its cause.
+  await control('ch-measure-300ms', 'an element with max-inline-size 20ch whose max-width transition is declared 300 ms (!important)',
+    (el) => { el.style.setProperty('transition', 'max-width 300ms linear', 'important'); el.style.maxInlineSize = '20ch'; el.style.fontFamily = 'monospace'; el.style.fontSize = '16px'; getComputedStyle(el).maxWidth; el.style.fontSize = '24px'; },
+    { mustFail: true, reason: /duration is 300 ms/ });
   // The recorder itself. (1) One target/kind/name seen with a permitted timing, then a different one, then the
   // permitted one again: every distinct timing is judged, so the one in between fails although the first and the
   // last are valid, nothing is left at the end and nothing is declared any more.
@@ -786,25 +877,35 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   // After the controls the page is as it was.
   const afterControls = await look({ sinceFrame: (await frameNow()) + 1 });
 
-  // The one effect the site produces: when the Job arrives, the footer's visibility change is inherited one DOM level
-  // per frame, each level a 0.01 ms transition. It is recorded as a cascade and bounded by its own mechanism: it may
-  // not take more frames than the nesting levels it passes through (no repetition, nothing drawn out).
+  // The one cascade the site produces: when the Job arrives, the footer's visibility change is inherited one DOM
+  // level per frame, each level a 0.01 ms transition. It is bounded by its own mechanism: it may not take more frames
+  // than the nesting levels it passes through (no repetition, nothing drawn out).
+  // Correction (C5-14 on GitHub's runner, 2026-11-18): the cascade is the VISIBILITY transitions, and they must all be
+  // in the footer. A self-hosted font that finishes loading after paint re-resolves every `ch` measure; under the
+  // rule that is an instantaneous max-width transition, recognised only by fontReflowProblems (motionJudge.js).
+  // Every other effect is `unexplained` and fails. Every effect, of every kind, is still judged by judgeReducedMotion.
   const cascade = (r) => {
     const seen = r.observation.effects;
     if (!seen.length) return null;
-    const first = Math.min(...seen.map((e) => e.firstFrame)); const last = Math.max(...seen.map((e) => e.lastFrame));
-    const depths = seen.map((e) => e.depth);
-    return { effects: seen.length, outsideTheFooter: seen.filter((e) => !e.where.startsWith('footer')).map((e) => e.where), properties: [...new Set(seen.map((e) => `${e.kind} ${e.name}`))], firstFrame: first, lastFrame: last, frames: last - first + 1, nestingLevels: Math.max(...depths) - Math.min(...depths) + 1, repeated: seen.filter((e) => e.runs > 1).map((e) => ({ where: e.where, startedInFrames: e.runFrames })) };
+    const sorted = classifyEffects(r.observation);
+    const vis = sorted.visibility;
+    const first = vis.length ? Math.min(...vis.map((e) => e.firstFrame)) : null; const last = vis.length ? Math.max(...vis.map((e) => e.lastFrame)) : null;
+    const depths = vis.map((e) => e.depth);
+    return {
+      effects: seen.length, visibilityEffects: vis.length, visibilityOutsideTheFooter: sorted.visibilityOutsideTheFooter, fontReflow: sorted.fontReflow, unexplained: sorted.unexplained,
+      firstFrame: first, lastFrame: last, frames: vis.length ? last - first + 1 : 0, nestingLevels: vis.length ? Math.max(...depths) - Math.min(...depths) + 1 : 0,
+      repeated: vis.filter((e) => e.runs > 1).map((e) => ({ where: e.where, startedInFrames: e.runFrames })),
+    };
   };
   for (const name of ['job-open-at-content', 'job-content-after-loading']) {
     const c = cascade(results.reduce[name]);
     results.reduce[name].cascade = c;
     // Held, the footer's return always happens after a painted pending state. On a direct load with the preload hint
     // the Job can be there before the first frame, and then the footer is never hidden at all: no cascade to see.
-    if (name === 'job-content-after-loading') expect.soft(c, `${name}: the footer's return was observed`).not.toBeNull();
+    if (name === 'job-content-after-loading') expect.soft(c?.visibilityEffects ?? 0, `${name}: the footer's return was observed`).toBeGreaterThan(0);
     if (!c) continue;
-    expect.soft(c.outsideTheFooter, `${name}: only the footer`).toEqual([]);
-    expect.soft(c.properties, `${name}: only visibility transitions`).toEqual(['CSSTransition visibility']);
+    expect.soft(c.visibilityOutsideTheFooter, `${name}: the visibility cascade is only the footer`).toEqual([]);
+    expect.soft(c.unexplained, `${name}: every other effect is a recognised font-swap re-resolution`).toEqual([]);
     expect.soft(c.frames, `${name}: no more frames than nesting levels`).toBeLessThanOrEqual(c.nestingLevels);
   }
   await page.emulateMedia({ reducedMotion: null });
@@ -849,6 +950,29 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   expect.soft(controls['intended-instant-transition'].permittedNamingIt.length, 'the intended 0.01 ms transition was seen, permitted and finished').toBeGreaterThan(0);
   expect.soft(controls['intended-instant-transition'].finalStillPresent).toBe(0);
   expect.soft(controls['site-hover-and-focus']).toMatchObject({ actionStillVisible: true, actionEnabled: true });
+  // The cascade assertions' own controls (C5-14 correction): only the genuine font swap is recognised.
+  const reasons = (id) => controls[id].sortedAs.unexplained.flatMap((e) => e.problems).join(' | ');
+  const freshly = (id, fam) => controls[id].fontLoads.some((l) => l.families.includes(fam));
+  const already = (id, fam) => controls[id].fontsAlreadyLoaded.some((l) => l.families.includes(fam));
+  expect.soft(controls['font-swap-ch-measure'].sortedAs, 'a font swap re-resolving a constant ch measure is recognised').toMatchObject({ unexplained: [], visibilityOutsideTheFooter: [] });
+  expect.soft(controls['font-swap-ch-measure'].sortedAs.fontReflow.length, 'the font swap was seen').toBe(1);
+  expect.soft(freshly('font-swap-ch-measure', 'QAC5Swap'), 'its face was recorded as freshly loaded').toBe(true);
+  expect.soft(controls['intended-instant-transition'].sortedAs.unexplained.length, 'an instantaneous opacity change outside the footer is unexplained').toBeGreaterThan(0);
+  expect.soft(reasons('max-width-px-outside-footer'), 'a px measure is not a font swap').toMatch(/not one measure in ch/);
+  expect.soft(reasons('ch-measure-without-font-load'), 'a ch measure without a font load is not a font swap').toMatch(/font face was freshly loaded/);
+  expect.soft(controls['ch-measure-changed-during-font-load'].sortedAs.fontReflow, 'a measure changed with the font load is not recognised').toEqual([]);
+  expect.soft(reasons('ch-measure-changed-during-font-load'), 'its start value is not 60ch of the fallback').toMatch(/start value [\d.]+px is not 60ch in its fallback font .*the measure itself changed/);
+  expect.soft(freshly('ch-measure-changed-during-font-load', 'QAC5Measure'), 'its face was freshly loaded (only the measure is wrong)').toBe(true);
+  expect.soft(freshly('font-face-already-loaded', 'QAC5Preloaded'), 'a face already loaded when first seen is not a fresh load').toBe(false);
+  expect.soft(already('font-face-already-loaded', 'QAC5Preloaded'), 'it is recorded as already loaded').toBe(true);
+  expect.soft(controls['font-face-already-loaded'].sortedAs.fontReflow, 'its width change is not recognised').toEqual([]);
+  expect.soft(reasons('font-face-already-loaded'), 'because no fresh load').toMatch(/no "QAC5Preloaded" font face was freshly loaded/);
+  expect.soft(controls['repeated-width-transition'].effects.find((e) => e.name === 'max-width')?.runs, 'the width transition ran twice').toBe(2);
+  expect.soft(controls['repeated-width-transition'].sortedAs.fontReflow, 'a repeated width transition is not recognised as a whole').toEqual([]);
+  expect.soft(reasons('repeated-width-transition'), 'its second run alone fails').toMatch(/run 2 \(frame \d+\): .*no "monospace" font face was freshly loaded/);
+  expect.soft(reasons('repeated-width-transition'), 'its first run is a genuine swap').not.toMatch(/run 1 \(frame/);
+  expect.soft(controls['visibility-outside-footer'].sortedAs.visibilityOutsideTheFooter.length, 'a visibility transition outside the footer is caught').toBeGreaterThan(0);
+  for (const id of ['font-swap-ch-measure', 'max-width-px-outside-footer', 'ch-measure-without-font-load', 'visibility-outside-footer', 'ch-measure-changed-during-font-load', 'font-face-already-loaded', 'repeated-width-transition']) expect.soft(controls[id].verdict, `control ${id}: instantaneous, so the judge permits it`).toBe('PASS');
   // The timing that changed on one key: three timings were seen in order, only the middle one offends, the first
   // alone would have passed, and nothing is left or declared.
   {
@@ -871,7 +995,7 @@ test('C5-14 Reduced motion (EMULATED prefers-reduced-motion: reduce): no percept
   }
   // No observation of the site itself had an unreadable frame.
   for (const [name, r] of Object.entries(results.reduce)) expect.soft(r.observation.unreadable, `${name}: every frame was read`).toMatchObject({ count: 0, initialSnapshotReadable: true, finalSnapshotReadable: true });
-  expect.soft(Object.keys(controls).sort()).toEqual(['delayed', 'intended-instant-transition', 'persistent', 'short-repeated-indefinitely', 'short-repeated-meaningful-total', 'site-hover-and-focus', 'sustained-opacity', 'sustained-transform', 'timing-changes-on-one-key', 'unreadable-snapshot']);
+  expect.soft(Object.keys(controls).sort()).toEqual(['ch-measure-300ms', 'ch-measure-changed-during-font-load', 'ch-measure-without-font-load', 'delayed', 'font-face-already-loaded', 'font-swap-ch-measure', 'intended-instant-transition', 'max-width-px-outside-footer', 'persistent', 'repeated-width-transition', 'short-repeated-indefinitely', 'short-repeated-meaningful-total', 'site-hover-and-focus', 'sustained-opacity', 'sustained-transform', 'timing-changes-on-one-key', 'unreadable-snapshot', 'visibility-outside-footer']);
   expect.soft(afterControls.verdict.failures, 'after the controls the page passes again').toEqual([]);
 });
 

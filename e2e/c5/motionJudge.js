@@ -112,3 +112,76 @@ export function judgeReducedMotion(observation) {
   for (const a of o.unavailable ?? []) failures.push(`not available after the observation: ${a}`);
   return { pass: failures.length === 0, failures, permitted, offenders };
 }
+
+/**
+ * C5-14 correction: a web-font swap re-resolving a constant `ch` measure.
+ *
+ * Under the site's reduced-motion rule every computed-value change becomes a 0.01 ms transition. When a self-hosted
+ * web font finishes loading after first paint (font-display: swap), every element whose max-width is declared in
+ * `ch` gets a new computed width, so the swap appears as an instantaneous `max-width` transition. Such an effect is
+ * still judged by judgeReducedMotion like every other; this function only says whether it is that re-resolution,
+ * so that it is not mistaken for part of the footer cascade - and so that nothing else is mistaken for it.
+ *
+ * Recognised only when it is a CSS transition of `max-width` and EACH of its runs (a repeated transition is judged
+ * run by run) holds on its own:
+ *   - its target declares exactly one max-width / max-inline-size, in `ch` (N ch), measured in the run's frame;
+ *   - its end value is N times the width of "0" in the target's font now, and its start value is N times that
+ *     width in the target's fallback font (the family list after its primary family) - the measure itself stayed
+ *     N ch, only what `ch` resolves to changed;
+ *   - its value changed;
+ *   - a font face of the target's own primary family became FRESHLY loaded (seen not loaded, then loaded; a face
+ *     already loaded when first seen does not count) in the run's frame or the frame before (the swap is applied at
+ *     the first style recalculation after the face loads);
+ * and its last run's end value is its target's value afterwards. Values are compared as the browser serialises
+ * them (6 significant digits). [] when recognised.
+ */
+export function fontReflowProblems(effect, observation) {
+  const problems = [];
+  const px = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?px$/.test(v) ? parseFloat(v) : null);
+  const same = (a, b) => typeof a === 'number' && typeof b === 'number' && Number.isFinite(a) && Number.isFinite(b) && Number(a.toPrecision(6)) === Number(b.toPrecision(6));
+  if (effect?.kind !== 'CSSTransition') problems.push(`it is a ${effect?.kind ?? 'unknown kind of effect'}, not a CSS transition`);
+  if (effect?.name !== 'max-width') problems.push(`its property is ${effect?.name ?? 'unknown'}, not max-width`);
+  const loads = Array.isArray(observation?.fontLoads) ? observation.fontLoads : null;
+  if (!loads) problems.push('the observation does not record font loads');
+  const runs = Array.isArray(effect?.runDetails) ? effect.runDetails : [];
+  if (runs.length === 0) problems.push('none of its runs was measured');
+  else if (runs.length !== effect.runs) problems.push(`${runs.length} of its ${effect.runs} runs were measured`);
+  runs.forEach((r, i) => {
+    const run = `run ${i + 1} (frame ${r.frame})`;
+    const declared = r.measure?.declared;
+    const distinct = Array.isArray(declared) ? [...new Set(declared.map((v) => String(v).trim()))] : [];
+    const n = distinct.length === 1 && /^\d+(\.\d+)?ch$/.test(distinct[0]) ? parseFloat(distinct[0]) : null;
+    if (!Array.isArray(declared) || declared.length === 0) problems.push(`${run}: no declared max-width or max-inline-size was found for its target`);
+    else if (n === null) problems.push(`${run}: its declared measure is ${distinct.join(', ')}, not one measure in ch`);
+    const from = px(r.values?.from); const to = px(r.values?.to);
+    if (from === null || to === null) problems.push(`${run}: its start and end values cannot be read`);
+    else if (from === to) problems.push(`${run}: its value did not change`);
+    if (n !== null && to !== null && !same(to, n * r.measure.zeroLoaded)) problems.push(`${run}: its end value ${r.values.to} is not ${n}ch in its loaded font (${(n * r.measure.zeroLoaded).toPrecision(6)}px)`);
+    if (n !== null && from !== null && !same(from, n * r.measure.zeroFallback)) problems.push(`${run}: its start value ${r.values.from} is not ${n}ch in its fallback font (${(n * r.measure.zeroFallback).toPrecision(6)}px): the measure itself changed`);
+    const family = r.primaryFamily;
+    if (!family) problems.push(`${run}: its target's primary font family cannot be read`);
+    else if (loads && !loads.some((l) => (l.frame === r.frame || l.frame === r.frame - 1) && l.families.includes(family))) problems.push(`${run}: no "${family}" font face was freshly loaded in frame ${r.frame} or the frame before`);
+  });
+  const lastTo = px(runs[runs.length - 1]?.values?.to);
+  if (lastTo !== null && px(effect?.valueAfter) !== lastTo) problems.push(`it did not settle at its end value (${effect?.valueAfter ?? 'unknown'})`);
+  return problems;
+}
+
+/**
+ * Sorts one observation's effects for the cascade assertions (C5-14 correction): the visibility transitions (the footer
+ * cascade, and any that are not in the footer), the recognised font-swap re-resolutions, and everything else -
+ * `unexplained`, which the test requires to be empty. Every effect is still judged by judgeReducedMotion.
+ */
+export function classifyEffects(observation) {
+  const effects = observation?.effects ?? [];
+  const visibility = effects.filter((e) => e.kind === 'CSSTransition' && e.name === 'visibility');
+  const fontReflow = [];
+  const unexplained = [];
+  for (const e of effects) {
+    if (visibility.includes(e)) continue;
+    const why = fontReflowProblems(e, observation);
+    if (why.length) unexplained.push({ where: e.where, kind: e.kind, name: e.name, firstFrame: e.firstFrame, problems: why });
+    else fontReflow.push({ where: e.where, family: e.primaryFamily, runs: e.runDetails.map((r) => ({ frame: r.frame, from: r.values.from, to: r.values.to, declared: r.measure.declared, zeroLoaded: r.measure.zeroLoaded, zeroFallback: r.measure.zeroFallback })) });
+  }
+  return { visibility, visibilityOutsideTheFooter: visibility.filter((e) => !e.where.startsWith('footer')).map((e) => e.where), fontReflow, unexplained };
+}

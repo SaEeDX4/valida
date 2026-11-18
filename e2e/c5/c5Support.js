@@ -394,7 +394,54 @@ export const MOTION_RECORDER = () => {
   const MAX_EFFECTS = 400;
   const MAX_TIMINGS = 24;
   const MAX_UNREADABLE = 60;
-  const rec = { frame: 0, effects: new Map(), lastCount: 0, lastReadable: true, quietFrames: 0, truncated: false, unreadableFrames: [], unreadableCount: 0, marks: [] };
+  const rec = { frame: 0, effects: new Map(), lastCount: 0, lastReadable: true, quietFrames: 0, truncated: false, unreadableFrames: [], unreadableCount: 0, marks: [], fontLoads: [], fontsAlreadyLoaded: [] };
+  // Font faces that became loaded, per frame (read before each frame's effects), for fontReflowProblems. Only a face
+  // the recorder has seen NOT loaded and then sees loaded is a fresh load. A face already loaded when the recorder
+  // first sees it (at installation or later) is recorded as already loaded, never as a fresh load. Each FontFace is
+  // tracked by identity, so the several unicode-range faces of one family are kept apart.
+  const family = (f) => String(f ?? '').replace(/^["']|["']$/g, '');
+  const faceStatus = new WeakMap();
+  const noteFonts = () => {
+    const fresh = [];
+    const already = [];
+    try {
+      for (const f of document.fonts) {
+        const before = faceStatus.get(f);
+        const now = f.status;
+        faceStatus.set(f, now);
+        if (before === undefined) { if (now === 'loaded') already.push(family(f.family)); continue; }
+        if (before !== 'loaded' && now === 'loaded') fresh.push(family(f.family));
+      }
+    } catch { /* unreadable: nothing is recorded as loaded */ }
+    if (fresh.length) rec.fontLoads.push({ frame: rec.frame, families: [...new Set(fresh)] });
+    if (already.length) rec.fontsAlreadyLoaded.push({ frame: rec.frame, families: [...new Set(already)] });
+  };
+  noteFonts();
+  // Every max-width / max-inline-size declared for an element: its matching rules (in media that apply) and its
+  // inline style. An unreadable stylesheet is recorded as such, which fontReflowProblems rejects.
+  rec.declaredMeasures = (target) => {
+    const declared = [];
+    const visit = (rules) => {
+      for (const r of rules) {
+        if (r.media && r.cssRules) { if (matchMedia(r.media.mediaText).matches) visit(r.cssRules); continue; }
+        if (r.cssRules && !r.selectorText) { visit(r.cssRules); continue; }
+        if (!r.style || !r.selectorText) continue;
+        let matches = false;
+        try { matches = target.matches(r.selectorText); } catch { matches = false; }
+        if (!matches) continue;
+        for (const prop of ['max-width', 'max-inline-size']) { const v = r.style.getPropertyValue(prop); if (v) declared.push(v.trim()); }
+      }
+    };
+    for (const sheet of document.styleSheets) { try { visit(sheet.cssRules); } catch { declared.push('unreadable stylesheet'); } }
+    for (const prop of ['max-width', 'max-inline-size']) { const v = target.style.getPropertyValue(prop); if (v) declared.push(v.trim()); }
+    return declared;
+  };
+  // The width of "0" (what `ch` resolves to) in the element's font, with its full family list and with the list
+  // after its primary family (its fallback). Measured with the page's own fonts.
+  let ctx = null;
+  const zeroWidth = (cs, families) => {
+    try { ctx = ctx ?? document.createElement('canvas').getContext('2d'); ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${families}`; return ctx.measureText('0').width; } catch { return null; }
+  };
   // One entry per DISTINCT timing seen on a key: an effect that changes its timing between frames is judged on each.
   const timingOf = (d) => ({ kind: d.kind, duration: d.duration, delay: d.delay, endDelay: d.endDelay, iterations: d.iterations, activeDuration: d.activeDuration, fill: d.fill });
   const signature = (t) => JSON.stringify([t.kind, t.duration, t.delay, t.endDelay, t.iterations, t.activeDuration, t.fill]);
@@ -433,6 +480,11 @@ export const MOTION_RECORDER = () => {
     const kind = a.constructor?.name ?? null;
     const name = a.animationName ?? a.transitionProperty ?? null;
     const place = where(target, pseudo);
+    // A transition's start and end values (for fontReflowProblems).
+    let values = null;
+    if (kind === 'CSSTransition' && name && typeof a.effect?.getKeyframes === 'function') {
+      try { const kf = a.effect.getKeyframes(); const prop = name.replace(/-([a-z])/g, (_, c) => c.toUpperCase()); values = { from: kf[0]?.[prop] ?? null, to: kf[kf.length - 1]?.[prop] ?? null }; } catch { values = null; }
+    }
     return {
       key: `${place}|${kind}|${name}`,
       where: place,
@@ -441,6 +493,15 @@ export const MOTION_RECORDER = () => {
       text: target ? (target.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40) : null,
       kind,
       name,
+      values,
+      primaryFamily: cs ? family(cs.fontFamily.split(',')[0].trim()) : null,
+      // For a max-width transition, measured in the frame it is seen: its declared measure and what `ch` resolves to.
+      measure: kind === 'CSSTransition' && name === 'max-width' && target && cs ? {
+        declared: rec.declaredMeasures(target),
+        zeroLoaded: zeroWidth(cs, cs.fontFamily),
+        zeroFallback: zeroWidth(cs, cs.fontFamily.split(',').slice(1).join(',').trim() || 'serif'),
+        fontFamily: cs.fontFamily,
+      } : null,
       playState: a.playState,
       pending: a.pending,
       currentTime: num(a.currentTime),
@@ -460,6 +521,7 @@ export const MOTION_RECORDER = () => {
   rec.snapshot = () => { try { return document.getAnimations().map(describe); } catch { return null; } };
   const tick = () => {
     rec.frame += 1;
+    noteFonts();
     const read = rec.snapshot();
     // A frame whose effects could not be listed is NOT a quiet frame: it is recorded as unreadable.
     if (read === null) {
@@ -479,12 +541,16 @@ export const MOTION_RECORDER = () => {
       const known = rec.effects.get(d.key);
       if (known) {
         known.framesSeen += 1;
-        if (known.lastFrame !== rec.frame - 1) { known.runs += 1; if (known.runFrames.length < 12) known.runFrames.push(rec.frame); }
+        if (known.lastFrame !== rec.frame - 1) {
+          known.runs += 1;
+          if (known.runFrames.length < 12) known.runFrames.push(rec.frame);
+          if (known.runDetails.length < 12) known.runDetails.push({ frame: rec.frame, values: d.values, measure: d.measure, primaryFamily: d.primaryFamily });
+        }
         known.lastFrame = rec.frame;
         known.last = d;
         noteTiming(known, d);
       } else if (rec.effects.size < MAX_EFFECTS) {
-        const fresh = { ...d, firstFrame: rec.frame, lastFrame: rec.frame, framesSeen: 1, runs: 1, runFrames: [rec.frame], firstAt: Math.round(performance.now() * 10) / 10, last: d, timings: [] };
+        const fresh = { ...d, firstFrame: rec.frame, lastFrame: rec.frame, framesSeen: 1, runs: 1, runFrames: [rec.frame], runDetails: [{ frame: rec.frame, values: d.values, measure: d.measure, primaryFamily: d.primaryFamily }], firstAt: Math.round(performance.now() * 10) / 10, last: d, timings: [] };
         noteTiming(fresh, d);
         rec.effects.set(d.key, fresh);
       } else {
@@ -592,12 +658,14 @@ export function motionObserve(page, { maxFrames = 90, quietFrames = 3, sinceFram
       let target = null;
       try { target = document.querySelector(selector); } catch { target = null; }
       e.targetShownAfter = target ? shown(target) : null;
+      // For a max-width transition: its target's value now (each run was measured when it was seen).
+      if (e.name === 'max-width' && target) e.valueAfter = getComputedStyle(target).maxWidth;
       if (!pending && target && e.name === 'visibility' && !shown(target)) unavailable.push(`${e.where} is not visible after its visibility transition`);
     }
     return {
       reducedMotionApplies: applies, scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior, rule, pending,
       startFrame, endFrame: rec.frame, framesObserved, quiet, quietFramesAtEnd: quietRun, truncated: rec.truncated,
-      initial, effects, final, unreadable, declaredBeyondRule, unavailable,
+      initial, effects, final, unreadable, declaredBeyondRule, unavailable, fontLoads: rec.fontLoads.map((l) => ({ ...l })), fontsAlreadyLoaded: rec.fontsAlreadyLoaded.map((l) => ({ ...l })),
       availability: { h1: shown(document.querySelector('h1')), footer: shown(footer), footerLinks: footerLinks.length, footerLinksShown: footerLinks.filter(shown).length },
     };
   }, { maxFrames, quietFrames, sinceFrame });

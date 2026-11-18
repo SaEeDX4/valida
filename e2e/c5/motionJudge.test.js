@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { effectProblems, judgeReducedMotion } from './motionJudge.js';
+import { classifyEffects, effectProblems, fontReflowProblems, judgeReducedMotion } from './motionJudge.js';
 
 /** The site's rule as motionObserve reads it, and an observation with nothing in it. */
 const RULE = { transitionMs: 0.01, animationMs: 0.01, iterationCount: '1' };
@@ -136,5 +136,63 @@ describe('judgeReducedMotion', () => {
     assert.match(judgeReducedMotion(observation({ unreadable: { ...READABLE, finalSnapshotReadable: false } })).failures[0], /final snapshot could not be read/);
     // An observation that does not say is not assumed readable (records made before this field existed).
     assert.match(judgeReducedMotion(observation({ unreadable: undefined })).failures[0], /does not say whether every frame could be read/);
+  });
+});
+
+// C5-14 correction: the font-swap re-resolution of a constant ch measure, and the sorting for the cascade assertions.
+describe('fontReflowProblems and classifyEffects', () => {
+  // One run as recorded on a runner without a system Inter: 68ch, "0" 9.89778… px in the fallback and 11.2273… px in Inter.
+  const run = (over = {}) => ({ frame: 5, values: { from: '673.049px', to: '763.458px' }, primaryFamily: 'Inter', measure: { declared: ['68ch'], zeroLoaded: 763.458 / 68, zeroFallback: 673.049 / 68, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }, ...over });
+  const swap = (over = {}, runs = [run()]) => effect({ key: 'main section:nth-of-type(1)|CSSTransition|max-width', where: 'main#main-content > section:nth-of-type(2) > div > div > div > section:nth-of-type(1)', name: 'max-width', firstFrame: runs[0].frame, lastFrame: runs[runs.length - 1].frame, runs: runs.length, runFrames: runs.map((r) => r.frame), runDetails: runs, valueAfter: runs[runs.length - 1].values?.to ?? null, depth: 9, ...over });
+  const loads = [{ frame: 5, families: ['Inter'] }];
+  it('a constant ch measure re-resolved when its own family is freshly loaded is recognised, and is still judged (it passes)', () => {
+    assert.deepEqual(fontReflowProblems(swap(), { fontLoads: loads }), []);
+    assert.deepEqual(fontReflowProblems(swap({}, [run({ frame: 6 })]), { fontLoads: loads }), []);
+    assert.equal(judgeReducedMotion(observation({ effects: [swap()], fontLoads: loads })).pass, true);
+  });
+  it('the same effect taking 300 ms fails the judge, whatever it is', () => {
+    assert.equal(judgeReducedMotion(observation({ effects: [swap({ duration: 300, activeDuration: 300 })], fontLoads: loads })).pass, false);
+  });
+  it('each part is required', () => {
+    const cases = [
+      [{ name: 'opacity' }, null, /not max-width/],
+      [{ kind: 'CSSAnimation' }, null, /not a CSS transition/],
+      [{}, [run({ measure: { ...run().measure, declared: ['300px'] } })], /not one measure in ch/],
+      [{}, [run({ measure: { ...run().measure, declared: ['68ch', '60ch'] } })], /not one measure in ch/],
+      [{}, [run({ measure: { ...run().measure, declared: [] } })], /no declared max-width/],
+      [{}, [run({ values: { from: '763.458px', to: '763.458px' } })], /did not change/],
+      [{}, [run({ values: null })], /cannot be read/],
+      [{ valueAfter: '700px' }, null, /did not settle/],
+      [{}, [run({ primaryFamily: 'Space Grotesk' })], /no "Space Grotesk" font face was freshly loaded/],
+      [{}, [run({ frame: 7 })], /in frame 7 or the frame before/],
+      [{}, [run({ frame: 4 })], /in frame 4 or the frame before/],
+      // The measure changed with the load: 68ch in the fallback to 60ch in the loaded font.
+      [{}, [run({ values: { from: '673.049px', to: `${(60 * 763.458 / 68).toPrecision(6)}px` }, measure: { ...run().measure, declared: ['60ch'] } })], /start value 673\.049px is not 60ch in its fallback font .*the measure itself changed/],
+      // The end value is not N ch of the loaded font.
+      [{}, [run({ values: { from: '673.049px', to: '700px' } })], /end value 700px is not 68ch in its loaded font/],
+      [{ runs: 2 }, null, /1 of its 2 runs were measured/],
+    ];
+    for (const [over, runs, why] of cases) assert.match(fontReflowProblems(swap(over, runs ?? [run()]), { fontLoads: loads }).join('; '), why, JSON.stringify([over, runs]));
+    assert.match(fontReflowProblems(swap(), {}).join('; '), /does not record font loads/);
+    assert.match(fontReflowProblems(swap(), { fontLoads: [] }).join('; '), /freshly loaded/);
+  });
+  it('a repeated width transition is judged run by run', () => {
+    const second = run({ frame: 20, values: { from: '763.458px', to: '954.322px' }, measure: { ...run().measure, zeroLoaded: 954.322 / 68 } });
+    const p = fontReflowProblems(swap({}, [run(), second]), { fontLoads: loads }).join('; ');
+    assert.match(p, /run 2 \(frame 20\): .*no "Inter" font face was freshly loaded in frame 20/);
+    assert.doesNotMatch(p, /run 1 /);
+    // Each run with its own fresh load and a constant measure is recognised.
+    const both = [run(), run({ frame: 20, values: { from: '673.049px', to: '763.458px' } })];
+    assert.deepEqual(fontReflowProblems(swap({}, both), { fontLoads: [...loads, { frame: 20, families: ['Inter'] }] }), []);
+  });
+  it('sorting: the footer cascade, the recognised swap, and anything else as unexplained', () => {
+    const footer = effect({ key: 'footer|CSSTransition|visibility', where: 'footer', depth: 3 });
+    const outside = effect({ key: 'main p|CSSTransition|visibility', where: 'main#main-content > p', depth: 4 });
+    const opacity = effect({ key: 'main div|CSSTransition|opacity', where: 'main#main-content > div', name: 'opacity' });
+    const s = classifyEffects(observation({ effects: [footer, swap(), outside, opacity], fontLoads: loads }));
+    assert.deepEqual(s.visibility.map((e) => e.where), ['footer', 'main#main-content > p']);
+    assert.deepEqual(s.visibilityOutsideTheFooter, ['main#main-content > p']);
+    assert.equal(s.fontReflow.length, 1);
+    assert.deepEqual(s.unexplained.map((e) => e.name), ['opacity']);
   });
 });

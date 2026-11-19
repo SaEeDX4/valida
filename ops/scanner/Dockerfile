@@ -7,6 +7,11 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends clamav clamav-daemon clamav-freshclam ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY ops/scanner/clamd.conf /etc/clamav/clamd.conf
+# EnableVersionCommand exists only in builds that can disable VERSION (Ubuntu's); Debian's clamd rejects the
+# unknown option and always answers VERSION. Keep the line only where the binary knows it; the self-test
+# proves VERSION answers either way.
+RUN grep -aq EnableVersionCommand /usr/sbin/clamd || sed -i '/^EnableVersionCommand /d' /etc/clamav/clamd.conf \
+ && clamconf -n >/dev/null
 # Official signatures baked in at build; each run refreshes them incrementally (run.sh).
 RUN freshclam --stdout --foreground || [ $? -eq 1 ]
 WORKDIR /app/backend

@@ -274,7 +274,8 @@ jobs:
         run: grep -Eq '^FROM [^ ]+@sha256:[0-9a-f]{64}$' ops/scanner/Dockerfile
       - name: Self-test
         run: |
-          docker run --rm --memory 4g -e SCANNER_IMAGE_SELFTEST=1 valida-scanner:ci > selftest.out 2> selftest.err; rc=$?
+          rc=0; docker run --rm --memory 4g -e SCANNER_IMAGE_SELFTEST=1 valida-scanner:ci > selftest.out 2> selftest.err || rc=$?
+          echo "exit $rc"
           tail -20 selftest.err; cat selftest.out
           { echo "### Scanner image self-test"; echo; echo '```'; cat selftest.out; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           [ "$rc" -eq 0 ] && grep -q '"selftest":"PASS"' selftest.out

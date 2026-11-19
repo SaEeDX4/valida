@@ -168,17 +168,18 @@ describe('Atlas-native recovery: the journal in the live cluster', () => {
     expect(await serviceUsers(t.db)).toBe(0); // still closed until the owner opens it after VERIFIED
   });
 
-  it('live cluster lost, offline export of the newest checkpoint kept: closed until the owner attests it, then VERIFIED from the export alone', async () => {
+  it('live cluster lost, offline export kept: closed, and an owner attestation does not open it (recorded only)', async () => {
     const t = await preparedTarget(state.s0);
     const lost = gateEnv(t, { RECOVERY_JOURNAL_MONGODB_URI: undefined, RECOVERY_LIVE_MONGODB_URI: undefined });
     const closed = await zeroWrites(() => cli(['restore-verify', '--snapshot-id', 'qa-an-s0', '--anchor', state.anchor1, '--journal-file', state.export1], lost));
     expect(closed.out).toMatchObject({ verdict: 'RECOVERY FAILED', reasons: ['DELETION_HISTORY_FRESHNESS_UNKNOWN'], history: { freshness: 'EXPORT_ONLY' } });
     expect(await appCount(t.db, state.ids[0])).toBe(1);
-    const r = await cli(['restore-verify', '--snapshot-id', 'qa-an-s0', '--anchor', state.anchor1, '--journal-file', state.export1, '--owner-attestation', 'QA-OWNER-REC-AN'], lost);
-    expect(r.code, r.stderr).toBe(0);
-    expect(r.out).toMatchObject({ verdict: 'RECOVERY VERIFIED', applied: { applications: 1, files: 1 }, history: { freshness: 'OWNER_ATTESTED_EXPORT', attestation: 'QA-OWNER-REC-AN' } });
-    expect(await appCount(t.db, state.ids[0])).toBe(0);
-    expect(await fileCount(t.db, state.victimKey)).toBe(0);
+    const r = await zeroWrites(() => cli(['restore-verify', '--snapshot-id', 'qa-an-s0', '--anchor', state.anchor1, '--journal-file', state.export1, '--owner-attestation', 'QA-OWNER-REC-AN'], lost));
+    expect(r.code).toBe(1);
+    expect(r.out).toMatchObject({ verdict: 'RECOVERY FAILED', reasons: ['DELETION_HISTORY_FRESHNESS_UNKNOWN'], history: { freshness: 'EXPORT_ONLY', attestation: 'QA-OWNER-REC-AN' } });
+    expect(await appCount(t.db, state.ids[0])).toBe(1);
+    expect(await fileCount(t.db, state.victimKey)).toBe(1);
+    expect(await serviceUsers(t.db)).toBe(0);
   });
 
   it('no trustworthy history: the gate fails with ZERO writes and the target stays closed with the applicant still in it', async () => {
@@ -270,6 +271,9 @@ describe('Atlas-native recovery: the journal in the live cluster', () => {
     const dead = 'mongodb://qa:qa@127.0.0.1:1/valida?authSource=admin&replicaSet=none';
     const cases = [
       ['previous export + previous checkpoint, live journal unavailable', ['--journal-file', state.export1], { RECOVERY_JOURNAL_MONGODB_URI: undefined, RECOVERY_LIVE_MONGODB_URI: undefined }, 'DELETION_HISTORY_FRESHNESS_UNKNOWN'],
+      // The gap closed (2026-11-19): an owner reference documents a decision; it cannot prove no later deletion occurred.
+      ['previous export + previous checkpoint + --owner-attestation, live journal unavailable', ['--journal-file', state.export1, '--owner-attestation', 'QA-OWNER-REC-AN-2'], { RECOVERY_JOURNAL_MONGODB_URI: undefined, RECOVERY_LIVE_MONGODB_URI: undefined }, 'DELETION_HISTORY_FRESHNESS_UNKNOWN'],
+      ['previous export + previous checkpoint + --owner-attestation, live journal unreachable', ['--journal-file', state.export1, '--owner-attestation', 'QA-OWNER-REC-AN-3'], { RECOVERY_JOURNAL_MONGODB_URI: 'mongodb://qa:qa@127.0.0.1:1/valida?authSource=admin&replicaSet=none', RECOVERY_LIVE_MONGODB_URI: undefined }, 'DELETION_HISTORY_FRESHNESS_UNKNOWN'],
       ['previous export + previous checkpoint, live journal configured but unreachable', ['--journal-file', state.export1], { RECOVERY_JOURNAL_MONGODB_URI: dead, RECOVERY_LIVE_MONGODB_URI: undefined }, 'DELETION_HISTORY_FRESHNESS_UNKNOWN'],
       ['previous checkpoint, live journal unreachable', [], { RECOVERY_JOURNAL_MONGODB_URI: dead, RECOVERY_LIVE_MONGODB_URI: undefined }, 'DELETION_HISTORY_UNAVAILABLE'],
     ];

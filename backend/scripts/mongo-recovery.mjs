@@ -39,8 +39,9 @@
  *                                 target is positively identified BEFORE the first write (restoreTarget.js).
  *                                 Freshness: the live journal must answer as RECOVERY_LIVE_REPLICA_SET. An export
  *                                 (--journal-file) cannot prove that no later deletion exists: it is refused
- *                                 (DELETION_HISTORY_FRESHNESS_UNKNOWN; the target stays closed) unless
- *                                 --owner-attestation <owner-record ref> states that it holds the newest checkpoint
+ *                                 (DELETION_HISTORY_FRESHNESS_UNKNOWN; zero writes; the target stays closed).
+ *                                 --owner-attestation <owner-record ref> is only RECORDED in the report: a
+ *                                 statement cannot prove that no later deletion occurred, so it never opens
  *
  *   backup-create                 (r3, D-MN-2) RECOVERY_BACKUP_READER_MONGODB_URI (role valida_backup_reader),
  *                                 BACKUP_RECIPIENT_PUBLIC_KEYS (>= 2 PEM public keys), BACKUP_DUMP_WRITER_* and
@@ -132,12 +133,13 @@ async function client(uri) {
 }
 /**
  * Whether the history the gate reads is known to be the NEWEST (mongoRestore.js step 1b). An offline
- * export cannot show that no deletion followed it: only an explicit owner attestation accepts it.
+ * export cannot show that no deletion followed it, and neither can an owner's statement: an attestation
+ * is recorded for the decision trail but never establishes freshness.
  */
 async function freshnessOf(fromExport) {
   const attestation = values['owner-attestation'];
   if (attestation !== undefined && !/^[A-Za-z0-9._-]{1,64}$/.test(attestation)) refuse('--owner-attestation must be the owner-record reference (1-64 letters, digits, . _ -)');
-  if (fromExport) return attestation ? { established: true, basis: 'OWNER_ATTESTED_EXPORT', attestation } : { established: false, basis: 'EXPORT_ONLY' };
+  if (fromExport) return { established: false, basis: 'EXPORT_ONLY', ...(attestation ? { attestation } : {}) };
   if (attestation !== undefined) refuse('--owner-attestation applies only with --journal-file');
   if ((process.env.BACKUP_JOURNAL_STORE ?? 'mongodb') === 's3') return { established: true, basis: 'EXTERNAL_JOURNAL' };
   const journalClient = opened[opened.length - 1];

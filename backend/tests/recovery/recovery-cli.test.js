@@ -159,14 +159,14 @@ describe('the durable deletion history (finding 2)', () => {
 
     // The middle snapshot, from the offline export (live journal not consulted).
     const t1 = await preparedTarget(state.s1);
-    // An export cannot prove it is the newest: refused unless the owner attests it (2026-11-18 freshness rule).
+    // An export cannot prove it is the newest, and an owner attestation cannot either (freshness rule, 2026-11-19).
     const exportEnv = { ...restoreEnv(t1), BACKUP_JOURNAL_READER_ACCESS_KEY_ID: undefined, BACKUP_JOURNAL_READER_SECRET_ACCESS_KEY: undefined };
     const unattested = await zeroWrites(() => cli(['restore-verify', '--snapshot-id', 'qa-s1', '--anchor', state.anchor2, '--journal-file', state.export2], exportEnv));
     expect(unattested.out).toMatchObject({ verdict: 'RECOVERY FAILED', reasons: ['DELETION_HISTORY_FRESHNESS_UNKNOWN'], history: { checkpoint: { count: 2 } } });
-    const r1 = await cli(['restore-verify', '--snapshot-id', 'qa-s1', '--anchor', state.anchor2, '--journal-file', state.export2, '--owner-attestation', 'QA-OWNER-REC-1'], exportEnv);
-    expect(r1.code, r1.stderr).toBe(0);
-    expect(r1.out).toMatchObject({ verdict: 'RECOVERY VERIFIED', applied: { applications: 1, files: 1, alreadyAbsent: 1 }, checked: 2 });
-    expect(await count(target, t1.db, state.ids[1])).toBe(0);
+    const r1 = await zeroWrites(() => cli(['restore-verify', '--snapshot-id', 'qa-s1', '--anchor', state.anchor2, '--journal-file', state.export2, '--owner-attestation', 'QA-OWNER-REC-1'], exportEnv));
+    expect(r1.code).toBe(1);
+    expect(r1.out).toMatchObject({ verdict: 'RECOVERY FAILED', reasons: ['DELETION_HISTORY_FRESHNESS_UNKNOWN'], history: { freshness: 'EXPORT_ONLY', attestation: 'QA-OWNER-REC-1' } });
+    expect(await count(target, t1.db, state.ids[1])).toBe(1); // closed, untouched
 
     // Put the live database back (test side) for the remaining tests.
     await restoreInto(live, LIVE_DB, state.s0);
@@ -320,14 +320,15 @@ describe('restore safety: the target is positively identified before the first w
     expect(fs.existsSync(path.join(work, 'nope.uri'))).toBe(false);
   });
 
-  it('the intended target, correctly configured, recovers (journal path and offline path)', async () => {
+  it('the intended target, correctly configured, recovers from the journal; the offline path stays closed even when attested', async () => {
     const head = (await cli(['journal-head'], reader())).out.anchor;
     const ok = await cli(['restore-verify', '--snapshot-id', 'qa-ok', '--anchor', head], restoreEnv(t));
     expect(ok.code, ok.stderr).toBe(0);
     expect(ok.out).toMatchObject({ verdict: 'RECOVERY VERIFIED', target: { database: t.db, targetId: t.targetId, setName: parts(ADMIN.target).setName } });
     const t2 = await preparedTarget(state0());
-    const off = await cli(['restore-verify', '--snapshot-id', 'qa-ok2', '--anchor', head, ...(await offline()), '--owner-attestation', 'QA-OWNER-REC-2'], restoreEnv(t2));
-    expect(off.out).toMatchObject({ verdict: 'RECOVERY VERIFIED' });
+    const offlineArgs = await offline();
+    const off = await zeroWrites(() => cli(['restore-verify', '--snapshot-id', 'qa-ok2', '--anchor', head, ...offlineArgs, '--owner-attestation', 'QA-OWNER-REC-2'], restoreEnv(t2)));
+    expect(off.out).toMatchObject({ verdict: 'RECOVERY FAILED', reasons: ['DELETION_HISTORY_FRESHNESS_UNKNOWN'] });
   });
 });
 

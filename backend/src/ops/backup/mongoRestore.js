@@ -22,9 +22,9 @@ import { identifyRestoreTarget } from './restoreTarget.js';
  *      tampered: RECOVERY FAILED (DELETION_HISTORY_<reason>), zero writes;
  *   1b. (2026-11-18) FRESHNESS: the verified history must be known to be the NEWEST. It is when it was
  *      read from the live journal (its server answers as the configured live replica set) or from the
- *      independent external journal. An offline export cannot prove that no deletion followed it: it
- *      is accepted only with an explicit owner attestation (recorded in the report). Otherwise
- *      RECOVERY FAILED (DELETION_HISTORY_FRESHNESS_UNKNOWN), zero writes: the target stays closed;
+ *      independent external journal. An offline export cannot prove that no deletion followed it, and
+ *      an owner attestation cannot either (it is recorded, never trusted): RECOVERY FAILED
+ *      (DELETION_HISTORY_FRESHNESS_UNKNOWN), zero writes, the target stays closed;
  *   2. EVERY entry — checkpointed and pending — is applied: the Application
  *      and its exact résumé version are removed if present. Idempotent;
  *   3. every remaining Application must have its résumé document with the

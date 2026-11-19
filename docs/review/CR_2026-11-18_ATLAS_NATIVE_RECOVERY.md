@@ -16,7 +16,7 @@
    - the history came from the live journal, and that server identifies itself as `RECOVERY_LIVE_REPLICA_SET`; or
    - it came from the independent external journal (inactive).
 
-   An offline export cannot show that no deletion followed it. Restoring from an export alone therefore fails with `DELETION_HISTORY_FRESHNESS_UNKNOWN`, writes nothing, and leaves the target closed. The only exception is `--owner-attestation <owner-record ref>`, which is recorded in the report.
+   An offline export cannot show that no deletion followed it. Restoring from an export alone therefore fails with `DELETION_HISTORY_FRESHNESS_UNKNOWN`, writes nothing, and leaves the target closed. **This holds even with `--owner-attestation <owner-record ref>`** (corrected 2026-11-19, owner instruction): an owner reference documents a decision but cannot prove that no later deletion occurred. It is recorded in the report and never establishes freshness.
 3. **Atlas user management.** Atlas refuses `createRole` and `createUser`. `prepare-target --atlas-users` therefore writes only the restore authorisation and prints the restore-writer custom role. The owner creates that role in the Atlas console, with its user restricted to the target cluster. The gate still checks that user's privileges before the first write.
 4. **Inactive, not deleted:** the encrypted recovery copy (`backup-create` / `backup-restore`), the S3 journal store and the B2 backup roles.
 
@@ -28,8 +28,8 @@
 | G2 | An independent encrypted daily copy existed | **Removed.** Only the Atlas Flex snapshots remain: the last 8 daily snapshots, no point-in-time restore. Losing the Atlas account means losing the data. RPO ≤ 24 h |
 | G3 | Two hosted rehearsals (P-6, P-15) | P-6 only, restoring Flex to Flex |
 | G4 | Restore users were created by command | They are created in the Atlas console and restricted to the target cluster. **Every live user must be restricted to the live cluster**, because Atlas users are project-wide |
-| G5 | Loss of the live cluster was covered by the external journal | It is covered only by the owner's newest offline export, **with an owner attestation**. Without a fresh, attested export the restored target stays closed: availability is lost, privacy is not |
+| G5 | Loss of the live cluster was covered by the external journal | **Not covered for reopening.** If the live journal is lost, no export or attestation can establish freshness, so the restored target stays closed. Availability is lost, privacy is not. Exports remain useful as evidence and for anchor checks |
 
 **Operating rule.** After each authorised deletion, the owner records the printed anchor in the owner record and keeps a `journal-export` file offline. The export holds ids, an opaque résumé reference and digests only.
 
-**Attestation rule.** The owner attests an export only after confirming two things: the live journal cannot be recovered, and the export matches the newest anchor in the owner record.
+**Attestation rule (2026-11-19).** `--owner-attestation` records the owner's decision reference in the gate's report. It never opens a target.

@@ -9,13 +9,24 @@ clamd &
 node -e '
 const net = require("node:net");
 const until = Date.now() + 240000;
-(function probe() {
+function probe() {
+  let done = false;
+  let out = "";
   const s = net.connect(3310, "127.0.0.1");
+  const next = () => {
+    if (done) return;
+    done = true;
+    s.destroy();
+    if (/^ClamAV /.test(out)) process.exit(0);
+    if (Date.now() > until) { console.error("{\"scanner-image\":\"clamd-not-ready\"}"); process.exit(1); }
+    setTimeout(probe, 2000);
+  };
+  s.setTimeout(5000, next);
   s.on("connect", () => s.end("zVERSION\0"));
-  let out = ""; s.on("data", (d) => { out += d; });
-  s.on("close", () => { if (/^ClamAV /.test(out)) process.exit(0); retry(); });
-  s.on("error", retry);
-  function retry() { s.destroy(); if (Date.now() > until) { console.error("{\"scanner-image\":\"clamd-not-ready\"}"); process.exit(1); } setTimeout(probe, 2000); }
-})();' || exit 1
+  s.on("data", (d) => { out += d; });
+  s.on("close", next);
+  s.on("error", next);
+}
+probe();' || exit 1
 if [ "${SCANNER_IMAGE_SELFTEST:-}" = "1" ]; then exec node /app/ops/scanner/selftest.mjs; fi
 exec node scripts/resume-scan.mjs

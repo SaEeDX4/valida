@@ -1,7 +1,8 @@
 # C6 Review/Production résumé scanner — the Render cron image (Atlas-native, 2026-11-18).
 # Build context: the repository root. Render: Runtime Docker, Dockerfile path ops/scanner/Dockerfile,
 # command left empty (the entrypoint runs one batch), plan with >= 4 GB RAM (clamd holds the signatures).
-FROM node:24-bookworm-slim
+# Pinned by digest (resolved by CI run 44477140778, 2026-11-19).
+FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 RUN apt-get update \
  && apt-get install -y --no-install-recommends clamav clamav-daemon clamav-freshclam ca-certificates \
  && rm -rf /var/lib/apt/lists/*

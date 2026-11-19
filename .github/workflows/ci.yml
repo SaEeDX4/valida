@@ -270,10 +270,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build
         run: docker build -f ops/scanner/Dockerfile -t valida-scanner:ci .
-      - name: Base image digest
-        run: |
-          d=$(docker image inspect node:24-bookworm-slim --format '{{index .RepoDigests 0}}')
-          echo "base: $d"; echo "- base image: \`$d\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Base image pinned by digest
+        run: grep -Eq '^FROM [^ ]+@sha256:[0-9a-f]{64}$' ops/scanner/Dockerfile
       - name: Self-test
         run: |
           docker run --rm --memory 4g -e SCANNER_IMAGE_SELFTEST=1 valida-scanner:ci > selftest.out 2> selftest.err; rc=$?

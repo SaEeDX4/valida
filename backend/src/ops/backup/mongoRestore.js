@@ -20,6 +20,11 @@ import { identifyRestoreTarget } from './restoreTarget.js';
  *      offline export of it) and verified, optionally against the owner's
  *      anchor (deletionJournal.js). Unreadable, incomplete, stale or
  *      tampered: RECOVERY FAILED (DELETION_HISTORY_<reason>), zero writes;
+ *   1b. (2026-11-18) FRESHNESS: the verified history must be known to be the NEWEST. It is when it was
+ *      read from the live journal (its server answers as the configured live replica set) or from the
+ *      independent external journal. An offline export cannot prove that no deletion followed it: it
+ *      is accepted only with an explicit owner attestation (recorded in the report). Otherwise
+ *      RECOVERY FAILED (DELETION_HISTORY_FRESHNESS_UNKNOWN), zero writes: the target stays closed;
  *   2. EVERY entry — checkpointed and pending — is applied: the Application
  *      and its exact résumé version are removed if present. Idempotent;
  *   3. every remaining Application must have its résumé document with the
@@ -29,7 +34,7 @@ import { identifyRestoreTarget } from './restoreTarget.js';
 export const RESTORE_VERDICTS = Object.freeze(['RECOVERY VERIFIED', 'RECOVERY FAILED', 'RECOVERY REFUSED']);
 export const RESUME_FILES = 'resume_files';
 
-export async function runMongoRestore({ targetClient, targetUri, liveUris = [], liveClient = null, env = process.env, history, anchor = null, snapshot, now = new Date() }) {
+export async function runMongoRestore({ targetClient, targetUri, liveUris = [], liveClient = null, env = process.env, history, anchor = null, freshness = { established: false, basis: 'UNSPECIFIED' }, snapshot, now = new Date() }) {
   const report = { snapshot, target: null, history: null, applied: { applications: 0, files: 0, alreadyAbsent: 0 }, checked: 0, missing: [], mismatched: [], orphans: 0, verdict: null, reasons: [] };
 
   const target = await identifyRestoreTarget({ targetClient, targetUri, liveUris, liveClient, env, now });
@@ -50,9 +55,20 @@ export async function runMongoRestore({ targetClient, targetUri, liveUris = [], 
     report.reasons.push(`DELETION_HISTORY_${error instanceof DeletionLogUnavailable ? error.reason : 'UNAVAILABLE'}`);
     return report;
   }
+  if (freshnessRefused(freshness, report)) return report;
 
   await replayAndVerify(targetClient.db(target.identity.database), entries, report);
   return report;
+}
+
+/** Step 1b. Records the basis; refuses (nothing written) when the history is not known to be the newest. */
+export function freshnessRefused(freshness, report) {
+  report.history.freshness = freshness?.basis ?? 'UNSPECIFIED';
+  if (freshness?.attestation) report.history.attestation = freshness.attestation;
+  if (freshness?.established === true) return false;
+  report.verdict = 'RECOVERY FAILED';
+  report.reasons.push('DELETION_HISTORY_FRESHNESS_UNKNOWN');
+  return true;
 }
 
 /**

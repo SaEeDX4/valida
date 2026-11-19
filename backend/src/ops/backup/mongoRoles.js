@@ -11,7 +11,7 @@
  * here. The restore writer exists ONLY on the temporary restore-target cluster
  * (created by the owner there, restricted to that cluster in Atlas).
  */
-export const LIVE_ROLES = Object.freeze(['valida_api_runtime', 'valida_resume_storage', 'valida_deletion_operator', 'valida_resume_scanner', 'valida_backup_reader']);
+export const LIVE_ROLES = Object.freeze(['valida_api_runtime', 'valida_resume_storage', 'valida_deletion_operator', 'valida_journal_reader', 'valida_resume_scanner', 'valida_backup_reader']);
 export const RESTORE_TARGET_ROLES = Object.freeze(['valida_restore_writer', 'valida_restore_loader']);
 
 export function roleDefinitions(db) {
@@ -28,7 +28,10 @@ export function roleDefinitions(db) {
     // The API's storage user (RESUME_STORAGE_MONGODB_URI): résumé documents only; never update.
     valida_resume_storage: [on('resume_files', ['find', 'insert', 'remove'])],
     // The authorised-deletion operator: remove exact records (the history is written to the journal first).
-    valida_deletion_operator: [on('applications', ['find', 'remove']), on('resume_files', ['find', 'remove'])],
+    // Atlas-native: the operator also writes the deletion journal (insert-only: no update, no remove).
+    valida_deletion_operator: [on('applications', ['find', 'remove']), on('resume_files', ['find', 'remove']), on('deletion_journal', ['find', 'insert'])],
+    // Atlas-native: reads the journal for the restore gate and journal-head / journal-export.
+    valida_journal_reader: [on('deletion_journal', ['find'])],
     // The scanner (E4): reads résumés, records a bound scan result.
     // r3: per-version retry state (scanQueue.js) — the Application schema is unchanged.
     valida_resume_scanner: [on('applications', ['find', 'update']), on('resume_files', ['find']), on('scan_attempts', ['find', 'insert', 'update'])],

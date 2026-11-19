@@ -4,9 +4,14 @@
  * restore gate when résumés live in MongoDB and the deletion history lives in
  * the independent, locked journal (src/ops/backup/deletionJournal.js).
  *
- * Journal (S3 API, the accepted C6-T6 log bucket): BACKUP_S3_ENDPOINT,
- * BACKUP_S3_REGION, BACKUP_LOG_BUCKET [, BACKUP_S3_URL_STYLE, BACKUP_S3_TIMEOUT_MS]
- * and the role's own key pair: BACKUP_JOURNAL_WRITER_* or BACKUP_JOURNAL_READER_*;
+ * Journal store, BACKUP_JOURNAL_STORE:
+ *   mongodb (default, Atlas-native 2026-11-18) the insert-only `deletion_journal` collection in the
+ *           live cluster. Writer: RECOVERY_OPERATOR_MONGODB_URI (valida_deletion_operator); reader:
+ *           RECOVERY_JOURNAL_MONGODB_URI (valida_journal_reader). Not independent of Atlas: keep the
+ *           anchor, and a `journal-export` after each deletion, outside Atlas.
+ *   s3      (inactive under the Atlas-native plan) the C6-T6 locked log bucket: BACKUP_S3_ENDPOINT,
+ *           BACKUP_S3_REGION, BACKUP_LOG_BUCKET [, BACKUP_S3_URL_STYLE, BACKUP_S3_TIMEOUT_MS] and
+ *           BACKUP_JOURNAL_WRITER_* or BACKUP_JOURNAL_READER_*.
  * BACKUP_JOURNAL_NAMESPACE (default `production`; `review` for the Review environment).
  *
  *   journal-init                  writer. Writes checkpoint 0 once (provisioning); prints the anchor
@@ -17,7 +22,11 @@
  *                                 it as the new anchor
  *   journal-head                  reader. The newest verified checkpoint
  *   journal-export --out <file>   reader. The whole verified journal as one JSON file
- *   prepare-target --target-id <id> --expires-hours <h> --writer-uri-out <file> [--mode snapshot|load]
+ *   prepare-target --target-id <id> --expires-hours <h> (--writer-uri-out <file> | --atlas-users) [--mode snapshot|load]
+ *                                 --atlas-users: Atlas refuses createRole/createUser, so the command writes
+ *                                 only the authorisation and prints the custom role for the owner to create in
+ *                                 the Atlas console, with its user RESTRICTED TO THE TARGET CLUSTER. The gate
+ *                                 still verifies that user's privileges before the first write
  *                                 OWNER, with RECOVERY_TARGET_ADMIN_MONGODB_URI (an admin of the NEW
  *                                 temporary cluster only). Refuses the live replica set; writes the
  *                                 restore_authorization document; creates role valida_restore_writer
@@ -27,7 +36,11 @@
  *                                 RECOVERY_LIVE_REPLICA_SET; optional RECOVERY_LIVE_MONGODB_URI (any live
  *                                 user: only `hello` is sent there, to detect an alias). The history comes
  *                                 from the journal (reader) unless --journal-file names an export. The
- *                                 target is positively identified BEFORE the first write (restoreTarget.js)
+ *                                 target is positively identified BEFORE the first write (restoreTarget.js).
+ *                                 Freshness: the live journal must answer as RECOVERY_LIVE_REPLICA_SET. An export
+ *                                 (--journal-file) cannot prove that no later deletion exists: it is refused
+ *                                 (DELETION_HISTORY_FRESHNESS_UNKNOWN; the target stays closed) unless
+ *                                 --owner-attestation <owner-record ref> states that it holds the newest checkpoint
  *
  *   backup-create                 (r3, D-MN-2) RECOVERY_BACKUP_READER_MONGODB_URI (role valida_backup_reader),
  *                                 BACKUP_RECIPIENT_PUBLIC_KEYS (>= 2 PEM public keys), BACKUP_DUMP_WRITER_* and
@@ -50,7 +63,7 @@ import { parseArgs } from 'node:util';
 import mongoose from 'mongoose';
 import { MongoPrivateStorage } from '../src/integrations/storage/mongoPrivateStorage.js';
 import { BackupConfigurationError, resolveBackupRole } from '../src/ops/backup/backupConfig.js';
-import { deletionJournal, exportJournalStore, s3JournalStore } from '../src/ops/backup/deletionJournal.js';
+import { JOURNAL_COLLECTION, deletionJournal, exportJournalStore, mongoJournalStore, s3JournalStore } from '../src/ops/backup/deletionJournal.js';
 import { deleteApplicationDurably } from '../src/ops/backup/durableDeletion.js';
 import { runMongoRestore } from '../src/ops/backup/mongoRestore.js';
 import { restoreTargetRoleDefinitions } from '../src/ops/backup/mongoRoles.js';
@@ -74,6 +87,8 @@ const { values } = parseArgs({
     'target-id': { type: 'string' },
     'expires-hours': { type: 'string' },
     'writer-uri-out': { type: 'string' },
+    'atlas-users': { type: 'boolean', default: false },
+    'owner-attestation': { type: 'string' },
     mode: { type: 'string' },
     'backup-id': { type: 'string' },
     'manifest-sha256': { type: 'string' },
@@ -100,11 +115,38 @@ function namespace() {
   if (!/^[a-z0-9-]{1,32}$/.test(ns)) refuse('BACKUP_JOURNAL_NAMESPACE must be 1-32 lowercase letters, digits or hyphens');
   return ns;
 }
-const journalFor = (role) => deletionJournal(s3JournalStore(resolveBackupRole(role).endpoints.log), { namespace: namespace() });
+const opened = [];
+/** The journal for `role`. The MongoDB store connects lazily: an unreachable journal is reported as history UNAVAILABLE. */
+function journalFor(role) {
+  const kind = process.env.BACKUP_JOURNAL_STORE ?? 'mongodb';
+  if (kind === 's3') return deletionJournal(s3JournalStore(resolveBackupRole(role).endpoints.log), { namespace: namespace() });
+  if (kind !== 'mongodb') refuse('BACKUP_JOURNAL_STORE must be mongodb or s3');
+  const c = new MongoClient(uriOf(role === 'journal-writer' ? 'RECOVERY_OPERATOR_MONGODB_URI' : 'RECOVERY_JOURNAL_MONGODB_URI'), { serverSelectionTimeoutMS: 10_000 });
+  opened.push(c);
+  return deletionJournal(mongoJournalStore(c.db().collection(JOURNAL_COLLECTION)), { namespace: namespace() });
+}
 async function client(uri) {
   const c = new MongoClient(uri, { serverSelectionTimeoutMS: 10_000 });
   await c.connect();
   return c;
+}
+/**
+ * Whether the history the gate reads is known to be the NEWEST (mongoRestore.js step 1b). An offline
+ * export cannot show that no deletion followed it: only an explicit owner attestation accepts it.
+ */
+async function freshnessOf(fromExport) {
+  const attestation = values['owner-attestation'];
+  if (attestation !== undefined && !/^[A-Za-z0-9._-]{1,64}$/.test(attestation)) refuse('--owner-attestation must be the owner-record reference (1-64 letters, digits, . _ -)');
+  if (fromExport) return attestation ? { established: true, basis: 'OWNER_ATTESTED_EXPORT', attestation } : { established: false, basis: 'EXPORT_ONLY' };
+  if (attestation !== undefined) refuse('--owner-attestation applies only with --journal-file');
+  if ((process.env.BACKUP_JOURNAL_STORE ?? 'mongodb') === 's3') return { established: true, basis: 'EXTERNAL_JOURNAL' };
+  const journalClient = opened[opened.length - 1];
+  try {
+    const hello = await journalClient.db('admin').command({ hello: 1 });
+    return hello.setName && hello.setName === process.env.RECOVERY_LIVE_REPLICA_SET ? { established: true, basis: 'LIVE_JOURNAL' } : { established: false, basis: 'JOURNAL_NOT_LIVE' };
+  } catch {
+    return { established: false, basis: 'JOURNAL_UNREACHABLE' };
+  }
 }
 const anchorOf = (checkpoint) => `${checkpoint.count}:${checkpoint.sha256}`;
 
@@ -145,7 +187,7 @@ try {
     if (!/^[A-Za-z0-9_-]{16,64}$/.test(targetId ?? '')) refuse('--target-id is required (16-64 letters, digits, - or _; generate it and record it in the owner record)');
     const hours = Number(values['expires-hours'] ?? '');
     if (!Number.isInteger(hours) || hours < 1 || hours > 168) refuse('--expires-hours is required (1-168)');
-    if (!values['writer-uri-out']) refuse('--writer-uri-out <file> is required');
+    if (!values['writer-uri-out'] && !values['atlas-users']) refuse('--writer-uri-out <file> (or --atlas-users) is required');
     const mode = values.mode ?? 'snapshot';
     if (!['snapshot', 'load'].includes(mode)) refuse('--mode must be snapshot (a restored Atlas snapshot) or load (an empty target for a recovery copy)');
     const liveSet = process.env.RECOVERY_LIVE_REPLICA_SET;
@@ -165,17 +207,24 @@ try {
       }
       await db.collection(RESTORE_AUTHORIZATION_COLLECTION).insertOne({ targetId, setName: hello.setName, database: restoredUri, mode, purpose: 'valida-restore', authorisedAt: new Date(), expiresAt: new Date(Date.now() + hours * 3_600_000) }, { writeConcern: { w: 'majority', j: true } });
       const roles = restoreTargetRoleDefinitions(restoredUri, mode);
-      for (const [role, privileges] of Object.entries(roles)) {
-        await db.command({ createRole: role, privileges, roles: [] });
+      if (values['atlas-users']) {
+        const [[roleName, privileges]] = Object.entries(roles);
+        print({ command, setName: hello.setName, database: restoredUri, mode, expiresHours: hours,
+          atlasCustomRole: { roleName: `${roleName}_${targetId.slice(0, 8)}`, actions: privileges.flatMap((p) => p.actions.map((action) => ({ action: action.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(), resources: [{ db: p.resource.db, collection: p.resource.collection }] }))) },
+          next: 'create this custom role and one database user with it, restricted to the TARGET cluster only; then run restore-verify with that user' });
+      } else {
+        for (const [role, privileges] of Object.entries(roles)) {
+          await db.command({ createRole: role, privileges, roles: [] });
+        }
+        const roleName = Object.keys(roles)[0];
+        const pwd = randomBytes(24).toString('hex');
+        const user = `${roleName}_${targetId.slice(0, 8)}`;
+        await db.command({ createUser: user, pwd, roles: [{ role: roleName, db: restoredUri }] });
+        const id = uriIdentity(adminUri.replace(/\/[^/?]*(\?|$)/, `/${restoredUri}$1`));
+        const scheme = adminUri.startsWith('mongodb+srv://') ? 'mongodb+srv' : 'mongodb';
+        writeFileSync(values['writer-uri-out'], `${scheme}://${user}:${pwd}@${id.hosts.join(',')}/${restoredUri}?authSource=${restoredUri}${hello.setName && scheme === 'mongodb' ? `&replicaSet=${hello.setName}` : ''}\n`, { mode: 0o600 });
+        print({ command, setName: hello.setName, database: restoredUri, mode, writerUser: user, expiresHours: hours });
       }
-      const roleName = Object.keys(roles)[0];
-      const pwd = randomBytes(24).toString('hex');
-      const user = `${roleName}_${targetId.slice(0, 8)}`;
-      await db.command({ createUser: user, pwd, roles: [{ role: roleName, db: restoredUri }] });
-      const id = uriIdentity(adminUri.replace(/\/[^/?]*(\?|$)/, `/${restoredUri}$1`));
-      const scheme = adminUri.startsWith('mongodb+srv://') ? 'mongodb+srv' : 'mongodb';
-      writeFileSync(values['writer-uri-out'], `${scheme}://${user}:${pwd}@${id.hosts.join(',')}/${restoredUri}?authSource=${restoredUri}${hello.setName && scheme === 'mongodb' ? `&replicaSet=${hello.setName}` : ''}\n`, { mode: 0o600 });
-      print({ command, setName: hello.setName, database: restoredUri, mode, writerUser: user, expiresHours: hours });
     } finally {
       await c.close();
     }
@@ -212,9 +261,9 @@ try {
     try {
       if (liveUri) live = await client(liveUri).catch(() => null);
       const report = await restoreRecoveryCopy({
-        targetClient: target, targetUri, liveUris: [liveUri, process.env.RECOVERY_OPERATOR_MONGODB_URI, process.env.MONGODB_URI], liveClient: live,
+        targetClient: target, targetUri, liveUris: [liveUri, process.env.RECOVERY_OPERATOR_MONGODB_URI, process.env.RECOVERY_JOURNAL_MONGODB_URI, process.env.MONGODB_URI], liveClient: live,
         store, namespace: namespace(), backupId, expectedManifestSha256: values['manifest-sha256'], privateKey, passphrase: process.env.RECOVERY_PRIVATE_KEY_PASSPHRASE,
-        history, anchor, maxAgeDays,
+        history, anchor, maxAgeDays, freshness: await freshnessOf(Boolean(values['journal-file'])),
       });
       if (values.report) writeFileSync(values.report, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
       print({ command, backupId, verdict: report.verdict, reasons: report.reasons, recoveryPoint: report.recoveryPoint, target: report.target, history: report.history, loaded: report.loaded, applied: report.applied, checked: report.checked, missing: report.missing.length, mismatched: report.mismatched.length, orphans: report.orphans });
@@ -237,8 +286,8 @@ try {
     try {
       if (liveUri) live = await client(liveUri).catch(() => null);
       const report = await runMongoRestore({
-        targetClient: target, targetUri, liveUris: [liveUri, process.env.RECOVERY_OPERATOR_MONGODB_URI, process.env.MONGODB_URI], liveClient: live,
-        history, anchor, snapshot: { id: snapshotId },
+        targetClient: target, targetUri, liveUris: [liveUri, process.env.RECOVERY_OPERATOR_MONGODB_URI, process.env.RECOVERY_JOURNAL_MONGODB_URI, process.env.MONGODB_URI], liveClient: live,
+        history, anchor, freshness: await freshnessOf(Boolean(values['journal-file'])), snapshot: { id: snapshotId },
       });
       // A live cluster that cannot be reached (a disaster) leaves the alias check to the replica-set name.
       const notes = liveUri && !live ? ['LIVE_UNREACHABLE: alias checked by replica-set name and authorisation only'] : [];
@@ -258,4 +307,6 @@ try {
   const named = ['PrivateStorageError', 'StorageInitializationError', 'DeletionLogUnavailable', 'BackupStoreError'].includes(error?.name);
   process.stderr.write(`recovery ${command}: failed (${named ? `${error.name} ${error.reason}` : `${type}${code ? ` ${code}` : ''}`})\n`);
   process.exitCode = 1;
+} finally {
+  for (const c of opened) await c.close().catch(() => {});
 }

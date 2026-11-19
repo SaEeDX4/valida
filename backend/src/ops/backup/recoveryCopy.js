@@ -4,7 +4,7 @@ import { REQUIRED_INDEXES } from '../../db/indexes.js';
 import { BackupStoreError, getObject, putNewObject } from './backupStore.js';
 import { DeletionLogUnavailable } from './deletionLog.js';
 import { identifyRestoreTarget, RECOVERY_COLLECTIONS } from './restoreTarget.js';
-import { replayAndVerify } from './mongoRestore.js';
+import { freshnessRefused, replayAndVerify } from './mongoRestore.js';
 
 /**
  * Proposed (MongoDB-native r3, owner decision D-MN-2) — the INDEPENDENT,
@@ -236,7 +236,7 @@ export async function createRecoveryCopy({ client, db, store, recipients, namesp
  * Restore to an EMPTY, positively identified target (mode 'load'), then deletion replay.
  * Nothing is written unless the target, the deletion history AND the recovery material all verify.
  */
-export async function restoreRecoveryCopy({ targetClient, targetUri, liveUris = [], liveClient = null, env = process.env, store, namespace = 'production', backupId, expectedManifestSha256, privateKey, passphrase, history, anchor = null, now = new Date(), maxAgeDays = 35 }) {
+export async function restoreRecoveryCopy({ targetClient, targetUri, liveUris = [], liveClient = null, env = process.env, store, namespace = 'production', backupId, expectedManifestSha256, privateKey, passphrase, history, anchor = null, freshness = { established: false, basis: 'UNSPECIFIED' }, now = new Date(), maxAgeDays = 35 }) {
   const report = { backupId, recoveryPoint: null, target: null, history: null, loaded: null, applied: { applications: 0, files: 0, alreadyAbsent: 0 }, checked: 0, missing: [], mismatched: [], orphans: 0, verdict: null, reasons: [] };
   const target = await identifyRestoreTarget({ targetClient, targetUri, liveUris, liveClient, env, now, mode: 'load' });
   if (!target.ok) {
@@ -255,6 +255,7 @@ export async function restoreRecoveryCopy({ targetClient, targetUri, liveUris = 
     report.reasons.push(`DELETION_HISTORY_${error instanceof DeletionLogUnavailable ? error.reason : 'UNAVAILABLE'}`);
     return report;
   }
+  if (freshnessRefused(freshness, report)) return report;
   let opened;
   try {
     if (!NAMESPACE.test(namespace) || !BACKUP_ID.test(backupId ?? '')) throw new RecoveryCopyError('BACKUP_ID_INVALID');

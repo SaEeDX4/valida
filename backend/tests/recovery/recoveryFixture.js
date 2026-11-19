@@ -102,7 +102,7 @@ export function journalEnv(moto, role, { endpoint = moto.endpoint, namespace } =
     APP_ENV: 'local', NODE_ENV: 'test',
     BACKUP_S3_ENDPOINT: endpoint, BACKUP_S3_REGION: 'us-east-1', BACKUP_S3_TIMEOUT_MS: '3000', BACKUP_LOG_BUCKET: moto.buckets.log,
     [`${prefix}_ACCESS_KEY_ID`]: moto.users[user].accessKeyId, [`${prefix}_SECRET_ACCESS_KEY`]: moto.users[user].secretAccessKey,
-    BACKUP_JOURNAL_NAMESPACE: namespace,
+    BACKUP_JOURNAL_NAMESPACE: namespace, BACKUP_JOURNAL_STORE: 's3',
   };
 }
 

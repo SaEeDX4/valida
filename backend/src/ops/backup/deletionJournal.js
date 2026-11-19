@@ -68,6 +68,56 @@ export function s3JournalStore(endpoint) {
   };
 }
 
+/**
+ * Atlas-native (2026-11-18): the journal as an INSERT-ONLY collection in the live
+ * cluster (`deletion_journal`, one document per object: { _id: key, bytes, sha256 }).
+ * The same verification applies unchanged. The writer role may only find and
+ * insert there (mongoRoles.js): it cannot update or remove a journal document.
+ * Unlike the S3 store, the history is NOT independent of Atlas; the owner's
+ * anchor (and an offline `journal-export`) is what detects a stale or rewritten copy.
+ */
+export const JOURNAL_COLLECTION = 'deletion_journal';
+export function mongoJournalStore(collection) {
+  const majority = { writeConcern: { w: 'majority', j: true } };
+  const fail = (operation, error) => {
+    if (error?.code === 13 || error?.codeName === 'Unauthorized') return new BackupStoreError(operation, 'PERMISSION_DENIED');
+    return new BackupStoreError(operation, 'UNAVAILABLE');
+  };
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return {
+    kind: 'mongodb',
+    list: async (prefix) => {
+      try {
+        const docs = await collection.find({ _id: { $regex: `^${escape(prefix)}` } }, { projection: { _id: 1 }, readConcern: { level: 'majority' } }).sort({ _id: 1 }).toArray();
+        return docs.map((d) => d._id);
+      } catch (error) {
+        throw fail('list', error);
+      }
+    },
+    get: async (key) => {
+      let doc;
+      try {
+        doc = await collection.findOne({ _id: key }, { readConcern: { level: 'majority' } });
+      } catch (error) {
+        throw fail('get', error);
+      }
+      if (!doc) throw new BackupStoreError('get', 'NOT_FOUND');
+      const bytes = Buffer.from(doc.bytes.buffer ?? doc.bytes);
+      if (doc.sha256 !== sha256Hex(bytes)) throw new DeletionLogUnavailable('TAMPERED');
+      return bytes;
+    },
+    putNew: async (key, bytes) => {
+      try {
+        await collection.insertOne({ _id: key, bytes, sha256: sha256Hex(bytes), storedAt: new Date() }, majority);
+        return true;
+      } catch (error) {
+        if (error?.code === 11000) return false; // the key exists: never overwritten
+        throw fail('put', error);
+      }
+    },
+  };
+}
+
 /** A read-only store over an export (the offline path). */
 export function exportJournalStore(exported) {
   if (!exported || exported.schema !== 'valida.deletion-journal.export.v1' || !Array.isArray(exported.objects)) throw new DeletionLogUnavailable('EXPORT_INVALID');
@@ -89,7 +139,7 @@ export function exportJournalStore(exported) {
 const unavailable = (error) => new DeletionLogUnavailable(error instanceof DeletionLogUnavailable ? error.reason : error instanceof BackupStoreError ? error.reason : 'UNAVAILABLE');
 
 /**
- * @param store       s3JournalStore(endpoint) or exportJournalStore(json)
+ * @param store       mongoJournalStore(collection), s3JournalStore(endpoint) or exportJournalStore(json)
  * @param namespace   one journal per environment (e.g. production, review); keys under deletion-journal/<namespace>/
  */
 export function deletionJournal(store, { namespace = 'production', clock = () => new Date() } = {}) {

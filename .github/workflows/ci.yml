@@ -183,14 +183,54 @@ jobs:
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
-      - name: ClamAV with the official signatures
+      - name: ClamAV with the official signatures (packaged config and service, AppArmor enforced)
+        # fcad871 failed here: clamd refused "/etc/clamav/clamd-ci.conf" ("Can't open/parse the config file").
+        # Ubuntu's AppArmor profile for clamd reads its packaged config, so the packaged file and service are used;
+        # AppArmor stays as shipped. Setup fails, with diagnostics, unless the OFFICIAL signatures are current and
+        # the daemon answers a valid VERSION before the deadline.
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q clamav clamav-daemon
-          sudo systemctl stop clamav-freshclam || true
-          sudo freshclam --quiet
-          printf 'TCPSocket 3310\nTCPAddr 127.0.0.1\nStreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\nDatabaseDirectory /var/lib/clamav\nForeground no\n' | sudo tee /etc/clamav/clamd-ci.conf
-          sudo clamd -c /etc/clamav/clamd-ci.conf
-          for i in $(seq 1 120); do printf 'zVERSION\0' | timeout 2 nc 127.0.0.1 3310 | grep -q ClamAV && break; sleep 2; done
+          set -euo pipefail
+          diag() {
+            echo "::group::diagnostics"
+            sudo systemctl status clamav-daemon --no-pager || true
+            sudo journalctl -u clamav-daemon -u clamav-freshclam --no-pager | tail -80 || true
+            sudo tail -50 /var/log/clamav/clamav.log /var/log/clamav/freshclam.log 2>/dev/null || true
+            sudo dmesg | grep -i 'apparmor.*clam' | tail -20 || true
+            sudo ls -la /var/lib/clamav || true
+            echo "::endgroup::"
+          }
+          trap 'diag' ERR
+          sudo apt-get update -q
+          sudo apt-get install -y -q clamav clamav-daemon
+          echo "AppArmor profiles for ClamAV (left enforced):"; sudo aa-status 2>/dev/null | grep -iE 'clam|enforce mode' || true
+          sudo systemctl stop clamav-daemon clamav-freshclam || true
+          # freshclam: 0 = updated, 1 = already up to date; anything else is a failure.
+          rc=0; sudo freshclam --stdout || rc=$?
+          if [ "$rc" -gt 1 ]; then echo "::error::freshclam failed (exit $rc)"; diag; exit 1; fi
+          sudo ls -la /var/lib/clamav
+          for db in main daily bytecode; do
+            f=$(ls /var/lib/clamav/$db.cvd /var/lib/clamav/$db.cld 2>/dev/null | head -1 || true)
+            if [ -z "$f" ]; then echo "::error::official database $db missing"; diag; exit 1; fi
+            echo "--- $f"; sudo sigtool --info "$f" | tee -a "$RUNNER_TEMP/sigtool.txt"
+          done
+          # Official, current: the daily database was built by ClamAV within the scanner's 48 h limit.
+          bt=$(sudo sigtool --info "$(ls /var/lib/clamav/daily.c?d 2>/dev/null | head -1 || true)" | sed -n 's/^Build time: //p')
+          if [ -z "$bt" ]; then echo "::error::no build time in the daily database header"; diag; exit 1; fi
+          age=$(( ( $(date -u +%s) - $(date -u -d "$bt" +%s) ) / 3600 ))
+          echo "daily.cvd/.cld build time: $bt (age ${age} h)"
+          if [ "$age" -ge 48 ]; then echo "::error::official daily signatures are ${age} h old"; diag; exit 1; fi
+          sudo sed -i -e '/^TCPSocket /d' -e '/^TCPAddr /d' -e '/^StreamMaxLength /d' -e '/^MaxFileSize /d' -e '/^MaxScanSize /d' /etc/clamav/clamd.conf
+          printf 'TCPSocket 3310\nTCPAddr 127.0.0.1\nStreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\n' | sudo tee -a /etc/clamav/clamd.conf
+          sudo systemctl start clamav-daemon
+          v=""
+          for i in $(seq 1 150); do
+            v=$(printf 'zVERSION\0' | timeout 2 nc 127.0.0.1 3310 | tr -d '\0' || true)
+            if printf '%s' "$v" | grep -Eq '^ClamAV [0-9]+\.[0-9]+\.[0-9]+/[0-9]+/'; then break; fi
+            v=""; sleep 2
+          done
+          if [ -z "$v" ]; then echo "::error::clamd gave no valid VERSION within 300 s"; diag; exit 1; fi
+          echo "clamd VERSION: $v"
+          { echo "### ClamAV (official signatures)"; echo; echo "- clamd VERSION: \`$v\`"; echo "- daily build time: $bt (age ${age} h)"; echo; echo '```'; cat "$RUNNER_TEMP/sigtool.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - run: npm ci
       - run: npm run test:scanner
 

@@ -231,13 +231,25 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl restart clamav-daemon.socket
           sudo systemctl start clamav-daemon
-          v=""
+          # The probe is the same TCP client path the scanner uses (Node's net module, as clamdScanner.js), and it
+          # reports every distinct failure (20c5cf3: clamd was listening on 3310, yet the nc probe saw nothing for
+          # 300 s and printed no error).
+          probe() { node -e 'const s=require("net").connect(3310,"127.0.0.1");let b="";s.setTimeout(3000,()=>{console.error("probe: timeout after connect, got "+JSON.stringify(b));process.exit(2)});s.on("connect",()=>s.write("zVERSION\0"));s.on("data",d=>{b+=d;if(b.includes("\0")){process.stdout.write(b.replace(/\0/g,""));s.destroy();process.exit(0)}});s.on("end",()=>{process.stdout.write(b.replace(/\0/g,""));process.exit(b?0:3)});s.on("error",e=>{console.error("probe: "+e.code+" "+e.message);process.exit(4)})'; }
+          v=""; last=""
           for i in $(seq 1 150); do
-            v=$(printf 'zVERSION\0' | timeout 2 nc 127.0.0.1 3310 | tr -d '\0' || true)
-            if printf '%s' "$v" | grep -Eq '^ClamAV [0-9]+\.[0-9]+\.[0-9]+/[0-9]+/'; then break; fi
+            out=$(probe 2>&1) && v="$out" || true
+            if printf '%s\n' "$v" | grep -Eq '^ClamAV [0-9]+\.[0-9]+\.[0-9]+/[0-9]+/'; then break; fi
+            if [ "$out" != "$last" ]; then echo "VERSION probe $i: $out"; last="$out"; fi
             v=""; sleep 2
           done
-          if [ -z "$v" ]; then echo "::error::clamd gave no valid VERSION within 300 s"; diag; exit 1; fi
+          if [ -z "$v" ]; then
+            echo "::error::clamd gave no valid VERSION on 127.0.0.1:3310 within 300 s"
+            echo "unix-socket VERSION: $(printf 'zVERSION\0' | sudo timeout 5 nc -U /run/clamav/clamd.ctl | tr -d '\0' || true)"
+            echo "tcp (nc -v) VERSION: $(printf 'zVERSION\0' | timeout 5 nc -v 127.0.0.1 3310 2>&1 | tr -d '\0' || true)"
+            sudo aa-status 2>/dev/null | grep -A1 -i clamd || true
+            sudo journalctl -k --no-pager | grep -iE 'apparmor="DENIED"' | tail -20 || true
+            diag; exit 1
+          fi
           echo "clamd VERSION: $v"
           { echo "### ClamAV (official signatures)"; echo; echo "- clamd VERSION: \`$v\`"; echo "- daily build time: $bt (age ${age} h)"; echo; echo '```'; cat "$RUNNER_TEMP/sigtool.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - run: npm ci

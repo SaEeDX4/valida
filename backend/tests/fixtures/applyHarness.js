@@ -484,6 +484,8 @@ export async function createApplyEnvironment({
   withStorage = true,
   // B7 — the suppression check (default: complete coverage, nothing suppressed).
   suppression = openSuppressionGate(),
+  // C6-T6 — error monitoring (default: none).
+  errorMonitor,
 } = {}) {
   const log = capturingLogger();
   const intake = withStorage ? await createIntakeEnvironment({ logger: log.logger, storageOptions }) : null;
@@ -514,6 +516,7 @@ export async function createApplyEnvironment({
     resumeStorage: storage,
     uploadArea: intake?.uploadArea ?? null,
     suppressionGate: suppression,
+    ...(errorMonitor ? { errorMonitor } : {}),
   });
   return {
     app,

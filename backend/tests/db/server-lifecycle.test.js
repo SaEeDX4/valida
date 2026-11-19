@@ -122,6 +122,8 @@ describe('running src/server.js directly against MongoDB', () => {
       {
         APP_ENV: 'production', NODE_ENV: 'production', LOG_LEVEL: 'info', PORT: String(port),
         MONGODB_URI: TEST_URI, CORS_ALLOWED_ORIGINS: 'https://valida.lt',
+        // C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+        SITE_ACCESS: 'public',
       },
       { until: /backend listening/ },
     );

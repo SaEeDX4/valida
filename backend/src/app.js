@@ -9,6 +9,12 @@ import { generalRateLimit } from './middleware/rateLimit.js';
 import { apiNotFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { noStore } from './middleware/noStore.js';
+import { recruitmentAccessGate } from './middleware/recruitmentAccess.js';
+import { CLOSED_RECRUITMENT_ACCESS, DISABLED_SERVICE_DELEGATION } from './config/recruitmentAccess.js';
+import { noValidators } from './middleware/noValidators.js';
+import { siteAccessGate } from './middleware/siteAccess.js';
+import { PUBLIC_SITE_ACCESS } from './config/siteAccess.js';
+import { stampRelease } from './config/releaseIdentity.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { Readiness } from './modules/health/readiness.js';
 import { jobsRouter } from './modules/jobs/job.routes.js';
@@ -21,6 +27,7 @@ import { createApplicationNotifier } from './modules/applications/application.no
 import { createSuppressionGate } from './modules/suppression/suppressionGate.js';
 import { createSuppressionRegister } from './modules/suppression/suppressionRegister.js';
 import { keyringFromConfig } from './modules/suppression/suppressionKeys.js';
+import { DISABLED_ERROR_MONITOR } from './lib/monitoring/errorMonitor.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -46,7 +53,14 @@ export const API_BASE_PATH = '/api/v1';
  *                       the Jobs `Cache-Control: no-store` policy (B3), so it
  *                       also covers responses that parsing or rate limiting
  *                       end early (400, 413, 429)
+ *   4a. site access     C6-T3: on a private site, every request but liveness
+ *                       is admitted or answered 403 HERE — before the Jobs
+ *                       cache policy, CORS (preflight too), the recruitment
+ *                       gate, body parsing, rate limiting and routing. Every
+ *                       response is then `private, no-store`, no validators
  *   5. CORS             before the body is read, so preflight is cheap
+ *   5b. recruitment     the access gate on /api/v1/jobs (C6-T1): a client who
+ *                       may not use Jobs is answered before any body is read
  *   6. body parsing     with the 100 KB limit
  *   7. rate limiting    after identity, before any route work
  *   8. API routes
@@ -116,6 +130,11 @@ export function createApp({
    * current key every acknowledgement fails closed. Offline tests inject a
    * stand-in; the register itself is proven by the real-database suite.
    */
+  /**
+   * C6-T6 — error monitoring (lib/monitoring/errorMonitor.js). server.js
+   * passes the monitor built from SENTRY_DSN; the default sends nothing.
+   */
+  errorMonitor = DISABLED_ERROR_MONITOR,
   suppressionGate = createSuppressionGate({
     register: createSuppressionRegister({ timeoutMs: config?.suppression?.lookupTimeoutMs ?? 2_000, writeTimeoutMs: config?.databaseQueryTimeoutMs }),
     keyring: keyringFromConfig(config?.suppression),
@@ -129,6 +148,18 @@ export function createApp({
   // Never advertise the framework (Doc 13).
   app.disable('x-powered-by');
 
+  /*
+   * 1a. Release identity — C6-T5 (config/releaseIdentity.js; plan §8.4,
+   * D-6). First, so every response carries it: health, refusals, redirects,
+   * 404, errors and CORS preflights. The value comes from configuration only;
+   * a request's own X-Valida-Release is never read.
+   */
+  const release = config.release ?? null;
+  app.use((req, res, next) => {
+    stampRelease(res, release);
+    next();
+  });
+
   // 2. Request id, and X-Request-ID on the response.
   app.use(requestId());
 
@@ -141,10 +172,22 @@ export function createApp({
    * This API serves JSON only, never HTML, so a restrictive CSP costs nothing
    * and blocks any attempt to render an injected document. crossOriginResourcePolicy
    * stays same-origin: nothing here is meant to be embedded by another site.
+   *
+   * C6-T5:
+   *   - the CSP is exactly the four directives below (`useDefaults: false`).
+   *     Helmet's defaults had added broad sources (`https:`, `data:`,
+   *     'unsafe-inline' for styles) and `upgrade-insecure-requests`, none of
+   *     which a JSON API uses (Doc 13 §35);
+   *   - Strict-Transport-Security is NOT sent. Helmet sends a one-year,
+   *     includeSubDomains policy by default; HSTS is activated deliberately, at
+   *     plan step P9 by the owner (Doc 13 §31: not before the domain topology
+   *     is known).
    */
   app.use(
     helmet({
+      strictTransportSecurity: false,
       contentSecurityPolicy: {
+        useDefaults: false,
         directives: {
           defaultSrc: ["'none'"],
           frameAncestors: ["'none'"],
@@ -158,6 +201,21 @@ export function createApp({
   );
 
   /*
+   * 4a. Site access — C6-T3 (middleware/siteAccess.js). A no-op on a public
+   * site. On a private one it admits or refuses every request before any
+   * other work, and makes every response `private, no-store` without
+   * validators. A configuration object without a `siteAccess` entry is the
+   * public site of a local run (config/env.js always supplies one).
+   */
+  app.use(
+    siteAccessGate({
+      site: config.siteAccess ?? PUBLIC_SITE_ACCESS,
+      trustedHops: config.trustProxy ?? false,
+      delegation: config.serviceDelegation ?? DISABLED_SERVICE_DELEGATION,
+    }),
+  );
+
+  /*
    * 4b. Jobs cache policy — Doc 09 section 58. Mounted here, with the other
    * response headers and BEFORE CORS, body parsing and rate limiting, so that
    * every response on /api/v1/jobs carries `Cache-Control: no-store` — also the
@@ -165,9 +223,33 @@ export function createApp({
    * limiter, which end the request before the Jobs router is reached.
    */
   app.use(`${API_BASE_PATH}/jobs`, noStore());
+  // C6-T2: Jobs responses depend on who asks. No ETag or Last-Modified is
+  // sent and no conditional request is answered 304 (middleware/noValidators.js).
+  app.use(`${API_BASE_PATH}/jobs`, noValidators());
 
   // 5. CORS, from the explicit allowlist.
   app.use(corsMiddleware(config.corsAllowedOrigins));
+
+  /*
+   * 5b. Recruitment access gate — C6-T1 (middleware/recruitmentAccess.js).
+   * After CORS, so a refusal still carries the CORS headers a browser needs to
+   * read it; BEFORE body parsing and rate limiting, so a client who may not use
+   * Jobs is refused with the body unread. A configuration object without a
+   * `recruitment` entry is treated as closed. The gate takes the same
+   * TRUST_PROXY value as step 1, and applies it more strictly than req.ip: a
+   * forwarding chain shorter than the hop count is an unknown client.
+   */
+  app.use(
+    `${API_BASE_PATH}/jobs`,
+    recruitmentAccessGate({
+      access: config.recruitment ?? CLOSED_RECRUITMENT_ACCESS,
+      trustedHops: config.trustProxy ?? false,
+      delegation: config.serviceDelegation ?? DISABLED_SERVICE_DELEGATION,
+      // C6-T2: a rejected delegated read is logged by its fixed reason code
+      // only — never a header value, a key or an address.
+      onDelegationRejected: ({ outcome }) => logger.warn({ event: 'recruitment.delegation_rejected', outcome }, 'delegated Jobs read rejected'),
+    }),
+  );
 
   // 6. JSON body parsing with the general 100 KB limit. A malformed body or an
   //    oversized one becomes a controlled envelope in the error handler.
@@ -210,7 +292,7 @@ export function createApp({
   app.use(apiNotFound());
 
   // 10. Central error handler.
-  app.use(errorHandler(logger));
+  app.use(errorHandler(logger, errorMonitor));
 
   return app;
 }

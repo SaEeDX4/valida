@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "description": "C6-T6 dependency audit policy (Doc 13 sections 133-137, 310). Fail on any finding at or above severityThreshold, except an owner-approved, dated, exactly scoped exception. Read by ops/ci/audit-gate.mjs.",
+  "severityThreshold": "high",
+  "exceptions": [
+    {
+      "advisory": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "advisoryRange": "<=4.0.7",
+      "approvedVersions": ["4.0.7"],
+      "startUtc": "2026-11-18T05:31:00Z",
+      "expiresUtc": "2026-12-18T05:31:00Z",
+      "decision": "docs/review/OWNER_RECORD_2026-11-18-01_C6_T6_MONGO_PIN_AND_AUDIT_EXCEPTION.md",
+      "scope": {
+        "backend": {
+          "picomatch": { "nodes": ["node_modules/picomatch"], "version": "4.0.7" },
+          "fdir": { "nodes": ["node_modules/fdir"], "version": "6.5.0" },
+          "tinyglobby": { "nodes": ["node_modules/tinyglobby"], "version": "0.2.17" },
+          "vite": { "nodes": ["node_modules/vite"], "version": "8.3.3" },
+          "vitest": { "nodes": ["node_modules/vitest"], "version": "5.0.3" },
+          "@vitest/coverage-v8": { "nodes": ["node_modules/@vitest/coverage-v8"], "version": "5.0.3" }
+        },
+        "frontend": {
+          "picomatch": { "nodes": ["node_modules/picomatch"], "version": "4.0.7" },
+          "fdir": { "nodes": ["node_modules/fdir"], "version": "6.5.0" },
+          "tinyglobby": { "nodes": ["node_modules/tinyglobby"], "version": "0.2.17" },
+          "vite": { "nodes": ["node_modules/vite"], "version": "8.2.4" },
+          "vitest": { "nodes": ["node_modules/vitest"], "version": "5.0.3" },
+          "@vitejs/plugin-react": { "nodes": ["node_modules/@vitejs/plugin-react"], "version": "6.1.1" }
+        }
+      }
+    }
+  ]
+}

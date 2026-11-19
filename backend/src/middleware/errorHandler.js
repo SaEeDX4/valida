@@ -2,6 +2,7 @@ import { AppError, ERROR_CODES, malformedRequest, payloadTooLarge } from '../err
 import { errorEnvelope } from '../lib/envelope.js';
 import { safeErrorSummary } from '../lib/safeError.js';
 import { closeAfterResponseInStages } from '../lib/http/stagedClose.js';
+import { DISABLED_ERROR_MONITOR } from '../lib/monitoring/errorMonitor.js';
 
 /**
  * Central error handler — Doc 09 sections 20-23, Doc 13.
@@ -33,7 +34,15 @@ function normalise(error) {
   return null;
 }
 
-export function errorHandler(logger) {
+/**
+ * C6-T6: `monitor` (lib/monitoring/errorMonitor.js) records each UNEXPECTED
+ * failure — the generic 500 below — by the same classification as the log,
+ * with the release, environment and (when it is a UUID) the requestId.
+ * Handled AppErrors (4xx, 503) are application outcomes, not defects, and
+ * are not sent. Capture returns at once and never throws, so the response
+ * is the same with monitoring enabled, disabled or unreachable.
+ */
+export function errorHandler(logger, monitor = DISABLED_ERROR_MONITOR) {
   // eslint-disable-next-line no-unused-vars -- Express identifies the error
   // handler by its four-parameter signature; `next` must stay.
   return function centralErrorHandler(error, req, res, next) {
@@ -103,6 +112,7 @@ export function errorHandler(logger) {
       { reqId: req.id, err: safeErrorSummary(error), status: 500, code: ERROR_CODES.INTERNAL_ERROR },
       'unhandled error',
     );
+    monitor.captureUnexpected(error, { kind: 'request', status: 500, requestId: req.id });
 
     if (res.headersSent) {
       // A response is already streaming; the only safe action is to destroy it.

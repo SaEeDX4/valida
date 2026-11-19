@@ -3,6 +3,10 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { parseTrustedHops, resolveRecruitmentAccess, resolveServiceDelegation } from './recruitmentAccess.js';
+import { SITE_ACCESS_PROBLEM_TEXT, SITE_ACCESS_PROBLEM_VARIABLE, resolveSiteAccess } from './siteAccess.js';
+import { resolveReleaseIdentity } from './releaseIdentity.js';
+import { resolveErrorMonitoring } from './errorMonitoring.js';
 import { parseMongoUri } from '../db/connectionString.js';
 import { KEY_ID_PATTERN, decodeKey } from '../modules/suppression/suppressionKeys.js';
 
@@ -105,14 +109,12 @@ const originList = z
 const trustProxy = z
   .string()
   .default('false')
+  // C6-T2: the rule now lives in config/recruitmentAccess.js (parseTrustedHops),
+  // shared with the frontend document server. It is the same rule as before.
   .superRefine((value, ctx) => {
-    if (value === 'false') return;
-    const hops = Number(value);
-    if (!Number.isInteger(hops) || hops < 1 || hops > 10) {
-      ctx.addIssue({ code: 'custom', message: 'TRUST_PROXY_INVALID' });
-    }
+    if (parseTrustedHops(value) === null) ctx.addIssue({ code: 'custom', message: 'TRUST_PROXY_INVALID' });
   })
-  .transform((value) => (value === 'false' ? false : Number(value)));
+  .transform((value) => parseTrustedHops(value));
 
 /**
  * MONGODB_URI — Milestone B2.
@@ -573,7 +575,19 @@ const baseSchema = z.object({
   MONGODB_QUERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5_000),
 
   // Private resume storage — Milestone B4. See the section above.
-  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local']).optional()),
+  RESUME_STORAGE_DRIVER: emptyAsUnset(z.enum(['local', 's3', 'mongodb']).optional()),
+  // Proposed (MongoDB-native): the storage credential — a DEDICATED database user
+  // whose role grants insert/find/remove on resume_files only. Never logged.
+  RESUME_STORAGE_MONGODB_URI: emptyAsUnset(mongodbUri.optional()),
+  // C6-T4 — the S3-compatible driver. Presence only here; the rules (and the
+  // refusal messages, which never echo a value) are applied below.
+  RESUME_STORAGE_S3_ENDPOINT: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_REGION: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_BUCKET: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_ACCESS_KEY_ID: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_SECRET_ACCESS_KEY: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_URL_STYLE: emptyAsUnset(z.string().optional()),
+  RESUME_STORAGE_S3_TIMEOUT_MS: emptyAsUnset(z.string().optional()),
   // Only its presence is checked here; its rules are applied below, where the
   // failure can be reported without echoing the path.
   RESUME_STORAGE_LOCAL_ROOT: emptyAsUnset(z.string().optional()),
@@ -726,8 +740,22 @@ const RULE_TEXT = {
     'is required when APP_ENV=production; list the exact frontend origins allowed ' +
     'to call this API',
   RESUME_STORAGE_DRIVER:
-    'must be "local" (development only) or left unset; the production private-storage ' +
-    'provider is selected at deployment (Milestone C6)',
+    'must be "s3" (S3-compatible private object storage), "local" (development only) or left unset',
+  RESUME_STORAGE_S3_REQUIRED: 'is required when RESUME_STORAGE_DRIVER=s3',
+  RESUME_STORAGE_MONGODB_REQUIRED: 'is required when RESUME_STORAGE_DRIVER=mongodb (a dedicated storage database user)',
+  RESUME_STORAGE_MONGODB_WITHOUT_DRIVER: 'is set but RESUME_STORAGE_DRIVER is not "mongodb"; set the driver, or remove it',
+  RESUME_STORAGE_MONGODB_SHARED_CREDENTIAL: 'must not equal MONGODB_URI in production: the storage credential is a separate, least-privilege database user',
+  RESUME_STORAGE_S3_WITHOUT_DRIVER: 'is set but RESUME_STORAGE_DRIVER is not "s3"; set the driver, or remove the S3 settings',
+  RESUME_STORAGE_S3_ENDPOINT_INVALID:
+    'must be an https:// origin only (scheme, host and optional port; no credentials, path, query or fragment)',
+  RESUME_STORAGE_S3_ENDPOINT_NOT_HTTPS:
+    'must use https://; plain http:// is accepted only for a loopback test endpoint when APP_ENV=local and NODE_ENV is not production',
+  RESUME_STORAGE_S3_REGION_INVALID: 'must be a region name: 1-32 lowercase letters, digits or hyphens (for example eu-central-1, or auto)',
+  RESUME_STORAGE_S3_BUCKET_INVALID: 'must be a bucket name: 3-63 lowercase letters, digits, dots or hyphens, starting and ending with a letter or digit',
+  RESUME_STORAGE_S3_ACCESS_KEY_ID_INVALID: 'must be 8-128 letters, digits, dots, hyphens or underscores',
+  RESUME_STORAGE_S3_SECRET_ACCESS_KEY_INVALID: 'must be 16-256 visible ASCII characters without spaces',
+  RESUME_STORAGE_S3_URL_STYLE_INVALID: 'must be "path" (the default) or "virtual"',
+  RESUME_STORAGE_S3_TIMEOUT_MS_INVALID: 'must be a whole number of milliseconds from 1000 to 120000',
   RESUME_STORAGE_LOCAL_NOT_ALLOWED:
     'is "local", which is development-only and is refused unless APP_ENV=local and ' +
     'NODE_ENV is not production — a deployed instance must use real private object storage',
@@ -765,6 +793,69 @@ function safeRuleText(issue) {
  * to stderr at startup. `issues` carries the variable names and the same safe
  * rule text — never a value.
  */
+const S3_BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+const S3_REGION = /^[a-z0-9-]{1,32}$/;
+const S3_ACCESS_KEY_ID = /^[A-Za-z0-9._-]{8,128}$/;
+const S3_SECRET = /^[\x21-\x7e]{16,256}$/;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/**
+ * C6-T4 — validates the S3-compatible storage settings. With the driver
+ * selected, every required one must be present and valid; without it, none
+ * may be set (a half-configured store is a mistake, never a fallback). Only
+ * fixed rule texts are reported.
+ *
+ * @returns {{ problems: Array<{variable: string, rule: string}>, value: object | null }}
+ */
+function checkS3Settings(config, selected) {
+  const names = ['RESUME_STORAGE_S3_ENDPOINT', 'RESUME_STORAGE_S3_REGION', 'RESUME_STORAGE_S3_BUCKET', 'RESUME_STORAGE_S3_ACCESS_KEY_ID', 'RESUME_STORAGE_S3_SECRET_ACCESS_KEY', 'RESUME_STORAGE_S3_URL_STYLE', 'RESUME_STORAGE_S3_TIMEOUT_MS'];
+  const problems = [];
+  const problem = (variable, sentinel) => problems.push({ variable, rule: RULE_TEXT[sentinel] });
+  if (!selected) {
+    for (const name of names) if (config[name] !== undefined) problem(name, 'RESUME_STORAGE_S3_WITHOUT_DRIVER');
+    return { problems, value: null };
+  }
+  for (const name of names.slice(0, 5)) if (config[name] === undefined) problem(name, 'RESUME_STORAGE_S3_REQUIRED');
+
+  let endpoint = null;
+  if (config.RESUME_STORAGE_S3_ENDPOINT !== undefined) {
+    let url = null;
+    try {
+      url = new URL(config.RESUME_STORAGE_S3_ENDPOINT);
+    } catch {
+      url = null;
+    }
+    const originOnly = url && !url.username && !url.password && (url.pathname === '/' || url.pathname === '') && !url.search && !url.hash && !config.RESUME_STORAGE_S3_ENDPOINT.includes('?');
+    if (!originOnly || (url.protocol !== 'https:' && url.protocol !== 'http:')) {
+      problem('RESUME_STORAGE_S3_ENDPOINT', 'RESUME_STORAGE_S3_ENDPOINT_INVALID');
+    } else if (url.protocol === 'http:' && !(LOOPBACK_HOSTS.has(url.hostname) && config.APP_ENV === 'local' && config.NODE_ENV !== 'production')) {
+      // Doc 13 section 111: backend <-> private object storage uses HTTPS/TLS.
+      problem('RESUME_STORAGE_S3_ENDPOINT', 'RESUME_STORAGE_S3_ENDPOINT_NOT_HTTPS');
+    } else {
+      endpoint = new URL(url.origin);
+    }
+  }
+  if (config.RESUME_STORAGE_S3_REGION !== undefined && !S3_REGION.test(config.RESUME_STORAGE_S3_REGION)) problem('RESUME_STORAGE_S3_REGION', 'RESUME_STORAGE_S3_REGION_INVALID');
+  const bucket = config.RESUME_STORAGE_S3_BUCKET;
+  if (bucket !== undefined && (!S3_BUCKET.test(bucket) || bucket.includes('..'))) problem('RESUME_STORAGE_S3_BUCKET', 'RESUME_STORAGE_S3_BUCKET_INVALID');
+  if (config.RESUME_STORAGE_S3_ACCESS_KEY_ID !== undefined && !S3_ACCESS_KEY_ID.test(config.RESUME_STORAGE_S3_ACCESS_KEY_ID)) problem('RESUME_STORAGE_S3_ACCESS_KEY_ID', 'RESUME_STORAGE_S3_ACCESS_KEY_ID_INVALID');
+  if (config.RESUME_STORAGE_S3_SECRET_ACCESS_KEY !== undefined && !S3_SECRET.test(config.RESUME_STORAGE_S3_SECRET_ACCESS_KEY)) problem('RESUME_STORAGE_S3_SECRET_ACCESS_KEY', 'RESUME_STORAGE_S3_SECRET_ACCESS_KEY_INVALID');
+  const urlStyle = config.RESUME_STORAGE_S3_URL_STYLE ?? 'path';
+  if (urlStyle !== 'path' && urlStyle !== 'virtual') problem('RESUME_STORAGE_S3_URL_STYLE', 'RESUME_STORAGE_S3_URL_STYLE_INVALID');
+  let timeoutMs = 15_000;
+  if (config.RESUME_STORAGE_S3_TIMEOUT_MS !== undefined) {
+    timeoutMs = /^[0-9]{4,6}$/.test(config.RESUME_STORAGE_S3_TIMEOUT_MS) ? Number(config.RESUME_STORAGE_S3_TIMEOUT_MS) : NaN;
+    if (!(timeoutMs >= 1000 && timeoutMs <= 120_000)) problem('RESUME_STORAGE_S3_TIMEOUT_MS', 'RESUME_STORAGE_S3_TIMEOUT_MS_INVALID');
+  }
+  if (problems.length > 0) return { problems, value: null };
+  const value = { endpoint, region: config.RESUME_STORAGE_S3_REGION, bucket, urlStyle, timeoutMs };
+  Object.defineProperty(value, 'credentials', {
+    value: Object.freeze({ accessKeyId: config.RESUME_STORAGE_S3_ACCESS_KEY_ID, secretAccessKey: config.RESUME_STORAGE_S3_SECRET_ACCESS_KEY }),
+    enumerable: false,
+  });
+  return { problems, value: Object.freeze(value) };
+}
+
 export class ConfigurationError extends Error {
   constructor(issues) {
     const details = issues.map(({ variable, rule }) => `  - ${variable}: ${rule}`).join('\n');
@@ -870,6 +961,30 @@ export function loadConfig(env = process.env) {
    * worse, look like it worked while allowing nothing.
    */
   const missing = [];
+
+  /*
+   * C6-T3 — site access (config/siteAccess.js). Unlike the recruitment mode,
+   * a wrong value STOPS the backend: Review must be private with a valid
+   * allowlist, Production public. Reported by fixed text only — never the
+   * configured value or an address.
+   */
+  const site = resolveSiteAccess({ siteAccess: env?.SITE_ACCESS, allowlist: env?.ACCESS_ALLOWLIST, appEnv: config.APP_ENV });
+  if (!site.ok) {
+    missing.push({ variable: SITE_ACCESS_PROBLEM_VARIABLE[site.problem], rule: SITE_ACCESS_PROBLEM_TEXT[site.problem] });
+  }
+  /*
+   * C6-T5 — release identity (config/releaseIdentity.js). Absent: no header.
+   * Malformed: the backend refuses to start, reported by fixed text only.
+   */
+  const release = resolveReleaseIdentity(env);
+  if (!release.ok) missing.push({ variable: release.variable, rule: release.rule });
+  /*
+   * C6-T6 — error monitoring (config/errorMonitoring.js; D-4a). Absent:
+   * disabled, nothing is sent. Malformed: the backend refuses to start,
+   * reported by fixed text only — the DSN is never printed.
+   */
+  const monitoring = resolveErrorMonitoring({ dsn: env?.SENTRY_DSN, appEnv: config.APP_ENV, nodeEnv: config.NODE_ENV });
+  if (!monitoring.ok) missing.push({ variable: monitoring.variable, rule: monitoring.rule });
   if (isProduction && (!config.CORS_ALLOWED_ORIGINS || config.CORS_ALLOWED_ORIGINS.length === 0)) {
     missing.push({ variable: 'CORS_ALLOWED_ORIGINS', rule: RULE_TEXT.CORS_REQUIRED_IN_PRODUCTION });
   }
@@ -902,6 +1017,19 @@ export function loadConfig(env = process.env) {
     }
   } else if (storageRoot !== null) {
     missing.push({ variable: 'RESUME_STORAGE_LOCAL_ROOT', rule: RULE_TEXT.RESUME_STORAGE_LOCAL_ROOT_WITHOUT_DRIVER });
+  }
+
+  // C6-T4 — the S3-compatible driver: every setting validated, nothing echoed,
+  // no fallback to disk. A broken setting stops the service (Doc 09 section 159).
+  const s3Settings = checkS3Settings(config, storageDriver === 's3');
+  missing.push(...s3Settings.problems);
+  // Proposed (MongoDB-native): résumés in MongoDB, through a dedicated storage credential.
+  const storageMongoUri = config.RESUME_STORAGE_MONGODB_URI ?? null;
+  if (storageDriver === 'mongodb') {
+    if (storageMongoUri === null) missing.push({ variable: 'RESUME_STORAGE_MONGODB_URI', rule: RULE_TEXT.RESUME_STORAGE_MONGODB_REQUIRED });
+    else if (isProduction && storageMongoUri === config.MONGODB_URI) missing.push({ variable: 'RESUME_STORAGE_MONGODB_URI', rule: RULE_TEXT.RESUME_STORAGE_MONGODB_SHARED_CREDENTIAL });
+  } else if (storageMongoUri !== null) {
+    missing.push({ variable: 'RESUME_STORAGE_MONGODB_URI', rule: RULE_TEXT.RESUME_STORAGE_MONGODB_WITHOUT_DRIVER });
   }
 
   // B6 — transactional email (see checkNotificationSettings).
@@ -1006,6 +1134,47 @@ export function loadConfig(env = process.env) {
     nodeEnv: config.NODE_ENV,
     appEnv: config.APP_ENV,
     isProduction,
+    /*
+     * C6-T1 — recruitment access (config/recruitmentAccess.js). Read from the
+     * raw environment on purpose: these three variables are NOT validated by
+     * the schema above, because a wrong value must never stop the backend and
+     * must never be reported with its content. Whatever is not exactly right
+     * resolves to `closed`. The allowlist (testers' network addresses) is a
+     * non-enumerable property of this object: it is in no serialised view.
+     */
+    recruitment: resolveRecruitmentAccess({
+      mode: env?.RECRUITMENT_MODE,
+      authorisation: env?.RECRUITMENT_PUBLIC_AUTHORISATION,
+      allowlist: env?.ACCESS_ALLOWLIST,
+      appEnv: config.APP_ENV,
+    }),
+    /*
+     * C6-T2 — INTERNAL_SERVICE_KEY, the secret the document server presents
+     * when it reads a Job on a visitor's behalf (config/recruitmentAccess.js,
+     * "DELEGATION"). Read from the raw environment for the same reason as the
+     * three variables above: an absent or unusable key must never stop the
+     * backend; it disables delegation, which gives every delegated read the
+     * unlisted view. Only a digest is kept, non-enumerable: the key is in no
+     * serialised view.
+     */
+    serviceDelegation: resolveServiceDelegation({ key: env?.INTERNAL_SERVICE_KEY }),
+    /*
+     * C6-T3 — whether the whole API is private. Validated above (a refused
+     * configuration never gets here). The allowlist is non-enumerable.
+     */
+    siteAccess: site,
+    /*
+     * C6-T5 — the commit this process runs, from RENDER_GIT_COMMIT at start-up
+     * (config/releaseIdentity.js); { sha: null } when unset. Sent as
+     * X-Valida-Release on every response; never taken from a request.
+     */
+    release,
+    /*
+     * C6-T6 — error monitoring: { state: 'disabled' } or { state: 'enabled',
+     * transport }, with the DSN as a NON-enumerable property (in no
+     * serialised view of this object).
+     */
+    monitoring,
     port: config.PORT,
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,
@@ -1063,6 +1232,11 @@ export function loadConfig(env = process.env) {
     resumeStorage: Object.freeze({
       driver: storageDriver,
       localRoot: storageDriver === 'local' ? path.resolve(storageRoot) : null,
+      // C6-T4: the S3 settings. The credentials are a NON-ENUMERABLE property:
+      // in no serialised view, log line or inspection of the configuration.
+      s3: storageDriver === 's3' ? s3Settings.value : null,
+      // Proposed (MongoDB-native): the storage credential, redacted in every serialised view.
+      mongodb: storageDriver === 'mongodb' ? Object.freeze(withRedactedSerialisation({ uri: storageMongoUri }, ['uri'])) : null,
     }),
     /*
      * B7 — recipient suppression (design rev 8 §4.2, §5). The key bytes are

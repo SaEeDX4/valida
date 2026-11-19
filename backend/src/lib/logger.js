@@ -16,6 +16,8 @@ const REDACT_PATHS = [
   'req.headers.cookie',
   'req.headers["x-api-key"]',
   'req.headers["proxy-authorization"]',
+  // C6-T2: the document server's delegation key (never logged by any call site).
+  'req.headers["x-valida-internal-key"]',
   'res.headers["set-cookie"]',
   'password',
   '*.password',

@@ -13,6 +13,13 @@
     "test:e2e:c5": "playwright test --config playwright.c5.config.js",
     "test:c5:stats": "node --test c5/perfStats.test.js",
     "test:c5:motion": "node --test c5/motionJudge.test.js",
+    "test:c6:stack": "node c6/c6-t2-stack.mjs",
+    "test:c6t3:stack": "node c6/c6-t3-stack.mjs",
+    "test:c6t4:stack": "node c6/c6-t4-stack.mjs",
+    "test:c6t5:stack": "node c6/c6-t5-stack.mjs",
+    "test:c6t6:rehearsal": "node c6/c6-t6-backup-rehearsal.mjs",
+    "test:c6t6:checker": "node c6/c6-t6-review-checker.mjs",
+    "test:c6t6:deletion": "node c6/c6-t6-deletion-retry.mjs",
     "test:guards": "node --test guards/run-directory.test.js guards/loopback.test.js"
   },
   "devDependencies": {

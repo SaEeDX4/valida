@@ -15,11 +15,17 @@ describe('security headers', () => {
     expect(headers['x-content-type-options']).toBe('nosniff');
     expect(headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(headers['referrer-policy']).toBe('no-referrer');
-    expect(headers['strict-transport-security']).toBeTruthy();
     expect(headers['cross-origin-resource-policy']).toBe('same-origin');
-    // JSON-only API: nothing may be rendered or embedded.
-    expect(headers['content-security-policy']).toMatch(/default-src 'none'/);
-    expect(headers['content-security-policy']).toMatch(/frame-ancestors 'none'/);
+    // JSON-only API: nothing may be rendered or embedded. C6-T5: exactly the
+    // declared directives — no Helmet default source list, no upgrade directive.
+    expect(headers['content-security-policy']).toBe("default-src 'none';frame-ancestors 'none';base-uri 'none';form-action 'none'");
+  });
+
+  it('C6-T5: sends no Strict-Transport-Security (HSTS is the owner\'s plan step P9)', async () => {
+    for (const path of [HEALTH, '/api/v1/nope']) {
+      const { headers } = await request(buildApp()).get(path);
+      expect(headers['strict-transport-security']).toBeUndefined();
+    }
   });
 
   it('applies the headers to errors too', async () => {

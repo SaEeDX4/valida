@@ -1,0 +1,49 @@
+# Proposed (MongoDB-native launch change) — the backup alert for Atlas Flex
+# (Doc 15 section 187). Replaces backup-copy.yml and backup-manifest.yml: the
+# résumés live in the database, so the daily Atlas snapshot holds them with
+# their Applications and no copy or manifest job is needed.
+#
+# NOT ACTIVE until the owner creates the protected `backup-monitor`
+# environment, its service account (Atlas role: Project Read Only — it can list
+# snapshots and change nothing) and the two variables below. Scheduled
+# workflows run only from the default branch. A failed run (stale, failed or
+# missing snapshot, or the API unavailable) fails the job: GitHub's failure
+# notification to the owner is the alert.
+name: backup-freshness
+
+on:
+  schedule:
+    - cron: '41 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-freshness
+  cancel-in-progress: false
+
+jobs:
+  freshness:
+    name: newest Atlas Flex snapshot is recent and no later snapshot failed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: backup-monitor
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Check the newest snapshot
+        env:
+          ATLAS_CLIENT_ID: ${{ secrets.ATLAS_MONITOR_CLIENT_ID }}
+          ATLAS_CLIENT_SECRET: ${{ secrets.ATLAS_MONITOR_CLIENT_SECRET }}
+          ATLAS_GROUP_ID: ${{ vars.ATLAS_GROUP_ID }}
+          ATLAS_FLEX_CLUSTER: ${{ vars.ATLAS_FLEX_CLUSTER }}
+        run: node scripts/atlas-snapshot-freshness.mjs

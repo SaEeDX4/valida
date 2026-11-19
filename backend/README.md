@@ -206,6 +206,13 @@ node tests/diagnostics/localhost-addressing.mjs
 | `LOG_LEVEL` | no | `info` | `fatal`…`trace`, or `silent` |
 | `CORS_ALLOWED_ORIGINS` | **yes in production** | localhost 5173 + 4173 | Comma-separated exact origins. `*` is rejected |
 | `TRUST_PROXY` | no | `false` | `false`, or the number of trusted proxy hops (1–10) |
+| `RECRUITMENT_MODE` | no | — (**closed**) | C6-T1. Exactly `closed`, `testers` or `public`. Anything else, or nothing, is `closed`. See "Recruitment access (C6-T1)" |
+| `ACCESS_ALLOWLIST` | with `testers` | — | C6-T1. Comma-separated addresses or CIDR ranges (IPv4, IPv6; 1–50). Never logged |
+| `RECRUITMENT_PUBLIC_AUTHORISATION` | with `public` | — | C6-T1. The owner decision that opens recruitment, as `OD-YYYY-MM-DD-NN` |
+| `SITE_ACCESS` | **yes: `private` in review, `public` in production** | — (**public**, local only) | C6-T3. `private` or `public`, exactly. Review requires `private` with a valid `ACCESS_ALLOWLIST`; production requires `public`, written explicitly (C6-T3 correction 1). A wrong or unsafe value **stops the backend** before it listens. See "Private site access (C6-T3)" |
+| `INTERNAL_SERVICE_KEY` | no | — (delegation **disabled**) | C6-T2. The secret the document server presents when it reads Jobs on a visitor's behalf; 32–512 visible ASCII characters, no spaces. Absent or unusable: every delegated read gets the unlisted view. Server-only; never logged. See "Delegated Jobs reads (C6-T2)" |
+| `RENDER_GIT_COMMIT` | no (set by the host) | — (no release header) | C6-T5. The full 40-character lowercase commit SHA this process runs, stated as `X-Valida-Release` on every response (C6 plan §8.4). Anything else **stops the backend** before it listens; the value is never printed. The document server reads the same variable with the same rule |
+| `SENTRY_DSN` | no (a secret, set by the owner) | — (monitoring disabled; nothing sent) | C6-T6 (D-4a). Unexpected 500s and uncaught exceptions are sent to Sentry as events rebuilt from an allowlist: classified type, fixed text, repository-relative frames, release, `APP_ENV`, service — never the request, an applicant, a résumé or an error message (`src/lib/monitoring/errorMonitor.js`; [record](../docs/review/C6_T6_MONITORING_CI_CHECKER_BACKUP.md)). Malformed **stops the backend** before it listens, naming the variable only. Test: `npm run ops:monitoring:test-event`. The document server reads the same variable with the same rule |
 | `RATE_LIMIT_WINDOW_MS` | no | `60000` | Rate-limit window |
 | `RATE_LIMIT_MAX` | no | `120` | Requests allowed per window per client IP |
 | `MONGODB_URI` | **yes** (B2) | — | Any connection string the MongoDB driver accepts — standalone, replica-set host list or `mongodb+srv://`. Validated by the driver's own parser; never logged or printed |
@@ -214,7 +221,14 @@ node tests/diagnostics/localhost-addressing.mjs
 | `MONGODB_TEST_URI` | tests only | — | Used only by `test:db` / `verify:b2` / `verify:b3` / `verify:b4` / `verify:b5` / `verify:b6`. Database must be named **`valida_test`** or **`valida_test_<suffix>`** and differ from `MONGODB_URI` — see "B2 verification" |
 | `MONGODB_TEST_DISPOSABLE_TOPOLOGY` | tests only (B7) | unset | `1` lets the suppression read-preference cases RP-4 and RP-5 step the replica set's primary down and pause a secondary's replication. **Set it only for a replica set created for the test.** Unset, those two cases report NOT RUN |
 | `MONGODB_TEST_PARTITION_NODES` | tests only (B7 r6) | unset | Three `127.0.0.1:<port>` addresses of **fresh, disposable** `mongod --replSet rs2 --setParameter enableTestCommands=1` processes, comma-separated. Lets the stale-primary cases SP-1…SP-3 (`tests/db/b7-suppression-stale-primary.test.js`) initiate `rs2` behind a TCP partition bridge (each member at its port + 1000) and partition it. `MONGODB_TEST_URI` must then name the bridge addresses with `replicaSet=rs2`. A set already initiated with other members is refused. Unset, those cases report NOT RUN |
-| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. The production provider is selected at deployment (C6, AWAITING INPUT) |
+| `RESUME_STORAGE_DRIVER` | no (B4) | unset | `mongodb` (proposed launch driver: private résumé documents in MongoDB — any environment), `s3` (C6-T4, S3-compatible private object storage — any environment), `local` (development only) or unset. `local` is **refused at startup** unless `APP_ENV=local` and `NODE_ENV` is not `production`. Unset = no storage: the service starts, readiness reports it, no Application could be accepted. There is never a fallback from `s3` to disk |
+| `RESUME_STORAGE_S3_ENDPOINT` | with `s3` | — | C6-T4. The S3 API origin only (`https://host[:port]`; no credentials, path or query). **`https` is required**; plain `http` is accepted only for a loopback test endpoint with `APP_ENV=local` and `NODE_ENV` not production |
+| `RESUME_STORAGE_S3_REGION` | with `s3` | — | C6-T4. The signing region, e.g. `eu-central-1`, or `auto` where the provider says so |
+| `RESUME_STORAGE_S3_BUCKET` | with `s3` | — | C6-T4. The private bucket for this environment only |
+| `RESUME_STORAGE_S3_ACCESS_KEY_ID` / `RESUME_STORAGE_S3_SECRET_ACCESS_KEY` | with `s3` | — | C6-T4. **Secrets.** A credential scoped to object put, read (head), delete and list in that bucket only (Doc 13 §101). Held non-enumerably; in no log, error or configuration view |
+| `RESUME_STORAGE_S3_URL_STYLE` | no | `path` | C6-T4. `path` or `virtual` (bucket in the host name) |
+| `RESUME_STORAGE_S3_TIMEOUT_MS` | no | `15000` | C6-T4. Timeout of one storage request, 1000–120000 ms |
+| `RESUME_STORAGE_MONGODB_URI` | with `mongodb` | — | Proposed (MongoDB-native launch). **Secret.** The résumé store's OWN database user (role `valida_resume_storage`: find, insert, remove on `resume_files` only; no update). Refused without `RESUME_STORAGE_DRIVER=mongodb`; in production refused when equal to `MONGODB_URI`. One immutable document per résumé version (≤ 5 MiB, one atomic insert, write concern majority + journal). Held non-enumerably; in no log, error or configuration view |
 | `RESUME_STORAGE_LOCAL_ROOT` | with `local` | — | Absolute path of the private local storage directory. Must be outside the repository (and not contain it), not inside a public/static/web-served directory, and not a drive/filesystem root. Never logged or printed |
 | `APPLICATION_RATE_LIMIT_WINDOW_MS` | no (B5) | `900000` | 1000–86400000. Apply rate-limit window (Doc 09 section 34: 15 minutes) |
 | `APPLICATION_RATE_LIMIT_MAX` | no (B5) | `10` | 1–100000. Apply **attempts** per window per client IP — counted separately from, and in addition to, the general limit |
@@ -257,6 +271,249 @@ production value depends on how many proxies actually sit in front of the app
 and must be confirmed per deployment.
 
 ---
+
+## MongoDB-native storage, recovery and scanning (proposed r3)
+
+The launch design stores each résumé version as one private document in MongoDB
+(`RESUME_STORAGE_DRIVER=mongodb`). Three operational commands run **outside the
+API** with their own least-privilege credentials. None of these variables is set
+on the API service.
+
+| Command | Purpose | Its own credentials |
+| --- | --- | --- |
+| `npm run ops:recovery:*` (`scripts/mongo-recovery.mjs`) | authorised durable deletion; deletion journal; restore-target preparation; snapshot restore gate; encrypted recovery copy (create / restore) | `RECOVERY_OPERATOR_MONGODB_URI` (valida_deletion_operator), `RECOVERY_BACKUP_READER_MONGODB_URI` (valida_backup_reader), `RECOVERY_RESTORED_MONGODB_URI` (the restore writer/loader made by `prepare-target`), `RECOVERY_TARGET_ADMIN_MONGODB_URI` (owner only, the temporary target), `BACKUP_JOURNAL_WRITER_*` / `BACKUP_JOURNAL_READER_*` (journal, `BACKUP_LOG_BUCKET`), `BACKUP_DUMP_WRITER_*` / `BACKUP_DUMP_READER_*` (encrypted copies, `BACKUP_COPY_BUCKET`), `BACKUP_RECIPIENT_PUBLIC_KEYS` (≥ 2 PEM public keys), `RECOVERY_PRIVATE_KEY_PASSPHRASE` (owner's terminal only) |
+| `npm run ops:resume:scan` (`scripts/resume-scan.mjs`) | the ClamAV scan worker: new work first, bounded retries with backoff, exit 3 on backlog | `RESUME_SCANNER_MONGODB_URI` (valida_resume_scanner), `CLAMD_HOST`, `CLAMD_PORT`, `SCANNER_*` |
+| `scripts/atlas-snapshot-freshness.mjs` | the Flex backup alert | Atlas service account, Project Read Only |
+
+The restore gates write **only** to a target the owner has prepared and
+authorised (`prepare-target`, mode `snapshot` or `load`), after the target,
+the deletion history and — for a recovery copy — the encrypted material have
+all been verified. Their tests: `npm run test:recovery`, `test:mongo-roles`,
+`test:scanner`.
+
+## Recruitment access (C6-T1)
+
+Decision record: [`docs/review/OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md`](../docs/review/OWNER_DECISION_2026-11-15-01_C6_T1_RECRUITMENT_MODE.md) (Doc 00 §5; recorded against Docs 13 and 15).
+
+Publishing a Job no longer makes it visible by itself. The API also has a
+**recruitment mode**, and it is **closed unless configured**.
+
+| Mode | `GET /jobs` | `GET /jobs/:jobSlug` | `POST /jobs/:jobSlug/applications` |
+| --- | --- | --- | --- |
+| `closed` | `200`, an empty page | `404 JOB_NOT_FOUND` | `404 JOB_NOT_FOUND`, body unread |
+| `testers` | as accepted for a listed client; as `closed` for anyone else | the same | the same |
+| `public` | as accepted | as accepted | as accepted |
+
+"As accepted" means every rule of B3 and B5 below, unchanged: an open Job is
+listed, a closed one is served as closed and refuses applications, and a
+Draft, archived or not-yet-published Job is an unknown Job.
+
+### What makes the mode `closed`
+
+| Configuration | Effective mode | Reason code in the start-up line |
+| --- | --- | --- |
+| `RECRUITMENT_MODE` absent or empty | `closed` | `MODE_ABSENT` |
+| Any value other than exactly `closed`, `testers`, `public` — a typo, `Public`, `" public"` | `closed` | `MODE_INVALID` |
+| `closed` | `closed` | `MODE_CLOSED` |
+| `testers` without `ACCESS_ALLOWLIST` | `closed` | `TESTERS_ALLOWLIST_ABSENT` |
+| `testers` with a list that breaks the range policy below in **any** entry | `closed` | `TESTERS_ALLOWLIST_INVALID` |
+| `public` with `APP_ENV` other than `production` | `closed` | `PUBLIC_NOT_PRODUCTION` |
+| `public` without `RECRUITMENT_PUBLIC_AUTHORISATION` | `closed` | `PUBLIC_AUTHORISATION_ABSENT` |
+| `public` with an authorisation not of the form `OD-YYYY-MM-DD-NN` | `closed` | `PUBLIC_AUTHORISATION_INVALID` |
+| `testers` with a valid list | `testers` | `MODE_TESTERS` |
+| `public`, production, a well-formed authorisation | `public` | `MODE_PUBLIC` |
+
+**The range policy of `ACCESS_ALLOWLIST`** is applied to the parsed value of
+each entry, never to its text. One violation invalidates the whole list.
+
+| Rule | Refused | Why |
+| --- | --- | --- |
+| Not an address or CIDR range; a port; a zone (`fe80::1%eth0`); a netmask; more than 50 entries | `office`, `203.0.113.7:443` | The list must be fully understood or not used |
+| Broader than `/8` (IPv4) or `/16` (IPv6) | `0.0.0.0/0`, `10.0.0.0/7`, `::/0` | Such a range would make `testers` mean everyone — public without the decision record `public` requires |
+| An IPv6 entry that touches the IPv4-mapped block `::ffff:0:0/96`, in any spelling, inside the block or containing it | `::ffff:203.0.113.7`, `::ffff:cb00:7107`, `0:0:0:0:0:ffff:cb00:7107`, `::ffff:0:0/96`, `::/16` | That block is IPv4 written as IPv6. `::ffff:0:0/96` is all of IPv4 with an IPv6 prefix the previous rule would accept. An IPv4 network is written as IPv4, under the IPv4 limit |
+| The same value twice | `2001:db8::1,2001:0db8:0:0:0:0:0:1`; `203.0.113.0/24,203.0.113.7/24` | A duplicate is a mistake in the list, however it is spelt |
+
+A wrong value **does not stop the backend**. These three variables are read
+outside the validated schema on purpose: the backend starts, recruitment is
+shut, and one line says why —
+
+```
+{"level":"warn","recruitmentMode":"closed","recruitmentConfiguration":"invalid","recruitmentReason":"MODE_INVALID","recruitmentAuthorisation":null,"recruitmentAllowlistEntries":0,"msg":"recruitment access"}
+```
+
+The line is `info` for a valid or absent configuration and `warn` for a
+rejected one. It never contains a configured value or an address.
+
+### How a request is decided
+
+1. The gate (`middleware/recruitmentAccess.js`) is mounted on `/api/v1/jobs`
+   after CORS and **before body parsing and rate limiting** (step 5b of the
+   middleware order).
+2. The client address is established by the gate itself, not taken from
+   Express's `req.ip` (correction 1):
+   - `TRUST_PROXY=false`: the socket's peer. `X-Forwarded-For` is not read.
+   - `TRUST_PROXY=n`: `X-Forwarded-For` must hold **at least n entries**. The
+     client is the entry n from the right; it and every entry to its right —
+     the ones the trusted proxies appended — must be plain addresses. Entries
+     to the left are client-supplied and ignored.
+   - **A chain shorter than n, or no header, means the address is unknown,
+     and unknown is not listed.** `req.ip` would fall back to the socket peer
+     or to the leftmost entry; either could be a listed address that no proxy
+     vouched for. The rate limiters still use `req.ip`, unchanged.
+   - `True-Client-IP`, `CF-Connecting-IP`, `X-Real-IP` and `Forwarded` are
+     never read.
+   - Addresses are compared by **value**, not text. An IPv4-mapped IPv6
+     address is the IPv4 client in every spelling (`::ffff:203.0.113.7`,
+     `::ffff:cb00:7107`, `0:0:0:0:0:ffff:cb00:7107`). Anything that is not a
+     plain address — a port, a zone, a host name — is not listed.
+3. A client that may not use Jobs:
+   - `GET` / `HEAD` / `OPTIONS` continue to the router. The list answers an
+     empty page from the validated query; Job Detail answers the unknown-Job
+     `404`. Query validation and the general rate limit apply as to anyone.
+     **The database is not consulted.**
+   - any other method is answered at once, body unread, connection closed in
+     stages (B7): a submission with the Apply `404 JOB_NOT_FOUND`
+     ("This application isn't available."), anything else with the canonical
+     `404 API_ROUTE_NOT_FOUND`.
+4. The Apply controller repeats the check before it does anything, and the
+   Jobs controllers treat a request that carries no decision as refused: a
+   route mounted without the gate serves nothing.
+5. A listed client in `testers` mode receives `X-Valida-Audience: tester` on
+   Jobs responses, including error responses. No one else does.
+
+A refused client cannot tell a hidden Job from one that does not exist: both
+answers have the same status and body.
+
+### What is never written
+
+Tester addresses are held in a non-enumerable property. They are in no log
+line, error, `JSON.stringify` or `util.inspect` of the configuration; only the
+number of entries is reported. The access log records method, route template
+and status — never a client address (unchanged from C3).
+
+### Limits — what this task does not show
+
+- **Behind a real hosting proxy.** The tests supply forwarded addresses
+  themselves. Whether a host appends the client address the way a hop count
+  assumes can only be verified on that host (C6 plan §4.6.3, §4.6.5), before
+  any synthetic Job is introduced there.
+- **The document server.** Superseded by C6-T2 (next section): the document
+  server now names the visitor on every Jobs read, and the API decides that
+  read for the visitor, not for the document server's own address.
+- **Review as a private environment** is a later task.
+
+Tests: `tests/c6-recruitment-config.test.js`, `tests/c6-recruitment-http.test.js`,
+`tests/db/c6-recruitment-api.test.js`.
+
+## Delegated Jobs reads (C6-T2)
+
+Record: [`docs/review/C6_T2_VISITOR_AWARE_DOCUMENTS.md`](../docs/review/C6_T2_VISITOR_AWARE_DOCUMENTS.md).
+
+The document server (`frontend/server/`) decides a Job page's status and head
+from its own server-side reads of `GET /api/v1/jobs…`. Without delegation the
+API would decide those reads for the document server's address — which may be
+listed. With delegation it decides them **for the visitor**.
+
+A read is a **delegation attempt** when it carries either header:
+
+| Header | Value |
+| --- | --- |
+| `X-Valida-Visitor-Address` | the visitor's address as the document server established it (the T1 rule, its own `TRUST_PROXY`), or the literal `unlisted` |
+| `X-Valida-Internal-Key` | `INTERNAL_SERVICE_KEY` |
+
+| The attempt | Outcome | Decided as |
+| --- | --- | --- |
+| `GET`/`HEAD`, key matches, visitor a plain address | `ACCEPTED` | that visitor's own direct request (listed or not) |
+| `GET`/`HEAD`, key matches, visitor `unlisted` | `ACCEPTED_UNLISTED` | an unlisted client |
+| no `INTERNAL_SERVICE_KEY` configured, or an unusable one | `REJECTED_DELEGATION_DISABLED` | an unlisted client |
+| key header missing / wrong | `REJECTED_KEY_ABSENT` / `REJECTED_KEY_MISMATCH` | an unlisted client |
+| visitor header missing / not a plain address (port, zone, list, name, over 64 characters) | `REJECTED_VISITOR_ABSENT` / `REJECTED_VISITOR_INVALID` | an unlisted client |
+| any other method | `REJECTED_METHOD` | **no Jobs access, in every mode** — delegation never carries a submission |
+
+- **Never the caller's address.** Once a request is a delegation attempt,
+  neither the socket peer nor `X-Forwarded-For` is consulted. A failed
+  delegation from a listed document server is still unlisted.
+- **Constant time.** The key is compared as SHA-256 digests with
+  `crypto.timingSafeEqual`; the configured key is held only as a
+  non-enumerable digest.
+- **Direct requests are unchanged.** A request with neither header is decided
+  exactly as in C6-T1. Browsers cannot send these headers cross-origin: CORS
+  does not allow them.
+- **Logged by code only.** A rejected delegation logs
+  `recruitment.delegation_rejected` with its outcome — never the key, the
+  visitor or the caller. `req.headers["x-valida-internal-key"]` is redacted.
+- **Start-up line** adds `recruitmentDelegation` (`enabled`/`disabled`) and
+  `recruitmentDelegationReason` (`DELEGATION_ENABLED`, `DELEGATION_KEY_ABSENT`,
+  `DELEGATION_KEY_INVALID`).
+- **No validators on Jobs.** `/api/v1/jobs…` keeps `Cache-Control: no-store`
+  (Doc 09 §58) and now also drops conditional request headers and strips
+  `ETag`/`Last-Modified` (`middleware/noValidators.js`): one URL answers
+  differently for different visitors, so no answer may be revalidated as
+  another's.
+
+Known and unchanged: the rate limiters key by `req.ip`, so every
+document-server read counts against the document server's address (as in C4).
+
+Tests: `tests/c6-delegation.test.js` (with the shared case table
+`tests/fixtures/clientAddressCases.js`, also run by
+`frontend/server/visitorDelegation.test.js`), and the stack check
+`e2e/c6/c6-t2-stack.mjs`.
+
+---
+
+## Private site access (C6-T3)
+
+Record: [`docs/review/C6_T3_PRIVATE_REVIEW_ACCESS.md`](../docs/review/C6_T3_PRIVATE_REVIEW_ACCESS.md) (authorised in [`OWNER_RECORD_2026-11-16_…`](../docs/review/OWNER_RECORD_2026-11-16_C6_T2_ACCEPTANCE_AND_C6_T3_AUTHORISATION.md)).
+
+`SITE_ACCESS=private` makes the **whole API** answer only clients whose
+address is in `ACCESS_ALLOWLIST` (the T1 list, parser and range policy). The
+same rule, in the same module (`config/siteAccess.js`), runs in the document
+server.
+
+| `APP_ENV` | `SITE_ACCESS` absent | `public` | `private` |
+| --- | --- | --- | --- |
+| `local` | public (the development default) | public | private — needs a valid list |
+| `review` | **refused** | **refused** | private — needs a valid list |
+| `production` | **refused** (correction 1) | public | **refused** |
+
+Anything other than exactly `private` or `public` is refused everywhere. A
+refusal stops start-up before the socket is opened and names the variable and
+a fixed rule — never the value. The start-up line `site access` states the
+mode and the number of list entries.
+
+**On a private site** (`middleware/siteAccess.js`, step 4a of the middleware order):
+
+- **Only GET and HEAD of exactly `/api/v1/health`** pass without admission —
+  no query, no trailing slash, no other spelling. Readiness
+  (`/api/v1/health/ready`) is protected.
+- A client is admitted when its own address, established by the T1 rule
+  (`TRUST_PROXY`, the forwarding chain counted from the right; an incomplete
+  chain is unknown), is listed.
+- **A delegated read (C6-T2) is admitted for its authenticated end visitor
+  only**: a valid key, a listed `X-Valida-Visitor-Address`, GET or HEAD of the
+  Jobs list or one Job. Any other delegation — wrong or no key, `unlisted`, an
+  unlisted or malformed visitor, another route or method — is denied, **even
+  when the calling service's own address is listed**.
+- Everything else gets **403** before CORS (preflight included), the
+  recruitment gate, body parsing, rate limiting and routing, with the canonical
+  envelope:
+
+  ```json
+  { "success": false, "error": { "code": "AUTHORIZATION_DENIED", "message": "We couldn’t complete this request. Please try again." }, "meta": { "requestId": "…" } }
+  ```
+
+  The message is Doc 06 §188's approved generic wording; the code is the Doc 11
+  §239 403 family. A request that may carry a body is answered with its body
+  unread and the connection closed.
+- **Every response** — liveness, denials, errors, everything — carries
+  `Cache-Control: private, no-store`, with no `ETag` or `Last-Modified`;
+  conditional request headers are dropped, so nothing is answered `304`.
+- Admission grants nothing else: CORS, the recruitment mode, validation and
+  each route's rules apply as before.
+
+On a public site nothing changes: the T2 behaviour (`no-store` on Jobs) stands.
+
+Tests: `tests/c6-site-access.test.js`; the stack check `e2e/c6/c6-t3-stack.mjs`.
 
 ## Endpoints
 
@@ -537,8 +794,16 @@ while any other startup exception prints its classification only.
 ## Security
 
 - `X-Powered-By` disabled
-- Helmet: CSP `default-src 'none'`, `frame-ancestors 'none'`, `nosniff`,
-  `no-referrer`, HSTS, same-origin resource policy
+- Helmet: CSP exactly `default-src 'none'; frame-ancestors 'none'; base-uri 'none';
+  form-action 'none'` (C6-T5: Helmet's default directives are not merged in),
+  `nosniff`, `no-referrer`, same-origin resource policy
+- **No Strict-Transport-Security** (C6-T5). Helmet sends a one-year,
+  `includeSubDomains` policy by default; it is switched off because HSTS is
+  activated deliberately by the owner at C6 plan step P9 (Doc 13 §31)
+- **`X-Valida-Release`** on every response (C6-T5, D-6): the full commit SHA
+  from `RENDER_GIT_COMMIT`, read once at start-up — never from a request (an
+  incoming `X-Valida-Release` is ignored). Absent: no header. Malformed: the
+  backend refuses to start. See `src/config/releaseIdentity.js`
 - CORS from an explicit allowlist; no wildcard, no credentials
 - 100 KB JSON body limit
 - General rate limit: 120 requests / 60 s / client IP, configurable
@@ -558,7 +823,15 @@ Order is the design, not a preference:
 4. security headers — before any response body exists; for `/api/v1/jobs…`
    also `Cache-Control: no-store` (B3), so it covers responses that parsing or
    rate limiting end early
+   - 4a. site access (C6-T3) — on a private site, every request but liveness
+     is admitted or answered 403 here, before everything below; every response
+     becomes `private, no-store` without validators
 5. CORS — before the body is read, so preflight stays cheap
+   - 5b. the recruitment access gate on `/api/v1/jobs` (C6-T1) — after CORS,
+     so a refusal can be read by a browser; before body parsing, so a refused
+     request's body is never read. It also decides delegated reads (C6-T2)
+   - 5c. no validators on `/api/v1/jobs` (C6-T2) — conditional headers
+     dropped, `ETag`/`Last-Modified` never sent
 6. JSON body parsing (100 KB limit)
 7. general rate limiting — after identity, before route work
 8. API routes
@@ -1239,6 +1512,77 @@ lookup and on every race path that answers with the winner. A record visible to
 an ordinary read but not (yet) majority-confirmed is answered `503`
 (`application_replay_unconfirmed`), with nothing stored for the request; the
 same key replays once the record is confirmed.
+
+### S3-compatible storage (C6-T4)
+
+Record: [`docs/review/OWNER_RECORD_2026-11-16_C6_T3_ACCEPTANCE_AND_C6_T4_AUTHORISATION.md`](../docs/review/OWNER_RECORD_2026-11-16_C6_T3_ACCEPTANCE_AND_C6_T4_AUTHORISATION.md) (authorisation).
+
+`RESUME_STORAGE_DRIVER=s3` selects `integrations/storage/s3PrivateStorage.js`:
+managed private object storage over the S3 API (Doc 15 §§97–106), behind the
+same B4 interface as the local driver. Apply, compensation, readiness and
+reconciliation are unchanged; Applications record `storageProvider:
+S3_COMPATIBLE` (Doc 10 §95). **No new npm dependency**: SigV4 signing
+(`s3/sigv4.js`) and the requests (`s3/s3Http.js`) use Node's `crypto`,
+`http` and `https` only, so every storage request is exactly one attempt
+with an explicit timeout — no hidden retry.
+
+| | |
+| --- | --- |
+| Keys, length, SHA-256 | As the local driver: `resumes/<32 hex>/<32 hex>` from the CSPRNG; the bytes are counted and hashed again while sent; the PUT carries the SHA-256 as `x-amz-content-sha256`, `x-amz-checksum-sha256` and `x-amz-meta-sha256`; after the answer the object is checked with HEAD (length and SHA-256) |
+| Never overwrite | `If-None-Match: *` on every PUT; a 412 is a key collision and a new key is generated |
+| No read | The driver has no GET of an object, no URL and no presigned operation (Doc 09 §170) |
+| TLS | `https` with Node's default certificate verification; there is no option to disable it. An untrusted certificate is `TLS_FAILURE`, and nothing is sent |
+| Ownership marker | Every PUT carries a fresh random marker of its own, `x-amz-meta-attempt` (128 bits, never reused, never logged). After an uncertain outcome an object is adopted or deleted **only** if its marker is this attempt's (correction 1) |
+| Generation-bound deletion | Every deletion names the exact object **version** a HEAD observed (`DELETE ?versionId=…`; for the start-up probe, the version its PUT created) and removes that generation only: a replacement placed afterwards — even identical bytes under the same key with another marker — is another version and survives (correction 2). Without a version id to bind to, **nothing is deleted**: the object is preserved, its one-way reference logged (`storage_discard_skipped`, `outcome: NO_DELETE_BINDING`), and the generic failure stands; `deletePrivateObject` refuses with `DELETE_BINDING_UNAVAILABLE` |
+| Required provider capability | `VERSION_BOUND_DELETE` (`REQUIRED_CAPABILITIES` in the driver): **bucket versioning enabled**, a version id on PUT and HEAD, HEAD and DELETE by `versionId`, and the permissions `s3:GetObjectVersion` and `s3:DeleteObjectVersion` besides PutObject, GetObject, DeleteObject and ListBucket. Start-up refuses a store without it (`DELETE_BINDING_UNAVAILABLE`, `storage_capability_missing`), leaving the synthetic probe for reconciliation. Because each deletion removes the version itself, it leaves no noncurrent copy or delete marker. Whether the chosen provider supports this, and how its versioning interacts with lifecycle, retention and restore, is a **hosted check** |
+| Start-up (`init`) | Writes a disposable **synthetic** probe under a **representative résumé key** (`resumes/<32 hex>/<32 hex>`, the same generator and so the same access policy as an upload), checks it with HEAD (length and marker), reads it **anonymously** and requires an **explicit denial** (401/403), then deletes **its own version** and **confirms** the deletion (DELETE `?versionId` 200/204, a HEAD of that version 404, and no current object under the key — a replacement found there is preserved and start-up is refused). A 2xx is `PUBLIC_ACCESS`; a redirect, 404, 5xx, reset or timeout is `PUBLIC_ACCESS_UNVERIFIED`; an unconfirmed cleanup is `PROBE_CLEANUP_FAILED` (the probe's one-way reference is logged as `storage_probe_cleanup_unconfirmed`). Any failure stops the backend before it listens, with a fixed reason: `PERMISSION_DENIED`, `BUCKET_NOT_FOUND`, `UNAVAILABLE`, `TLS_FAILURE`, `PUBLIC_ACCESS`, `PUBLIC_ACCESS_UNVERIFIED`, `PROBE_CLEANUP_FAILED`, `PROBE_MISMATCH`, `PROVIDER_ERROR`. This proves the result for one résumé key at start-up; the provider's policy as a whole is still a hosted check |
+| Listing (reconciliation only) | Every `ListObjectsV2` page is validated: one `ListBucketResult` for this bucket and the `resumes/` prefix; `KeyCount` equal to the entries; `MaxKeys` within the requested page size; `IsTruncated` present; a `NextContinuationToken` on a truncated page, never repeated; every entry with one key under the prefix, one size and one valid date; no duplicate keys; page, object and size caps. Any failure on **any** page is `LISTING_INVALID` (logged as `storage_listing_invalid` with a fixed label): no report and no deletion, even when earlier pages were valid |
+| Readiness | Set by that start-up probe, as for the local driver. A storage outage **after** start-up is not reflected in readiness: each submission fails with 503 until the store answers again (observed in the stack check, A7) |
+
+**The outcome of a write** (object-first persistence is unchanged):
+
+| What happened | Driver | Apply | Object | Reconciliation |
+| --- | --- | --- | --- | --- |
+| 200, verified | stored | continues to the insert | referenced once inserted | — |
+| a definite refusal (4xx) or no connection | `PERMISSION_DENIED`, `UNAVAILABLE`, … — **proven** nothing written | 503, no Application | none | nothing to do |
+| the answer lost after sending (reset, timeout, 5xx) | asks the store (HEAD of the key) and decides by **ownership**: this attempt's marker, matching → **stored**; this attempt's marker, wrong → that observed version deleted (or, with no version to bind to, preserved), `INTEGRITY_MISMATCH`; present with another or no marker → **not owned**: neither adopted nor deleted, `OUTCOME_UNKNOWN` (`storage_write_outcome_unknown`, `outcome: NOT_OWNED`); absent → `UNAVAILABLE`, logged as `storage_write_outcome_unobserved` with `outcome: ABSENT_AT_OBSERVATION` (nothing was there **when checked**; a timed-out PUT may still land); no answer → `OUTCOME_UNKNOWN` | 201, or 503 with no Application | own-and-matching, untouched (not owned), absent at observation, or **possibly present and unreferenced** | an unreferenced object is listed by its one-way reference, kept while younger than the 24 h floor, deleted only by the confirmed command after that |
+| a local integrity failure (the source changed while sent) | `INTEGRITY_MISMATCH`; the observed version is deleted **only** if its marker is this attempt's and the HEAD named a version; otherwise preserved (`storage_discard_skipped`) | 503, no Application | none of this attempt's | anything preserved is listed as above |
+
+The driver deletes only an object whose ownership marker proves it was written
+by the current attempt, and only when that object is wrong (integrity) — and
+then only the exact version observed. A matching key, length and SHA-256 alone
+are **not** ownership: another writer can have put identical bytes there; and
+an ownership observation alone does not license a plain DELETE, because a
+writer outside the driver could replace the object between the HEAD and the
+DELETE (correction 2). Compensation
+after a proven database failure deletes that submission's own object; a
+concurrent submission that wins the Idempotency-Key keeps its object (tested
+against the real database unique index).
+
+**Tests.**
+
+- **Offline (`npm test`):**
+  - `tests/s3-storage-units.test.js`: the signer against AWS's published example, the configuration rules, TLS refusal, and the classification of store answers;
+  - `tests/storage-contract-local.test.js`: the shared B4 contract (`tests/fixtures/storageContract.shared.js`) against the local driver.
+- **`npm run test:s3`:**
+  - the same contract and the S3 driver against a local S3-compatible test double, moto server with signature checking and a scoped policy;
+  - a fault-injecting proxy for lost answers, resets and refusals;
+  - the Apply service end to end;
+  - `tests/s3/s3-correction-2.test.js` (correction 2): a synthetic replacement (same bytes, another marker) placed after the final ownership observation and before the deletion survives, on every upload clean-up path, through Apply (503, no Application), in `deletePrivateObject` and in the start-up probe clean-up; no version to bind to → nothing deleted; an unversioned bucket refuses start-up; positive controls for recovery after a lost answer and for start-up and clean-up on a versioned store (no version or marker left).
+  - `tests/s3/s3-correction-1.test.js` (correction 1): objects this attempt did not write (identical or different bytes, the conditional PUT's answer lost; a local integrity error) are never adopted or deleted, with the positive control; the conclusive start-up privacy check and confirmed cleanup; invalid, incomplete, unrelated and over-limit listings, including a later invalid page after a valid one, with the empty-bucket and multi-page controls.
+  - It needs Python with `moto[server]` (tested with moto 5.2.5), named by `VALIDA_TEST_MOTO_PYTHON`. Windows (PowerShell):
+
+    ```powershell
+    py -m venv $env:LOCALAPPDATA\valida-moto
+    & $env:LOCALAPPDATA\valida-moto\Scripts\pip install "moto[server]==5.2.5"
+    $env:VALIDA_TEST_MOTO_PYTHON = "$env:LOCALAPPDATA\valida-moto\Scripts\python.exe"
+    npm run test:s3
+    ```
+- **The real stack:** `e2e/c6/c6-t4-stack.mjs` (`npm run test:c6t4:stack` in `e2e/`).
+
+**Not shown locally:** the real provider's access policy, encryption at rest,
+region or jurisdiction, durability and restore. These are hosted verification
+(C6 plan §§3.4, 5).
 
 ### Failures — what happens to the stored object
 

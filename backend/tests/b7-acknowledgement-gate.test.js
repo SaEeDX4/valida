@@ -19,7 +19,8 @@ const smtp = {
   TRANSACTIONAL_REPLY_TO: 'careers@qa-valida.example.test',
   RECRUITMENT_NOTIFICATION_RECIPIENT: 'hr@qa-valida.example.test',
 };
-const production = { ...smtp, APP_ENV: 'production', NODE_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://valida.example.test' };
+// C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+const production = { ...smtp, APP_ENV: 'production', NODE_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://valida.example.test', SITE_ACCESS: 'public' };
 const complete = {
   provider: 'smtp',
   apiKey: null,

@@ -11,7 +11,7 @@ import { Job } from '../../src/models/Job.js';
 import { Application } from '../../src/models/Application.js';
 import { REQUIRED_INDEXES } from '../../src/db/indexes.js';
 import { publishJob } from '../../src/modules/jobs/job.service.js';
-import { freePort } from '../helpers.js';
+import { TEST_RECRUITMENT_ENV, freePort } from '../helpers.js';
 import { PDF_MIME, syntheticPdf, syntheticPdfOfSize } from '../fixtures/resumeFiles.js';
 import { listFiles, makeTestRoot, multipartBody, removeTestRoot, resumePart } from '../fixtures/uploadHarness.js';
 import { QA_CANDIDATE, applyPath } from '../fixtures/applyHarness.js';
@@ -42,6 +42,8 @@ let tempBase;
 const running = [];
 
 const serverEnv = (port) => ({
+  // C6-T1: the permitted tester path for a local server (tests/helpers.js).
+  ...TEST_RECRUITMENT_ENV,
   APP_ENV: 'local',
   NODE_ENV: 'test',
   LOG_LEVEL: 'silent',

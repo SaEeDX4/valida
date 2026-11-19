@@ -1,0 +1,17 @@
+{
+  "name": "valida-review-host-check",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "C6-T6 read-only review-host checker (C6 plan r3 section 7.1). GET and HEAD only; run by the owner from a listed machine.",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  },
+  "scripts": {
+    "check": "node check.mjs",
+    "test": "node --test check.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

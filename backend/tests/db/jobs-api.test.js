@@ -10,7 +10,7 @@ import { REQUIRED_INDEXES } from '../../src/db/indexes.js';
 import { applyJobEdit, archiveJob, closeJob, publishJob } from '../../src/modules/jobs/job.service.js';
 import { LIST_PROJECTION } from '../../src/modules/jobs/job.repository.js';
 import { PUBLIC_LIST_SORT, openJobsFilter } from '../../src/modules/jobs/job.visibility.js';
-import { buildConnectedApp, capturingLogger, freePort } from '../helpers.js';
+import { TEST_RECRUITMENT_ENV, buildConnectedApp, capturingLogger, freePort } from '../helpers.js';
 import { QA_NOW, at, minutes } from '../fixtures/jobFixtures.js';
 import { requireTestDatabase, assertConnectedToTestDatabase } from './testDatabase.js';
 
@@ -433,6 +433,8 @@ describe('`node src/server.js` serves Jobs from MongoDB', () => {
 
     const port = await freePort();
     const { child, output } = await startServerProcess({
+      // C6-T1: the permitted tester path for a local server (tests/helpers.js).
+      ...TEST_RECRUITMENT_ENV,
       APP_ENV: 'local',
       NODE_ENV: 'development',
       LOG_LEVEL: 'info',

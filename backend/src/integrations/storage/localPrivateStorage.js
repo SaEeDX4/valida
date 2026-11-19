@@ -311,7 +311,7 @@ export class LocalPrivateStorage {
    * this can never remove a file outside the object directory — not through
    * a crafted key, not through a linked parent — nor a directory.
    */
-  async deletePrivateObject(storageKey) {
+  async deletePrivateObject(storageKey, { expect } = {}) {
     this.#assertReady('delete');
     const target = this.#objectPath(storageKey, 'delete');
     // The object's directory must really be inside storage — a linked or
@@ -327,6 +327,20 @@ export class LocalPrivateStorage {
       throw new PrivateStorageError('delete', classifyStorageError(error), error);
     }
     if (!stat.isFile()) throw new PrivateStorageError('delete', 'NOT_A_FILE');
+    // C6-T6 correction: `expect` ({ sizeBytes, checksumSha256 }) binds the
+    // deletion to the object the caller's record describes; another object
+    // under the key is left alone. (Local storage is for development and
+    // tests; the hosted driver checks on the same HEAD it deletes by.)
+    if (expect) {
+      let digest;
+      try {
+        digest = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      } catch (error) {
+        if (error?.code === 'ENOENT') return { deleted: false, reason: 'NOT_FOUND' };
+        throw new PrivateStorageError('delete', classifyStorageError(error), error);
+      }
+      if (stat.size !== expect.sizeBytes || digest !== expect.checksumSha256) return { deleted: false, reason: 'NOT_THE_EXPECTED_OBJECT' };
+    }
     try {
       await this.#ops.unlink(target);
     } catch (error) {

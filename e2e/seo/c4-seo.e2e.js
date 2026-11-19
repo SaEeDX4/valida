@@ -277,19 +277,16 @@ test('C4-02 sitemap.xml and robots.txt from the live open Jobs', async () => {
   const sitemap = await sitemapLocs();
   expect(sitemap.status).toBe(200);
   expect(sitemap.contentType).toBe('application/xml; charset=utf-8');
-  expect(sitemap.locs).toEqual([
-    `${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`,
-    // GET /api/v1/jobs order (the API's own), each open Job once.
-    ...sitemap.locs.slice(5),
-  ]);
-  expect([...sitemap.locs.slice(5)].sort()).toEqual([
-    `${SITE}/careers/qa-c4-eligibility-updates`,
-    `${SITE}/careers/qa-c4-lifecycle`,
-    `${SITE}/careers/qa-c4-open-eligible`,
-    `${SITE}/careers/qa-c4-open-eligible-omitted`,
-    `${SITE}/careers/qa-c4-open-hybrid`,
-    `${SITE}/careers/qa-c4-open-remote`,
-  ]);
+  // C6-T2: the sitemap is built from the PUBLIC view, whoever requests it.
+  // This stack runs in `testers` mode (stackConfig.js), so the public view
+  // holds no Job: only the five static routes — although this requester
+  // (loopback) is listed and sees the open Jobs on their own pages. The
+  // public-mode listing of open Jobs, and its lifecycle (SEO-012), are checked
+  // by the C6-T2 stack check (e2e/c6/c6-t2-stack.mjs, E3 and E6).
+  expect(sitemap.locs).toEqual([`${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`]);
+  const testerPage = await fetch(`${SEO_INDEXED_ORIGIN}/careers/qa-c4-open-remote`, { redirect: 'manual' });
+  await testerPage.text();
+  expect([testerPage.status, testerPage.headers.get('x-valida-audience')]).toEqual([200, 'tester']);
   for (const excluded of ['qa-c4-retained-closed', 'qa-c4-closed-eligible', 'qa-c4-draft', 'qa-c4-archived', '/apply']) {
     expect(sitemap.locs.some((loc) => loc.includes(excluded)), excluded).toBe(false);
   }
@@ -518,7 +515,10 @@ test('C4-09 closing, then archiving, a Job updates its status, robots, canonical
 
   expect([closeRun.exitCode, archiveRun.exitCode]).toEqual([0, 0]);
   expect(states).toEqual([
-    { label: 'PUBLISHED (open)', status: 200, robots: [], canonical: [loc], jsonLd: 0, inSitemap: true },
+    // C6-T2: in this `testers` stack the sitemap is the public view, which holds
+    // no Job; the sitemap half of SEO-012 is checked in public mode by the
+    // C6-T2 stack check (E6).
+    { label: 'PUBLISHED (open)', status: 200, robots: [], canonical: [loc], jsonLd: 0, inSitemap: false },
     { label: 'CLOSED', status: 200, robots: ['noindex, follow'], canonical: [], jsonLd: 0, inSitemap: false },
     { label: 'ARCHIVED', status: 404, robots: ['noindex, follow'], canonical: [], jsonLd: 0, inSitemap: false },
   ]);

@@ -9,6 +9,10 @@ import { createHash, randomBytes } from 'node:crypto';
 /** Doc 10 section 95 — internal provider identifiers. */
 export const STORAGE_PROVIDERS = Object.freeze({
   LOCAL_DEVELOPMENT: 'LOCAL_DEVELOPMENT',
+  // C6-T4: managed private object storage over the S3 API (Doc 10 section 95's example value).
+  S3_COMPATIBLE: 'S3_COMPATIBLE',
+  // Proposed (MongoDB-native): one immutable BSON document per résumé version, in MongoDB.
+  MONGODB: 'MONGODB',
 });
 
 /**
@@ -79,6 +83,19 @@ export const STORAGE_FAILURE_REASONS = Object.freeze([
   'FORBIDDEN_LOCATION',
   'PATH_ESCAPES_STORAGE',
   'IO_ERROR',
+  // C6-T4 — the S3-compatible driver.
+  'UNAVAILABLE', // no connection, a timeout or a 5xx/429 from the store
+  'OUTCOME_UNKNOWN', // a write may or may not have happened, and the store could not say
+  'TLS_FAILURE', // the endpoint's certificate was not trusted: nothing was sent
+  'BUCKET_NOT_FOUND',
+  'PUBLIC_ACCESS', // an anonymous request could read the probe object (a representative résumé key)
+  'PROVIDER_ERROR', // any other refusal from the store
+  // C6-T4 correction 1.
+  'PUBLIC_ACCESS_UNVERIFIED', // the anonymous read of the start-up probe was not explicitly denied
+  'PROBE_CLEANUP_FAILED', // the start-up probe's removal could not be confirmed
+  'LISTING_INVALID', // an object listing was malformed, incomplete, unrelated or over a limit
+  // C6-T4 correction 2.
+  'DELETE_BINDING_UNAVAILABLE', // the store cannot bind a deletion to the exact object version observed
 ]);
 
 const REASON_SET = new Set(STORAGE_FAILURE_REASONS);

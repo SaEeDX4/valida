@@ -7,6 +7,13 @@ import { CANONICAL_ORIGIN, resolveSeoConfig } from '../src/seo/siteConfig.js';
 import { startDocumentServer } from './documentServer.js';
 import { createJobsClient } from './jobsClient.js';
 import { resolveJobApiPreloadBase } from './renderDocument.js';
+import { isUsableServiceKey, parseTrustedHops } from './visitorAddress.js';
+import { describeSiteAccess, resolveDocumentSiteAccess } from './siteAccess.js';
+import { buildContentSecurityPolicy } from './securityHeaders.js';
+import { describeReleaseIdentity, resolveReleaseIdentity } from '../../backend/src/config/releaseIdentity.js';
+import { describeErrorMonitoring, resolveErrorMonitoring } from '../../backend/src/config/errorMonitoring.js';
+import { createErrorMonitor, installCrashCapture } from '../../backend/src/lib/monitoring/errorMonitor.js';
+import { SENTRY_SDK } from './monitoringSdk.js';
 
 /**
  * Serves a production build with the C4 document behaviour (documentServer.js).
@@ -25,6 +32,41 @@ import { resolveJobApiPreloadBase } from './renderDocument.js';
  *                         Detail and Apply documents (renderDocument.js
  *                         jobApiPreloadTag). The hint always uses the API
  *                         base compiled into the build, never --api-origin.
+ *
+ * Environment (C6-T2; read from the environment, never from the command line,
+ * so the key is not visible in a process list):
+ *   TRUST_PROXY           "false" (default) or the number of proxy hops in
+ *                         front of this server, 1-10 — the same variable and
+ *                         rule as the backend's. Anything else: refused.
+ *   INTERNAL_SERVICE_KEY  the secret shared with the API, 32-512 visible ASCII
+ *                         characters. With none, or an unusable one, the
+ *                         server still starts; its Jobs reads are then
+ *                         unauthenticated, and the API answers every one of
+ *                         them with the unlisted (public) view.
+ *   APP_ENV               local (default), review or production (C6-T3).
+ *   SITE_ACCESS           "private" or "public" (C6-T3; config rule in
+ *                         backend/src/config/siteAccess.js). Review requires
+ *                         private with a valid ACCESS_ALLOWLIST and a build
+ *                         with indexing disabled; production requires public;
+ *                         production requires public written explicitly;
+ *                         absent is public only in a local run. A wrong or unsafe
+ *                         combination: refused, before listening.
+ *   ACCESS_ALLOWLIST      the addresses admitted to a private site (the API's
+ *                         list and range policy). Never printed.
+ *   SENTRY_DSN            C6-T6: error monitoring (D-4a). Absent or empty:
+ *                         disabled. A malformed DSN refuses start-up, naming
+ *                         the variable only (backend/src/config/errorMonitoring.js).
+ *   RENDER_GIT_COMMIT     C6-T5: the commit this server runs, stated in the
+ *                         X-Valida-Release header of every response (the
+ *                         API's rule, backend/src/config/releaseIdentity.js).
+ *                         Absent or empty: no header (an ordinary local
+ *                         run). Not a full 40-character lowercase SHA:
+ *                         refused, before listening.
+ *
+ * C6-T5: every response carries the enforced Content-Security-Policy and the
+ * security headers of securityHeaders.js; the policy's connect-src names the
+ * build's own API base (valida-seo.json apiBaseUrl). A build whose API base is
+ * neither empty nor a plain origin is refused, before listening.
  *
  * The SEO configuration (canonical origin, indexable or not) is NOT taken from
  * this process's environment: it is read from the build's valida-seo.json, so
@@ -64,20 +106,65 @@ if (manifest.indexing === true && !config.siteOrigin) {
   fail(`the build is indexable but has no valid canonical origin (${config.siteProblem}; only ${CANONICAL_ORIGIN} is accepted)`);
 }
 
+const trustedHops = parseTrustedHops(process.env.TRUST_PROXY);
+if (trustedHops === null) fail('TRUST_PROXY must be "false" or a hop count from 1 to 10');
+const access = resolveDocumentSiteAccess({
+  appEnv: process.env.APP_ENV,
+  siteAccess: process.env.SITE_ACCESS,
+  allowlist: process.env.ACCESS_ALLOWLIST,
+  indexing: config.indexing === true,
+});
+if (!access.ok) fail(`${access.variable}: ${access.rule}`);
+const serviceKey = process.env.INTERNAL_SERVICE_KEY;
+const keyState = serviceKey === undefined || serviceKey === '' ? 'absent' : isUsableServiceKey(serviceKey) ? 'usable' : 'unusable';
+
 const apiOrigin = values['api-origin'] ?? manifest.apiBaseUrl;
 let jobs;
 try {
-  jobs = createJobsClient({ apiOrigin });
+  jobs = createJobsClient({ apiOrigin, serviceKey });
 } catch {
   fail('an API origin is required (--api-origin), scheme, host and port only');
 }
+if (keyState !== 'usable') {
+  process.stderr.write(`serve: INTERNAL_SERVICE_KEY is ${keyState}: Jobs reads are unauthenticated and the API will give every visitor the public view\n`);
+}
+
+const release = resolveReleaseIdentity(process.env);
+if (!release.ok) fail(`${release.variable}: ${release.rule}`);
+const browserApiBase = manifest.apiBaseUrl ?? '';
+let contentSecurityPolicy;
+try {
+  contentSecurityPolicy = buildContentSecurityPolicy(browserApiBase);
+} catch {
+  fail("the build's API base (VITE_API_BASE_URL) is neither empty nor a plain origin: the Content-Security-Policy cannot name it");
+}
+
+// C6-T6 — error monitoring: release and environment tags; never the DSN.
+const monitoring = resolveErrorMonitoring({ dsn: process.env.SENTRY_DSN, appEnv: access.appEnv, nodeEnv: process.env.NODE_ENV });
+if (!monitoring.ok) fail(`${monitoring.variable}: ${monitoring.rule}`);
+const errorMonitor = createErrorMonitor({
+  monitoring,
+  release,
+  environment: access.appEnv,
+  service: 'valida-documents',
+  sdk: SENTRY_SDK,
+  logger: {
+    warn: (entry) => process.stderr.write(`${JSON.stringify({ level: 'warn', ...entry })}\n`),
+    info: (entry) => process.stdout.write(`${JSON.stringify({ level: 'info', ...entry })}\n`),
+    fatal: (entry, msg) => process.stderr.write(`${JSON.stringify({ level: 'fatal', ...entry, msg })}\n`),
+  },
+});
+installCrashCapture({
+  monitor: errorMonitor,
+  logger: { fatal: (entry, msg) => process.stderr.write(`${JSON.stringify({ level: 'fatal', ...entry, msg })}\n`) },
+});
 
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 0 || port > 65535) fail('--port must be a port number');
 
 const log = values.quiet ? () => {} : (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`);
 const jobApiPreloadBase = values['no-job-preload'] ? null : resolveJobApiPreloadBase(manifest.apiBaseUrl);
-const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, host: values.host, port, log });
+const server = await startDocumentServer({ distDir, config, jobs, jobApiPreloadBase, browserApiBase, release, trustedHops, site: access.site, host: values.host, port, log, errorMonitor });
 const address = server.address();
 process.stdout.write(
   `READY ${JSON.stringify({
@@ -88,9 +175,21 @@ process.stdout.write(
     siteOrigin: config.siteOrigin,
     apiOrigin: jobs.origin,
     jobApiPreload: jobApiPreloadBase === null ? null : `${jobApiPreloadBase}/api/v1/jobs/{slug}`,
+    trustProxy: trustedHops,
+    // Whether reads are authenticated, and why not — never the key.
+    delegation: jobs.delegation,
+    serviceKey: keyState,
+    appEnv: access.appEnv,
+    // C6-T3: never the allowlist, only how many entries it has.
+    ...describeSiteAccess(access.site),
+    // C6-T5: the commit stated in X-Valida-Release, and the enforced policy.
+    ...describeReleaseIdentity(release),
+    contentSecurityPolicy,
+    // C6-T6: enabled or disabled, and the transport kind — never the DSN.
+    ...describeErrorMonitoring(monitoring),
   })}\n`,
 );
 
-const stop = () => server.close(() => process.exit(0));
+const stop = () => server.close(() => Promise.resolve(errorMonitor.close(2_000)).finally(() => process.exit(0)));
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);

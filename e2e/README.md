@@ -232,3 +232,138 @@ Remove-Item Env:MONGODB_TEST_URI
 - `dist/`.
 
 **Not proven here.** Other browsers and real devices, real screen readers, OS text scaling, field Core Web Vitals, and the production host's compression, caching and TLS. These are in the manual checklist and in C6/C7.
+
+## C6-T2 — visitor-aware Job documents (`c6/c6-t2-stack.mjs`)
+
+A stack check, not a Playwright suite: the real API and two real document
+servers (indexable and review builds), local forwarding proxies standing in
+for a host's proxy (both services run with `TRUST_PROXY=1`), synthetic Jobs on
+a disposable database, and Chromium for the rendered pages. The document
+server's own egress is made a **listed** address on purpose, so a document
+server that failed to delegate would show the tester view to everyone.
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t2"
+npm run test:c6:stack -- --label local --out C:\Temp\valida-c6t2
+```
+
+Cases: A `closed` (listed and unlisted visitors), B `testers`, C invalid
+delegation and forwarding, the key absent or wrong, a cross-origin redirect,
+D the same URL for different visitors in both orders with conditional
+requests, E a local `public` fixture (synthetic authorisation, production
+`APP_ENV`, no storage) including E6, a Job opened, closed and archived with the sitemap following at once (SEO-012), F the API down, K the key in no build, log or HTTP
+evidence. Output: `results.json` (expected versus actual), sanitised
+`http/*.txt` (the key appears as `[INTERNAL_SERVICE_KEY]`), screenshots and
+logs. Ports start at 4330 (`C6T2_BASE_PORT`). It does not show a real host's
+proxy or shared cache: those are the hosted G-ACCESS checks.
+
+## C6-T3 — private site access (`c6/c6-t3-stack.mjs`)
+
+The same kind of stack check as C6-T2, for `SITE_ACCESS=private`: the start-up
+matrix of both services (each combination started or refused before
+listening), a private Review run (`APP_ENV=review`, `testers`, a review build)
+and a local private run with real résumé storage. The document server's egress
+is again a listed address, so a delegated read can only be admitted for its end
+visitor.
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t3"
+npm run test:c6t3:stack -- --label local --out C:\Temp\valida-c6t3
+```
+
+Cases: S start-up; R liveness, early refusal (both services, a head-only
+submission), listed access, delegation, cache isolation in both orders with
+conditional requests, Chromium; L a listed application end to end, an unlisted
+one refused with no record, object or notification, a closed-Job submission
+still refused; K the key and addresses in no evidence or log. Ports start at
+4360 (`C6T3_BASE_PORT`).
+
+## C6-T6 — the backup rehearsals and the review-host checker
+
+**`c6/c6-t6-backup-rehearsal.mjs`** (`npm run test:c6t6:rehearsal`) runs both
+approved restore rehearsals through the real commands (`backend/scripts/backup.mjs`):
+**D**, a damaged snapshot (an unexplained missing résumé → RECOVERY FAILED, the
+restored API closed), and **H**, a healthy snapshot (the snapshot itself
+restored, the deletion log replayed, every remaining résumé verified by length
+and SHA-256, deleted data still deleted, RECOVERY VERIFIED; then the same with
+the deletion log unavailable → FAILED). It starts its own MongoDB 8 **with
+access control** (one user per role) and a fresh moto double per rehearsal,
+and records the snapshot used, the exposure between copies and the local
+RPO/RTO (`reports/measured.json`). The provider's snapshot is a stated
+stand-in: a copy of the live database at T.
+
+```powershell
+cd e2e
+$env:VALIDA_TEST_MOTO_PYTHON = "<python with moto[server]>"
+$env:VALIDA_TEST_MONGOD = "<path to mongod 8>"
+node c6/c6-t6-backup-rehearsal.mjs --out <folder outside the repository>
+```
+
+**`c6/c6-t6-review-checker.mjs`** (`npm run test:c6t6:checker`, needs
+`MONGODB_TEST_URI`) exercises `ops/review-host/check.mjs` against the local
+stack: listed and unlisted perspectives (the allowlist decides, on loopback),
+header spoofing, a missing, mismatched or absent release SHA, and a
+misconfigured Review detected by its access and cache responses. Ports start
+at 4420 (`C6T6_CHECKER_BASE_PORT`).
+
+## C6-T5 — enforced CSP, security headers and release identity (`c6/c6-t5-stack.mjs`)
+
+The real API and document server over real production builds (an ordinary
+and an indexable one), a disposable MongoDB database, local résumé storage,
+Chromium, and a probe server on another origin that records every request it
+receives. Both services get `RENDER_GIT_COMMIT` = the commit under test
+(`git rev-parse HEAD`; `C6T5_RELEASE` overrides it for a work-in-progress run).
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t5"
+npm run test:c6t5:stack -- --label local --out C:\Temp\valida-c6t5
+```
+
+Parts: **S** start-up with `RENDER_GIT_COMMIT` absent, valid and malformed,
+for the API (launcher and `node src/server.js`) and the document server;
+**H** the headers on every kind of response of both services, the accepted
+cache rules, a forged release header ignored; **B** Chromium — every route
+with no CSP violation and its fonts and stylesheet loaded, the synthetic
+Careers → Job → Apply flow (record and object checked), the JobPosting data
+block on an indexable build, and the browser **blocking** an image, a script,
+a fetch, an inline script, `eval` and framing that the policy disallows, with
+the probe showing that nothing reached it (and a positive control); **E** the
+document server's 503 with the API stopped; **R** private-Review refusals;
+**K** the service key in no evidence. Ports start at 4390 (`C6T5_BASE_PORT`).
+
+## C6-T4 — S3-compatible private résumé storage (`c6/c6-t4-stack.mjs`)
+
+The real backend with `RESUME_STORAGE_DRIVER=s3`, a disposable MongoDB
+database and the local S3-compatible test double (moto server, behind a
+fault-injecting proxy). The local SMTP test server is used so readiness can be
+fully ready. Objects are read back by an independent reader (botocore), never
+by the driver. It needs `VALIDA_TEST_MOTO_PYTHON` (see `backend/README.md`,
+"S3-compatible storage (C6-T4)").
+
+```powershell
+cd e2e
+$env:MONGODB_TEST_URI = "mongodb://127.0.0.1:27017/valida_test_c6t4"
+$env:VALIDA_TEST_MOTO_PYTHON = "$env:LOCALAPPDATA\valida-moto\Scripts\python.exe"
+npm run test:c6t4:stack -- --label local --out C:\Temp\valida-c6t4
+```
+
+Cases:
+
+- **S, start-up refusals:** no permission, wrong secret, unreachable store, incomplete configuration, plain `http` in review. Plus readiness 200 with a working store.
+- **A, submissions:**
+  - accepted, checked byte for byte;
+  - not publicly readable;
+  - a proven storage refusal;
+  - a lost answer resolved as stored;
+  - a lost answer left unknown (503, an unreferenced object, logged);
+  - concurrent submissions with one Idempotency-Key;
+  - an outage, then recovery;
+  - every record matched to its object.
+- **R, the reconciliation CLI:** a dry run, then a confirmed delete that respects the 24 h floor.
+- **K, evidence hygiene:** no credential, storage key or applicant field in the evidence.
+
+Ports start at 4380 (`C6T4_BASE_PORT`).
+

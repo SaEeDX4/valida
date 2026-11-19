@@ -1,4 +1,6 @@
 import { LocalPrivateStorage } from './localPrivateStorage.js';
+import { S3PrivateStorage } from './s3PrivateStorage.js';
+import { MongoPrivateStorage } from './mongoPrivateStorage.js';
 import { StorageInitializationError } from './storageContract.js';
 
 export {
@@ -40,17 +42,25 @@ export {
  *                                  durably accepted:
  *                                  { storageProvider, storageKey, sizeBytes,
  *                                    checksumSha256, storedAt }
- *   deletePrivateObject(storageKey)
+ *   deletePrivateObject(storageKey, { expect }?)
  *                                  removes ONE object named by a valid resume
  *                                  key — the only deletion there is (B5
  *                                  compensation, Doc 09 section 119):
  *                                  { deleted: true } | { deleted: false,
- *                                  reason: 'NOT_FOUND' }
+ *                                  reason: 'NOT_FOUND' }. C6-T6: with
+ *                                  `expect` ({ sizeBytes, checksumSha256 }),
+ *                                  an object that is not that one is left
+ *                                  alone: { deleted: false, reason:
+ *                                  'NOT_THE_EXPECTED_OBJECT' }
  *   statPrivateObject(storageKey)  { exists, sizeBytes } — integrity and
  *                                  reconciliation only
  *   close()
  *
- * There is deliberately NO read, list or URL operation. Phase 1 has no
+ * C6-T4 adds a second integration behind exactly this interface,
+ * S3PrivateStorage (RESUME_STORAGE_DRIVER=s3). Both also implement
+ * listPrivateObjects() for orphan reconciliation (B7).
+ *
+ * There is deliberately NO read or URL operation. Phase 1 has no
  * resume retrieval at all (Doc 09 section 170): authorized delivery is E4,
  * behind Admin authentication and the scan-status gate (Doc 11 sections
  * 165-174), and a public URL is prohibited outright (Doc 18 section 118).
@@ -78,6 +88,14 @@ export function createPrivateStorage({ config, logger, clock } = {}) {
       logger,
       clock,
     });
+  }
+  if (driver === 's3') {
+    // C6-T4 — managed private object storage over the S3 API. Never a fallback to disk.
+    return new S3PrivateStorage({ s3: config.resumeStorage.s3, logger, clock });
+  }
+  if (driver === 'mongodb') {
+    // Proposed (MongoDB-native): résumés in MongoDB, through the dedicated storage credential.
+    return new MongoPrivateStorage({ uri: config.resumeStorage.mongodb.uri, logger, clock });
   }
   // Unreachable through loadConfig, which accepts only the drivers above.
   throw new StorageInitializationError('INVALID_REQUEST');

@@ -2,6 +2,12 @@ import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { createApp } from './app.js';
 import { loadConfig, ConfigurationError } from './config/env.js';
+import { describeRecruitmentAccess } from './config/recruitmentAccess.js';
+import { describeSiteAccess } from './config/siteAccess.js';
+import { describeReleaseIdentity } from './config/releaseIdentity.js';
+import { describeErrorMonitoring } from './config/errorMonitoring.js';
+import { createErrorMonitor, installCrashCapture } from './lib/monitoring/errorMonitor.js';
+import { SENTRY_SDK } from './lib/monitoring/sentrySdk.js';
 import { createLogger } from './lib/logger.js';
 import { Readiness, DEPENDENCY_STATE } from './modules/health/readiness.js';
 import { safeErrorSummary } from './lib/safeError.js';
@@ -166,6 +172,37 @@ export async function startServer({
   readiness.set('configuration', DEPENDENCY_STATE.READY);
 
   /*
+   * C6-T1 — recruitment access (config/recruitmentAccess.js). One line states
+   * the EFFECTIVE mode and why, so a release check can read it. A rejected
+   * configuration is a warning, not a failure: the backend runs with
+   * recruitment closed. The line holds no client address and no configured
+   * value: the allowlist entry is a count, the reason a fixed code. The field
+   * names are prefixed so that they cannot be mistaken for another line's.
+   */
+  const recruitment = describeRecruitmentAccess(config.recruitment, config.serviceDelegation);
+  logger[recruitment.recruitmentConfiguration === 'invalid' ? 'warn' : 'info'](recruitment, 'recruitment access');
+  // C6-T3 — whether the whole API is private (a refused configuration never starts).
+  logger.info(describeSiteAccess(config.siteAccess), 'site access');
+  // C6-T5 — the commit this process states in X-Valida-Release (plan §8.4).
+  logger.info(describeReleaseIdentity(config.release), 'release identity');
+  /*
+   * C6-T6 — error monitoring (D-4a; lib/monitoring/errorMonitor.js). Built
+   * before anything can fail at run time. The line states enabled/disabled
+   * and the transport kind, never the DSN. Its delivery is flushed at
+   * shutdown, within the shutdown budget.
+   */
+  const errorMonitor = createErrorMonitor({
+    monitoring: config.monitoring,
+    release: config.release,
+    environment: config.appEnv,
+    service: 'valida-api',
+    sdk: SENTRY_SDK,
+    logger,
+  });
+  logger.info(describeErrorMonitoring(config.monitoring), 'error monitoring');
+  if (errorMonitor.state === 'enabled') onShutdown('errorMonitor', () => errorMonitor.close(2_000));
+
+  /*
    * B4 — private resume storage, before anything else is opened.
    *
    * When storage is configured it must genuinely work: init() creates and
@@ -319,7 +356,7 @@ export async function startServer({
      * The storage and upload area are handed to the application for the Apply
      * route (B5). No B4 route uses them: B4 adds no public upload endpoint.
      */
-    app = createApp({ config, logger, readiness, resumeStorage, uploadArea, notificationService });
+    app = createApp({ config, logger, readiness, resumeStorage, uploadArea, notificationService, errorMonitor });
     /*
      * B4 r3: a request pipelined behind an upload refused before its body was
      * read (413/503, connection closed in stages) never reaches the app
@@ -478,7 +515,7 @@ export async function startServer({
     return { reason, clean, http, dependencies };
   }
 
-  return { app, server, config, logger, readiness, shutdown, onShutdown, resumeStorage, uploadArea };
+  return { app, server, config, logger, readiness, shutdown, onShutdown, resumeStorage, uploadArea, errorMonitor };
 }
 
 /**
@@ -570,6 +607,18 @@ export function formatStartupFailure(error) {
       'Detail is withheld because it may contain configuration values or credentials.'
     );
   }
+  if (error instanceof StorageInitializationError && error.driver === 's3') {
+    // C6-T4: the S3-compatible driver. Fixed text; no endpoint, bucket or credential.
+    return (
+      `[valida-backend] failed to start: the private resume storage could not be initialised (${error.reason}). ` +
+      'Check RESUME_STORAGE_S3_ENDPOINT, RESUME_STORAGE_S3_REGION, RESUME_STORAGE_S3_BUCKET and the access key: ' +
+      'the endpoint must be reachable and present a trusted TLS certificate, the bucket must exist, ' +
+      'the credentials must be allowed to put, read, delete and list objects in that bucket ' +
+      '(including reading and deleting a specific object version), bucket versioning must be enabled so that ' +
+      'every deletion can be bound to the exact object version observed, ' +
+      'and the bucket must not allow anonymous reads. There is no fallback to local storage.'
+    );
+  }
   if (error instanceof StorageInitializationError) {
     // `reason` is a fixed token (integrations/storage/storageContract.js); the
     // path is never printed.
@@ -596,6 +645,8 @@ if (isMainModule()) {
   try {
     const started = await startServer();
     installSignalHandlers(started);
+    // C6-T6: an uncaught exception is logged by classification, captured, and the process exits 1.
+    installCrashCapture({ monitor: started.errorMonitor, logger: started.logger });
   } catch (error) {
     console.error(formatStartupFailure(error));
     process.exit(1);

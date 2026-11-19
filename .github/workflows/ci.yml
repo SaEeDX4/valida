@@ -1,0 +1,329 @@
+# C6-T6 — continuous integration (C6 plan r3 §6). Secret-free: it runs for
+# pull requests from forks too, so it holds no secret and grants the token
+# read access to the repository contents only.
+#
+# Not a deployment: no job here deploys or holds a host credential (the
+# host's auto-deploy stays Off; deployment is a separate, owner-authorised act).
+# Actions are pinned to full commit SHAs (the tag is a comment).
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (unit, database, audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mongodb:
+        # Pinned by digest (owner record 2026-11-18-01): retrieved by Astra directly from Docker Registry.
+        image: mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
+        ports: ['27017:27017']
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_ci
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:db
+      # Dependency audit (Doc 13 §136): npm audit --json over ALL dependencies, decided by
+      # ops/ci/audit-policy.json — fail at high or above, except an owner-approved, dated,
+      # exactly scoped exception, which the gate names on every run.
+      - name: Audit gate controls
+        run: node --test ../ops/ci/audit-gate.test.mjs
+      - name: Audit gate (backend)
+        run: node ../ops/ci/audit-gate.mjs --package backend --out "$RUNNER_TEMP/audit"
+      - name: Keep the raw audit report and the gate's decision
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: audit-backend
+          path: ${{ runner.temp }}/audit/
+          if-no-files-found: error
+          retention-days: 30
+
+  storage-double:
+    name: backend (S3 driver and backup tooling, local S3 double)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: The S3 test double (exact versions)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/moto"
+          "$RUNNER_TEMP/moto/bin/pip" install --no-input -r tests/s3/requirements-moto.txt
+          echo "VALIDA_TEST_MOTO_PYTHON=$RUNNER_TEMP/moto/bin/python" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run test:s3
+      - run: npm run test:backup
+
+  mongo-roles:
+    # Proposed (MongoDB-native): the least-privilege database roles and the recovery
+    # commands, against an auth-enabled disposable MongoDB (same pinned image).
+    # The admin password is generated per run and masked; nothing is persisted.
+    name: backend (MongoDB roles and recovery commands, auth-enabled MongoDB)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: An auth-enabled disposable MongoDB
+        run: |
+          pwd="$(openssl rand -hex 24)"
+          echo "::add-mask::$pwd"
+          docker run -d --name qa-mongo-auth -p 127.0.0.1:27018:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=qa_admin -e MONGO_INITDB_ROOT_PASSWORD="$pwd" \
+            mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
+          for i in $(seq 1 60); do docker exec qa-mongo-auth mongosh --quiet -u qa_admin -p "$pwd" --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
+          echo "MONGODB_ROLES_ADMIN_URI=mongodb://qa_admin:$pwd@127.0.0.1:27018/admin?authSource=admin" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run test:mongo-roles
+
+  recovery:
+    # Proposed (MongoDB-native r2): the durable deletion journal (S3 double, compliance-locked log bucket)
+    # and the restore-target identification between TWO auth-enabled disposable replica sets.
+    name: backend (durable deletion journal and restore-target safety, two replica sets + S3 double)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: The S3 test double (exact versions)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/moto"
+          "$RUNNER_TEMP/moto/bin/pip" install --no-input -r tests/s3/requirements-moto.txt
+          echo "VALIDA_TEST_MOTO_PYTHON=$RUNNER_TEMP/moto/bin/python" >> "$GITHUB_ENV"
+      - name: Two auth-enabled disposable replica sets (rslive, rsrestore)
+        run: |
+          openssl rand -base64 48 > "$RUNNER_TEMP/keyfile" && chmod 400 "$RUNNER_TEMP/keyfile" && sudo chown 999:999 "$RUNNER_TEMP/keyfile"
+          for spec in rslive:27048 rsrestore:27049; do
+            n=${spec%:*}; p=${spec#*:}; pwd="$(openssl rand -hex 24)"; echo "::add-mask::$pwd"
+            docker run -d --name "$n" --network host -v "$RUNNER_TEMP/keyfile:/keyfile:ro" \
+              mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361 \
+              --replSet "$n" --port "$p" --bind_ip 127.0.0.1 --auth --keyFile /keyfile
+            for i in $(seq 1 60); do docker exec "$n" mongosh --quiet --port "$p" --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
+            docker exec "$n" mongosh --quiet --port "$p" --eval "rs.initiate({_id:'$n',members:[{_id:0,host:'127.0.0.1:$p'}]})"
+            for i in $(seq 1 60); do docker exec "$n" mongosh --quiet --port "$p" --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -q true && break; sleep 1; done
+            docker exec "$n" mongosh --quiet --port "$p" admin --eval "db.createUser({user:'qa_admin',pwd:'$pwd',roles:['root']})"
+            var=$([ "$n" = rslive ] && echo LIVE || echo TARGET)
+            echo "MONGODB_RECOVERY_${var}_ADMIN_URI=mongodb://qa_admin:$pwd@127.0.0.1:$p/admin?replicaSet=$n&authSource=admin" >> "$GITHUB_ENV"
+          done
+      - run: npm ci
+      - run: npm run test:recovery
+
+  scanner:
+    # Proposed (MongoDB-native r2, finding 3): the real ClamAV daemon. On the runner freshclam fetches the
+    # OFFICIAL signatures (not reachable from the local evidence environment) [A]; the suite fails, never skips,
+    # when clamd does not answer.
+    name: backend (résumé scanning with the real ClamAV daemon)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
+        ports:
+          - 27017:27017
+    env:
+      MONGODB_TEST_URI: mongodb://127.0.0.1:27017/valida_test_scanner
+      CLAMD_TEST_SIGNATURES: official
+      TZ: UTC
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: ClamAV with the official signatures (packaged config and service, AppArmor enforced)
+        # fcad871 failed here: clamd refused "/etc/clamav/clamd-ci.conf" ("Can't open/parse the config file").
+        # Ubuntu's AppArmor profile for clamd reads its packaged config, so the packaged file and service are used;
+        # AppArmor stays as shipped. Setup fails, with diagnostics, unless the OFFICIAL signatures are current and
+        # the daemon answers a valid VERSION before the deadline.
+        run: |
+          set -euo pipefail
+          diag() {
+            echo "::group::diagnostics"
+            sudo systemctl status clamav-daemon --no-pager || true
+            sudo journalctl -u clamav-daemon -u clamav-freshclam --no-pager | tail -80 || true
+            sudo tail -50 /var/log/clamav/clamav.log /var/log/clamav/freshclam.log 2>/dev/null || true
+            sudo dmesg | grep -i 'apparmor.*clam' | tail -20 || true
+            sudo ls -la /var/lib/clamav || true
+            sudo systemctl status clamav-daemon.socket --no-pager || true
+            sudo ss -lntpx | grep -E '3310|clamd' || true
+            echo "::endgroup::"
+          }
+          trap 'diag' ERR
+          sudo apt-get update -q
+          sudo apt-get install -y -q clamav clamav-daemon
+          echo "AppArmor profiles for ClamAV (left enforced):"; sudo aa-status 2>/dev/null | grep -iE 'clam|enforce mode' || true
+          sudo systemctl stop clamav-daemon clamav-freshclam || true
+          # freshclam: 0 = updated, 1 = already up to date; anything else is a failure.
+          rc=0; sudo freshclam --stdout || rc=$?
+          if [ "$rc" -gt 1 ]; then echo "::error::freshclam failed (exit $rc)"; diag; exit 1; fi
+          sudo ls -la /var/lib/clamav
+          for db in main daily bytecode; do
+            f=$(ls /var/lib/clamav/$db.cvd /var/lib/clamav/$db.cld 2>/dev/null | head -1 || true)
+            if [ -z "$f" ]; then echo "::error::official database $db missing"; diag; exit 1; fi
+            echo "--- $f"; sudo sigtool --info "$f" | tee -a "$RUNNER_TEMP/sigtool.txt"
+          done
+          # Official, current: the daily database was built by ClamAV within the scanner's 48 h limit.
+          bt=$(sudo sigtool --info "$(ls /var/lib/clamav/daily.c?d 2>/dev/null | head -1 || true)" | sed -n 's/^Build time: //p')
+          if [ -z "$bt" ]; then echo "::error::no build time in the daily database header"; diag; exit 1; fi
+          age=$(( ( $(date -u +%s) - $(date -u -d "$bt" +%s) ) / 3600 ))
+          echo "daily.cvd/.cld build time: $bt (age ${age} h)"
+          if [ "$age" -ge 48 ]; then echo "::error::official daily signatures are ${age} h old"; diag; exit 1; fi
+          # The packaged clamd is socket-activated (clamav-daemon.socket): it listens on the sockets systemd passes it,
+          # not on clamd.conf's TCPSocket (905e18f: daemon loaded, nothing on 3310). Add the TCP listener to the
+          # packaged socket unit with a drop-in; the scan limits stay in the packaged clamd.conf.
+          # Ubuntu's packaged clamd.conf sets "EnableVersionCommand false" (36ac004: clamd answered "COMMAND
+          # UNAVAILABLE" on TCP and on its unix socket). The scanner needs VERSION to bind each verdict to a known,
+          # fresh signature set, so VERSION is enabled; SHUTDOWN, RELOAD and STATS stay disabled as packaged.
+          sudo sed -i -e '/^TCPSocket /d' -e '/^TCPAddr /d' -e '/^StreamMaxLength /d' -e '/^MaxFileSize /d' -e '/^MaxScanSize /d' -e '/^EnableVersionCommand /d' /etc/clamav/clamd.conf
+          printf 'StreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\nEnableVersionCommand true\n' | sudo tee -a /etc/clamav/clamd.conf
+          grep -E '^Enable[A-Za-z]+Command ' /etc/clamav/clamd.conf
+          sudo mkdir -p /etc/systemd/system/clamav-daemon.socket.d
+          printf '[Socket]\nListenStream=127.0.0.1:3310\n' | sudo tee /etc/systemd/system/clamav-daemon.socket.d/valida-tcp.conf
+          sudo systemctl daemon-reload
+          sudo systemctl restart clamav-daemon.socket
+          sudo systemctl start clamav-daemon
+          # The probe is the same TCP client path the scanner uses (Node's net module, as clamdScanner.js), and it
+          # reports every distinct failure (20c5cf3: clamd was listening on 3310, yet the nc probe saw nothing for
+          # 300 s and printed no error).
+          probe() { node -e 'const s=require("net").connect(3310,"127.0.0.1");let b="";s.setTimeout(3000,()=>{console.error("probe: timeout after connect, got "+JSON.stringify(b));process.exit(2)});s.on("connect",()=>s.write("zVERSION\0"));s.on("data",d=>{b+=d;if(b.includes("\0")){process.stdout.write(b.replace(/\0/g,""));s.destroy();process.exit(0)}});s.on("end",()=>{process.stdout.write(b.replace(/\0/g,""));process.exit(b?0:3)});s.on("error",e=>{console.error("probe: "+e.code+" "+e.message);process.exit(4)})'; }
+          v=""; last=""
+          for i in $(seq 1 150); do
+            out=$(probe 2>&1) && v="$out" || true
+            if printf '%s\n' "$v" | grep -Eq '^ClamAV [0-9]+\.[0-9]+\.[0-9]+/[0-9]+/'; then break; fi
+            if [ "$out" != "$last" ]; then echo "VERSION probe $i: $out"; last="$out"; fi
+            v=""; sleep 2
+          done
+          if [ -z "$v" ]; then
+            echo "::error::clamd gave no valid VERSION on 127.0.0.1:3310 within 300 s"
+            echo "unix-socket VERSION: $(printf 'zVERSION\0' | sudo timeout 5 nc -U /run/clamav/clamd.ctl | tr -d '\0' || true)"
+            echo "tcp (nc -v) VERSION: $(printf 'zVERSION\0' | timeout 5 nc -v 127.0.0.1 3310 2>&1 | tr -d '\0' || true)"
+            sudo aa-status 2>/dev/null | grep -A1 -i clamd || true
+            sudo journalctl -k --no-pager | grep -iE 'apparmor="DENIED"' | tail -20 || true
+            diag; exit 1
+          fi
+          echo "clamd VERSION: $v"
+          { echo "### ClamAV (official signatures)"; echo; echo "- clamd VERSION: \`$v\`"; echo "- daily build time: $bt (age ${age} h)"; echo; echo '```'; cat "$RUNNER_TEMP/sigtool.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - run: npm ci
+      - run: npm run test:scanner
+
+  scanner-image:
+    # Atlas-native (2026-11-18): the image the Render cron job builds (ops/scanner/Dockerfile). Built here
+    # from the repository root, then run once in self-test mode: the real clamd in the image, official
+    # signatures, the production scanner client: EICAR -> INFECTED, a synthetic PDF -> CLEAN.
+    name: scanner image (Render cron, self-test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build -f ops/scanner/Dockerfile -t valida-scanner:ci .
+      - name: Base image pinned by digest
+        run: grep -Eq '^FROM [^ ]+@sha256:[0-9a-f]{64}$' ops/scanner/Dockerfile
+      - name: Self-test
+        run: |
+          rc=0; docker run --rm --memory 4g -e SCANNER_IMAGE_SELFTEST=1 valida-scanner:ci > selftest.out 2> selftest.err || rc=$?
+          echo "exit $rc"
+          tail -20 selftest.err; cat selftest.out
+          { echo "### Scanner image self-test"; echo; echo '```'; cat selftest.out; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$rc" -eq 0 ] && grep -q '"selftest":"PASS"' selftest.out
+
+  frontend:
+    name: frontend (build, budgets, tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run verify:quality
+      - name: Audit gate (frontend)
+        run: node ../ops/ci/audit-gate.mjs --package frontend --out "$RUNNER_TEMP/audit"
+      - name: Keep the raw audit report and the gate's decision
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: audit-frontend
+          path: ${{ runner.temp }}/audit/
+          if-no-files-found: error
+          retention-days: 30
+
+  e2e-guards:
+    name: e2e guards and C5 statistics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run test:guards
+      - run: npm run test:c5:stats
+      - run: npm run test:c5:motion

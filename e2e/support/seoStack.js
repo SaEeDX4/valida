@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { baseEnvironment } from './processes.js';
+import { LOCAL_RECRUITMENT_ENVIRONMENT } from './stackConfig.js';
 
 /**
  * Fixed settings of the C4 SEO stack run (playwright.seo.config.js). Separate
@@ -42,6 +43,8 @@ export function seoBackendEnvironment({ storageRoot }) {
     ...baseEnvironment(),
     NODE_ENV: 'development',
     APP_ENV: 'local',
+    // C6-T1: the permitted tester path for a local run (stackConfig.js).
+    ...LOCAL_RECRUITMENT_ENVIRONMENT,
     PORT: String(SEO_BACKEND_PORT),
     LOG_LEVEL: 'info',
     TRUST_PROXY: 'false',

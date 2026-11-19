@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { BACKEND_ORIGIN, BACKEND_PORT, FRONTEND_ORIGIN } from './paths.js';
@@ -30,6 +31,42 @@ export function readRun() {
 }
 
 /**
+ * C6-T1 — the recruitment access these local runs use.
+ *
+ * The API serves no Job unless recruitment is configured, and `public` is
+ * accepted only with APP_ENV=production, which these runs deliberately never
+ * use (see the comments on each environment below). They take the permitted
+ * tester path instead: mode `testers`, with the loopback addresses the
+ * browser and the document server reach the API from. Every assertion is
+ * unchanged. `closed`, an unlisted client and `public` are tested by the
+ * backend suites (backend/tests/c6-recruitment-*.test.js).
+ */
+/**
+ * C6-T2 — the key the document server presents when it reads a Job on a
+ * visitor's behalf. Synthetic and random for each process that starts a
+ * stack: generated here, given to the backend and the document server of the
+ * same run, written to no file. Without it the document server's reads would
+ * be unauthenticated and every document would show the public view.
+ */
+export const LOCAL_SERVICE_KEY = `qa-local-e2e-${randomBytes(24).toString('hex')}`;
+
+export const LOCAL_RECRUITMENT_ENVIRONMENT = Object.freeze({
+  RECRUITMENT_MODE: 'testers',
+  ACCESS_ALLOWLIST: '127.0.0.1/32,::1/128',
+  RECRUITMENT_PUBLIC_AUTHORISATION: '',
+  INTERNAL_SERVICE_KEY: LOCAL_SERVICE_KEY,
+});
+
+/**
+ * The environment of a document server (frontend/server/serve.mjs) in a
+ * local run: loopback, so no proxy hops; the run's key. Its visitors are
+ * the browser on 127.0.0.1, which the run's allowlist lists.
+ */
+export function documentServerEnvironment() {
+  return { ...baseEnvironment(), TRUST_PROXY: 'false', INTERNAL_SERVICE_KEY: LOCAL_SERVICE_KEY };
+}
+
+/**
  * The backend's environment — for the server AND for every backend CLI the
  * run uses (indexes, Job provisioning, suppression operations), so all of
  * them see one configuration.
@@ -46,6 +83,7 @@ export function backendEnvironment({ run, smtpPassword = process.env.E2E_SMTP_PA
     ...baseEnvironment(),
     NODE_ENV: 'development',
     APP_ENV: 'local',
+    ...LOCAL_RECRUITMENT_ENVIRONMENT,
     PORT: String(BACKEND_PORT),
     LOG_LEVEL: 'info',
     TRUST_PROXY: 'false',

@@ -1,4 +1,5 @@
 import { isUsableJobDetail, isUsableJobListItem, isValidJobSlug } from '../src/features/jobs/api/jobContract.js';
+import { DELEGATION_HEADERS, UNLISTED_VISITOR, isUsableServiceKey } from './visitorAddress.js';
 
 /**
  * Server-side reads of the PUBLIC Jobs API for the document server (C4).
@@ -9,6 +10,24 @@ import { isUsableJobDetail, isUsableJobListItem, isValidJobSlug } from '../src/f
  * (src/features/jobs/api/jobsApi.js). It has no other data source: no database
  * access, no private fields, no admin route. What it can know about a Job is
  * exactly what any visitor's browser can.
+ *
+ * C6-T2 — ON WHOSE BEHALF. Every read names the visitor it is made for
+ * (visitorAddress.js), with the server-only INTERNAL_SERVICE_KEY, so that the
+ * API decides it as it would decide that visitor's own request — never as a
+ * request from the document server's own, possibly listed, address:
+ *
+ *   X-Valida-Visitor-Address   the visitor's address, or `unlisted`
+ *   X-Valida-Internal-Key      INTERNAL_SERVICE_KEY, when one is configured
+ *
+ * The visitor header is sent even without a key, so the API still treats the
+ * read as a delegation, finds it unauthenticated and gives the unlisted view.
+ * The sitemap's reads always ask for `unlisted`: the public view, whoever
+ * asked for the sitemap.
+ *
+ * WHERE THE KEY GOES. Only to the configured API origin: the URL is that
+ * origin plus a fixed path, and `redirect: 'error'` means a redirect — to any
+ * origin — is never followed, so the key cannot be carried elsewhere. The key
+ * is never logged, never put in a document, a preload hint or an error.
  *
  * Outcomes, mirroring the Job Detail page's states (C2):
  *   OK           a usable public Job (OPEN or CLOSED) — page 200;
@@ -44,21 +63,26 @@ export function normalizeApiOrigin(value) {
   return url.origin;
 }
 
-export function createJobsClient({ apiOrigin, fetchImpl = globalThis.fetch, timeoutMs = 5_000 } = {}) {
+export function createJobsClient({ apiOrigin, serviceKey = null, fetchImpl = globalThis.fetch, timeoutMs = 5_000 } = {}) {
   const origin = normalizeApiOrigin(apiOrigin);
   if (!origin) throw new Error('createJobsClient needs the API origin (scheme, host and port only)');
+  // An unusable key is not sent: the read then carries the visitor header
+  // only, and the API answers it with the unlisted view.
+  const key = isUsableServiceKey(serviceKey) ? serviceKey : null;
 
-  async function readJson(pathname) {
+  async function readJson(pathname, visitor) {
+    const headers = { accept: 'application/json', [DELEGATION_HEADERS.visitor]: typeof visitor === 'string' && visitor ? visitor : UNLISTED_VISITOR };
+    if (key) headers[DELEGATION_HEADERS.key] = key;
     let response;
     try {
       response = await fetchImpl(`${origin}${pathname}`, {
         method: 'GET',
-        headers: { accept: 'application/json' },
+        headers,
         redirect: 'error',
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
-      return { status: 0, body: null };
+      return { status: 0, body: null, tester: false };
     }
     let body = null;
     try {
@@ -66,32 +90,40 @@ export function createJobsClient({ apiOrigin, fetchImpl = globalThis.fetch, time
     } catch {
       body = null;
     }
-    return { status: response.status, body };
+    return { status: response.status, body, tester: response.headers?.get?.('x-valida-audience') === 'tester' };
   }
 
   return {
     origin,
+    /** Whether reads are authenticated (a usable key is configured). Never the key. */
+    delegation: key ? 'enabled' : 'disabled',
 
-    /** GET /api/v1/jobs/:jobSlug */
-    async getJob(slug) {
-      if (!isValidJobSlug(slug)) return { outcome: JOB_OUTCOME.NOT_FOUND };
-      const { status, body } = await readJson(`/api/v1/jobs/${encodeURIComponent(slug)}`);
-      if (status === 404 || body?.error?.code === 'JOB_NOT_FOUND') return { outcome: JOB_OUTCOME.NOT_FOUND };
+    /**
+     * GET /api/v1/jobs/:jobSlug, for `visitor` (an address, or null for the
+     * unlisted view). `tester` is true when the API answered with the tester
+     * view for this visitor (X-Valida-Audience: tester).
+     */
+    async getJob(slug, { visitor = null } = {}) {
+      if (!isValidJobSlug(slug)) return { outcome: JOB_OUTCOME.NOT_FOUND, tester: false };
+      const { status, body, tester } = await readJson(`/api/v1/jobs/${encodeURIComponent(slug)}`, visitor);
+      if (status === 404 || body?.error?.code === 'JOB_NOT_FOUND') return { outcome: JOB_OUTCOME.NOT_FOUND, tester };
       if (status !== 200 || body?.success !== true || !isUsableJobDetail(body.data)) {
-        return { outcome: JOB_OUTCOME.UNAVAILABLE, status };
+        return { outcome: JOB_OUTCOME.UNAVAILABLE, status, tester: false };
       }
-      return { outcome: JOB_OUTCOME.OK, job: body.data };
+      return { outcome: JOB_OUTCOME.OK, job: body.data, tester };
     },
 
     /**
-     * Every OPEN Job's slug, walking GET /api/v1/jobs page by page. Any failed
-     * or unreadable page makes the whole result UNAVAILABLE: a sitemap that
-     * silently missed roles would be worse than none.
+     * Every OPEN Job's slug IN THE PUBLIC VIEW, walking GET /api/v1/jobs page
+     * by page. Any failed or unreadable page makes the whole result
+     * UNAVAILABLE: a sitemap that silently missed roles would be worse than
+     * none. C6-T2: always read as `unlisted`, so a tester-only Job is never
+     * listed, whoever asked for the sitemap.
      */
     async listOpenJobSlugs() {
       const slugs = [];
       for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
-        const { status, body } = await readJson(`/api/v1/jobs?page=${page}&limit=${LIST_PAGE_LIMIT}`);
+        const { status, body } = await readJson(`/api/v1/jobs?page=${page}&limit=${LIST_PAGE_LIMIT}`, null);
         const items = body?.data?.items;
         const pagination = body?.data?.pagination;
         if (status !== 200 || body?.success !== true || !Array.isArray(items) || !isPlainObject(pagination)) {

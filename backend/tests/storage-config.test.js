@@ -11,7 +11,8 @@ import { loadConfig, ConfigurationError, checkLocalStorageRoot, APPLICATION_ROOT
  * and no failure message may echo the path.
  */
 const base = { NODE_ENV: 'development', APP_ENV: 'local', MONGODB_URI: 'mongodb://127.0.0.1:27017/valida_dev' };
-const production = { NODE_ENV: 'production', APP_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://valida.example', MONGODB_URI: 'mongodb://127.0.0.1:27017/valida' };
+// C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+const production = { NODE_ENV: 'production', APP_ENV: 'production', CORS_ALLOWED_ORIGINS: 'https://valida.example', MONGODB_URI: 'mongodb://127.0.0.1:27017/valida', SITE_ACCESS: 'public' };
 const privateRoot = path.resolve(APPLICATION_ROOT, '..', 'valida-private-storage-qa');
 
 const failureOf = (env) => {
@@ -25,8 +26,8 @@ const failureOf = (env) => {
 
 describe('storage is optional, and absent means absent', () => {
   it('no storage variables -> driver null (the service still starts; readiness reports it)', () => {
-    expect(loadConfig(base).resumeStorage).toEqual({ driver: null, localRoot: null });
-    expect(loadConfig(production).resumeStorage).toEqual({ driver: null, localRoot: null });
+    expect(loadConfig(base).resumeStorage).toEqual({ driver: null, localRoot: null, s3: null, mongodb: null });
+    expect(loadConfig(production).resumeStorage).toEqual({ driver: null, localRoot: null, s3: null, mongodb: null });
   });
 
   it('empty values copied from a template are treated as unset', () => {
@@ -35,13 +36,13 @@ describe('storage is optional, and absent means absent', () => {
 
   it('the local driver with a valid root is accepted for local development', () => {
     const config = loadConfig({ ...base, RESUME_STORAGE_DRIVER: 'local', RESUME_STORAGE_LOCAL_ROOT: privateRoot });
-    expect(config.resumeStorage).toEqual({ driver: 'local', localRoot: privateRoot });
+    expect(config.resumeStorage).toEqual({ driver: 'local', localRoot: privateRoot, s3: null, mongodb: null });
   });
 
   it('the root is never serialised', () => {
     const config = loadConfig({ ...base, RESUME_STORAGE_DRIVER: 'local', RESUME_STORAGE_LOCAL_ROOT: privateRoot });
     expect(JSON.stringify(config)).not.toContain(privateRoot);
-    expect(JSON.parse(JSON.stringify(config)).resumeStorage).toEqual({ driver: 'local', localRoot: '[redacted]' });
+    expect(JSON.parse(JSON.stringify(config)).resumeStorage).toEqual({ driver: 'local', localRoot: '[redacted]', s3: null, mongodb: null });
   });
 });
 
@@ -58,10 +59,11 @@ describe('production rejects development storage (Doc 09 section 107)', () => {
     expect(error.message).not.toContain(privateRoot);
   });
 
-  it.each(['s3', 'LOCAL', 'filesystem', 'memory'])('refuses the unknown driver %j', (driver) => {
+  // C6-T4: "s3" is now a driver (tests/s3-storage-config.test.js); the others are still refused.
+  it.each(['LOCAL', 'disk', 'filesystem', 'memory'])('refuses the unknown driver %j', (driver) => {
     const error = failureOf({ ...base, RESUME_STORAGE_DRIVER: driver });
     expect(error).toBeInstanceOf(ConfigurationError);
-    expect(error.message).toContain('RESUME_STORAGE_DRIVER: must be "local" (development only) or left unset');
+    expect(error.message).toContain('RESUME_STORAGE_DRIVER: must be "s3" (S3-compatible private object storage), "local" (development only) or left unset');
     // The rejected value itself is never repeated back.
     expect(error.message).not.toContain(driver);
   });

@@ -19,6 +19,8 @@ const production = {
   APP_ENV: 'production',
   NODE_ENV: 'production',
   CORS_ALLOWED_ORIGINS: 'https://valida.lt',
+  // C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+  SITE_ACCESS: 'public',
 };
 
 function configError(env) {

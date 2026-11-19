@@ -170,7 +170,8 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     );
     expect(headOf(html)).not.toMatch(/name="robots"|valida:head|application\/ld\+json/);
     expect(response.headers.get('x-robots-tag')).toBeNull();
-    expect(response.headers.get('cache-control')).toBe('no-cache');
+    // C6-T2: Careers is a recruitment document (renderDocument.js isRecruitmentRoute): never stored. The others keep no-cache.
+    expect(response.headers.get('cache-control')).toBe(pathname === '/careers' ? 'private, no-store' : 'no-cache');
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
     // OD-2026-11-09-03: the sharing description is the route's own search description, except on Home.
     const metaContent = (selector) => [...headOf(html).matchAll(new RegExp(`<meta ${selector} content="([^"]*)">`, 'g'))].map((match) => match[1]);

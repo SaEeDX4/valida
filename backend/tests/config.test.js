@@ -72,6 +72,8 @@ describe('configuration', () => {
       PORT: '8080',
       CORS_ALLOWED_ORIGINS: 'https://valida.lt, https://www.valida.lt',
       TRUST_PROXY: '1',
+      // C6-T3 correction 1: production requires SITE_ACCESS=public explicitly.
+      SITE_ACCESS: 'public',
     });
     expect(config.isProduction).toBe(true);
     expect(config.corsAllowedOrigins).toEqual(['https://valida.lt', 'https://www.valida.lt']);
@@ -117,7 +119,8 @@ describe('configuration', () => {
       expect(keys, `unexpected ${fragment} setting`).not.toContain(fragment),
     );
     expect(Object.keys(config).filter((key) => key.toLowerCase().includes('storage'))).toEqual(['resumeStorage']);
-    expect(config.resumeStorage).toEqual({ driver: null, localRoot: null });
+    // C6-T4: the S3 settings are read only under their own names; RESUME_STORAGE_BUCKET is still ignored.
+    expect(config.resumeStorage).toEqual({ driver: null, localRoot: null, s3: null, mongodb: null });
     expect(JSON.stringify(config)).not.toMatch(/unused/);
   });
 
@@ -129,7 +132,8 @@ describe('configuration', () => {
       error = caught;
     }
     expect(error.name).toBe('ConfigurationError');
-    expect(error.issues.map((issue) => issue.variable)).toEqual(['CORS_ALLOWED_ORIGINS', 'MONGODB_URI']);
+    // C6-T3 correction 1: SITE_ACCESS is one of production's requirements.
+    expect(error.issues.map((issue) => issue.variable)).toEqual(['SITE_ACCESS', 'CORS_ALLOWED_ORIGINS', 'MONGODB_URI']);
   });
 
   it('never serialises the database connection string', () => {

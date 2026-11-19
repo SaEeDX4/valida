@@ -5,6 +5,18 @@ import path from 'node:path';
 import { buildRobotsTxt, buildSitemapXml } from '../src/seo/discovery.js';
 import { JOB_OUTCOME } from './jobsClient.js';
 import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocument.js';
+import { establishVisitorAddress } from './visitorAddress.js';
+import { applyDocumentSecurityHeaders, documentSecurityHeaders } from './securityHeaders.js';
+import { DISABLED_ERROR_MONITOR } from '../../backend/src/lib/monitoring/errorMonitor.js';
+import {
+  CONDITIONAL_REQUEST_HEADERS,
+  DOCUMENT_LIVENESS_PATH,
+  PUBLIC_SITE_ACCESS,
+  SITE_ADMISSION,
+  decideSiteAdmission,
+  enforcePrivateResponseHeaders,
+  isPrivateSite,
+} from './siteAccess.js';
 
 /**
  * The local reference document server (C4).
@@ -20,9 +32,14 @@ import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocume
  * section 63). This server is the host-independent, tested implementation of
  * the behaviour; C6 either deploys it or reproduces it on the chosen host
  * (edge function / HTML transformation) from the same src/seo modules, and the
- * production checks are repeated there. Compression, TLS, the www/apex
- * redirect and the frontend Content-Security-Policy are C6 hosting concerns and
- * are not done here.
+ * production checks are repeated there. Compression, TLS and the www/apex
+ * redirect are C6 hosting concerns and are not done here.
+ *
+ * C6-T5: every response — documents, assets, redirects, robots.txt, the
+ * sitemap, liveness, 403/404/405/500 — carries the enforced
+ * Content-Security-Policy and the other security headers of
+ * securityHeaders.js, and X-Valida-Release when the commit is configured.
+ * They are set first, before site access and before any other decision.
  *
  * SAFETY
  *   - GET and HEAD only; anything else is 405.
@@ -32,6 +49,18 @@ import { canonicalRedirect, checkTemplate, renderDocument } from './renderDocume
  *     index.html and SEO manifest are never served as files.
  *   - The only outbound requests are the public Jobs API reads (jobsClient.js).
  *   - Nothing from the request (query, headers, cookies) is logged or sent on.
+ *     C6-T2: the one thing derived from a request and sent on is the
+ *     visitor's ADDRESS, established by the API's own rule from the socket
+ *     and X-Forwarded-For under TRUST_PROXY (visitorAddress.js). The
+ *     X-Valida-* headers a request arrives with are never read and never
+ *     passed on, so a visitor cannot name another address or present a key.
+ *     The address is not logged.
+ *   - C6-T3: GET/HEAD of exactly /healthz is the liveness check: 200, empty
+ *     body, in every mode. With SITE_ACCESS=private (siteAccess.js) every
+ *     other request from a visitor whose address is not listed is answered
+ *     403 "Forbidden" FIRST — before the method check, redirects, robots.txt,
+ *     the sitemap, static files and documents — and every response carries
+ *     `Cache-Control: private, no-store` and no validator.
  */
 
 const CONTENT_TYPES = Object.freeze({
@@ -104,7 +133,19 @@ function send(res, method, status, headers, body = '') {
  * `jobApiPreloadBase` the browser-facing API base for the Job preload hint
  * (renderDocument.js jobApiPreloadTag), null for none.
  */
-export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, log = () => {} }) {
+const BODILESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/*
+ * C6-T6: `errorMonitor` (backend/src/lib/monitoring/errorMonitor.js) records
+ * each unexpected failure — the 500 below — with the release and
+ * environment, and nothing about the request: no path, query, header or
+ * visitor address. Capture returns at once and never throws, so the response
+ * is the same with monitoring enabled, disabled or unreachable.
+ */
+export async function createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, log = () => {}, errorMonitor = DISABLED_ERROR_MONITOR }) {
+  const privateSite = isPrivateSite(site);
+  // C6-T5: computed once; a build API base the policy cannot name is refused here.
+  const securityHeaders = documentSecurityHeaders({ browserApiBase });
   const distRoot = await realpath(distDir);
   const template = await loadTemplate(distRoot);
 
@@ -115,8 +156,42 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
     const finish = () =>
       log({ event: 'request', method, status: res.statusCode, route: routeKind, ms: Number((process.hrtime.bigint() - started) / 1_000_000n) });
     res.on('finish', finish);
+    applyDocumentSecurityHeaders(res, securityHeaders, release);
 
     try {
+      const rawTarget = typeof req.url === 'string' ? req.url : '';
+
+      // C6-T3 — site access, before anything else.
+      if (privateSite) {
+        enforcePrivateResponseHeaders(res);
+        for (const name of CONDITIONAL_REQUEST_HEADERS) delete req.headers[name];
+        const { admission } = decideSiteAdmission({
+          site,
+          method,
+          rawUrl: rawTarget,
+          livenessPath: DOCUMENT_LIVENESS_PATH,
+          trustedHops,
+          socketAddress: req.socket?.remoteAddress,
+          forwardedFor: req.headers?.['x-forwarded-for'],
+        });
+        if (admission === SITE_ADMISSION.DENIED) {
+          routeKind = 'denied';
+          const headers = { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' };
+          if (!config.indexing) headers['x-robots-tag'] = 'noindex, nofollow';
+          // A request that may carry a body: its body is never read, and the
+          // connection is not reused after this answer.
+          if (!BODILESS_METHODS.has(method)) headers.connection = 'close';
+          send(res, method, 403, headers, 'Forbidden');
+          return;
+        }
+      }
+
+      if ((method === 'GET' || method === 'HEAD') && rawTarget === DOCUMENT_LIVENESS_PATH) {
+        routeKind = 'liveness';
+        send(res, method, 200, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }, '');
+        return;
+      }
+
       if (method !== 'GET' && method !== 'HEAD') {
         routeKind = 'method';
         send(res, method, 405, { allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8' }, 'Method Not Allowed');
@@ -192,19 +267,22 @@ export async function createDocumentHandler({ distDir, config, jobs, jobApiPrelo
         return;
       }
 
-      const document = await renderDocument(pathname, { template, config, jobs, jobApiPreloadBase });
+      // C6-T2: who is asking, for the API to decide what they may see.
+      const visitor = establishVisitorAddress(req, trustedHops);
+      const document = await renderDocument(pathname, { template, config, jobs, jobApiPreloadBase, visitor });
       routeKind = document.route.kind;
       send(res, method, document.status, document.headers, document.body);
-    } catch {
+    } catch (error) {
       routeKind = 'error';
+      errorMonitor.captureUnexpected(error, { kind: 'request', status: 500 });
       if (!res.headersSent) send(res, method, 500, { 'content-type': 'text/plain; charset=utf-8' }, 'Internal Server Error');
       else res.destroy();
     }
   };
 }
 
-export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, host = '127.0.0.1', port = 4173, log }) {
-  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, log });
+export async function startDocumentServer({ distDir, config, jobs, jobApiPreloadBase = null, browserApiBase = '', release = null, trustedHops = false, site = PUBLIC_SITE_ACCESS, host = '127.0.0.1', port = 4173, log, errorMonitor }) {
+  const handle = await createDocumentHandler({ distDir, config, jobs, jobApiPreloadBase, browserApiBase, release, trustedHops, site, log, errorMonitor });
   const server = createServer((req, res) => {
     handle(req, res);
   });

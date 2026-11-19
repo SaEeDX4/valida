@@ -12,6 +12,7 @@ import {
   C5_BACKEND_ORIGIN, C5_BACKEND_PORT, C5_LAB_ORIGIN, C5_LAB_PORT, C5_SITE_ORIGIN, C5_SITE_PORT, C5_SITE_URL,
   c5BackendEnvironment,
 } from './c5Stack.js';
+import { documentServerEnvironment } from './stackConfig.js';
 
 /**
  * Starts the C5 integrated-site stack, once per run (playwright.c5.config.js):
@@ -99,7 +100,7 @@ export default async function c5GlobalSetup() {
       // the link in the proxy (round 2) also runs without the product's own hint, so the two are never doubled.
       ...(process.env.C5_NO_JOB_PRELOAD === '1' || process.env.C5_EXPERIMENT_PRELOAD_JOB_API === '1' ? ['--no-job-preload'] : [])], {
       cwd: FRONTEND_DIR,
-      env: baseEnvironment(),
+      env: documentServerEnvironment(),
       logFile: path.join(dirs.logs, 'documents.log'),
     });
     children.push(site);

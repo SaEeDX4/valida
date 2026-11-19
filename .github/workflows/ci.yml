@@ -224,8 +224,12 @@ jobs:
           # The packaged clamd is socket-activated (clamav-daemon.socket): it listens on the sockets systemd passes it,
           # not on clamd.conf's TCPSocket (905e18f: daemon loaded, nothing on 3310). Add the TCP listener to the
           # packaged socket unit with a drop-in; the scan limits stay in the packaged clamd.conf.
-          sudo sed -i -e '/^TCPSocket /d' -e '/^TCPAddr /d' -e '/^StreamMaxLength /d' -e '/^MaxFileSize /d' -e '/^MaxScanSize /d' /etc/clamav/clamd.conf
-          printf 'StreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\n' | sudo tee -a /etc/clamav/clamd.conf
+          # Ubuntu's packaged clamd.conf sets "EnableVersionCommand false" (36ac004: clamd answered "COMMAND
+          # UNAVAILABLE" on TCP and on its unix socket). The scanner needs VERSION to bind each verdict to a known,
+          # fresh signature set, so VERSION is enabled; SHUTDOWN, RELOAD and STATS stay disabled as packaged.
+          sudo sed -i -e '/^TCPSocket /d' -e '/^TCPAddr /d' -e '/^StreamMaxLength /d' -e '/^MaxFileSize /d' -e '/^MaxScanSize /d' -e '/^EnableVersionCommand /d' /etc/clamav/clamd.conf
+          printf 'StreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\nEnableVersionCommand true\n' | sudo tee -a /etc/clamav/clamd.conf
+          grep -E '^Enable[A-Za-z]+Command ' /etc/clamav/clamd.conf
           sudo mkdir -p /etc/systemd/system/clamav-daemon.socket.d
           printf '[Socket]\nListenStream=127.0.0.1:3310\n' | sudo tee /etc/systemd/system/clamav-daemon.socket.d/valida-tcp.conf
           sudo systemctl daemon-reload

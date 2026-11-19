@@ -197,6 +197,8 @@ jobs:
             sudo tail -50 /var/log/clamav/clamav.log /var/log/clamav/freshclam.log 2>/dev/null || true
             sudo dmesg | grep -i 'apparmor.*clam' | tail -20 || true
             sudo ls -la /var/lib/clamav || true
+            sudo systemctl status clamav-daemon.socket --no-pager || true
+            sudo ss -lntpx | grep -E '3310|clamd' || true
             echo "::endgroup::"
           }
           trap 'diag' ERR
@@ -219,8 +221,15 @@ jobs:
           age=$(( ( $(date -u +%s) - $(date -u -d "$bt" +%s) ) / 3600 ))
           echo "daily.cvd/.cld build time: $bt (age ${age} h)"
           if [ "$age" -ge 48 ]; then echo "::error::official daily signatures are ${age} h old"; diag; exit 1; fi
+          # The packaged clamd is socket-activated (clamav-daemon.socket): it listens on the sockets systemd passes it,
+          # not on clamd.conf's TCPSocket (905e18f: daemon loaded, nothing on 3310). Add the TCP listener to the
+          # packaged socket unit with a drop-in; the scan limits stay in the packaged clamd.conf.
           sudo sed -i -e '/^TCPSocket /d' -e '/^TCPAddr /d' -e '/^StreamMaxLength /d' -e '/^MaxFileSize /d' -e '/^MaxScanSize /d' /etc/clamav/clamd.conf
-          printf 'TCPSocket 3310\nTCPAddr 127.0.0.1\nStreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\n' | sudo tee -a /etc/clamav/clamd.conf
+          printf 'StreamMaxLength 6M\nMaxFileSize 6M\nMaxScanSize 25M\n' | sudo tee -a /etc/clamav/clamd.conf
+          sudo mkdir -p /etc/systemd/system/clamav-daemon.socket.d
+          printf '[Socket]\nListenStream=127.0.0.1:3310\n' | sudo tee /etc/systemd/system/clamav-daemon.socket.d/valida-tcp.conf
+          sudo systemctl daemon-reload
+          sudo systemctl restart clamav-daemon.socket
           sudo systemctl start clamav-daemon
           v=""
           for i in $(seq 1 150); do

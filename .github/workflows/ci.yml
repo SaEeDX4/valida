@@ -259,6 +259,28 @@ jobs:
       - run: npm ci
       - run: npm run test:scanner
 
+  scanner-image:
+    # Atlas-native (2026-11-18): the image the Render cron job builds (ops/scanner/Dockerfile). Built here
+    # from the repository root, then run once in self-test mode: the real clamd in the image, official
+    # signatures, the production scanner client: EICAR -> INFECTED, a synthetic PDF -> CLEAN.
+    name: scanner image (Render cron, self-test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build -f ops/scanner/Dockerfile -t valida-scanner:ci .
+      - name: Base image digest
+        run: |
+          d=$(docker image inspect node:24-bookworm-slim --format '{{index .RepoDigests 0}}')
+          echo "base: $d"; echo "- base image: \`$d\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Self-test
+        run: |
+          docker run --rm --memory 4g -e SCANNER_IMAGE_SELFTEST=1 valida-scanner:ci > selftest.out 2> selftest.err; rc=$?
+          tail -20 selftest.err; cat selftest.out
+          { echo "### Scanner image self-test"; echo; echo '```'; cat selftest.out; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$rc" -eq 0 ] && grep -q '"selftest":"PASS"' selftest.out
+
   frontend:
     name: frontend (build, budgets, tests)
     runs-on: ubuntu-24.04

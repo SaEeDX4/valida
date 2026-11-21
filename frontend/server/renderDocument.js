@@ -5,6 +5,7 @@ import {
   APPLY_PENDING_HEAD,
   JOB_ERROR_HEAD,
   NOT_FOUND_HEAD,
+  ADMIN_HEAD,
   STATIC_HEAD_BY_PATH,
   applyHead,
   jobDetailHead,
@@ -105,6 +106,8 @@ export function canonicalRedirect(pathname, search = '') {
 
 /** Which public route a canonical path is. */
 export function matchRoute(pathname) {
+  // E2: the Admin application shell — one document for every /admin path; the client routes inside it.
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return { kind: 'admin' };
   if (Object.hasOwn(STATIC_HEAD_BY_PATH, pathname)) return { kind: 'static', path: pathname };
   const segments = pathname.split('/').slice(1);
   if (segments[0] === 'careers' && segments.length === 2 && segments[1]) return { kind: 'job', slug: segments[1] };
@@ -129,6 +132,7 @@ function safeDecode(segment) {
 export async function resolveRouteHead(route, { jobs, visitor = null }) {
   if (route.kind === 'static') return { status: 200, input: STATIC_HEAD_BY_PATH[route.path] };
   if (route.kind === 'notFound') return { status: 404, input: NOT_FOUND_HEAD };
+  if (route.kind === 'admin') return { status: 200, input: ADMIN_HEAD };
 
   const slug = safeDecode(route.slug);
   // C6-T2: the read is made for this visitor (jobsClient.js); the API decides what it may see.
@@ -232,7 +236,7 @@ export async function renderDocument(pathname, { template, config, jobs, jobApiP
     'content-type': 'text/html; charset=utf-8',
     // Doc 16 section 209: documents are revalidated, so a release is never stuck behind an old shell.
     // C6-T2: the recruitment documents are never stored at all.
-    'cache-control': isRecruitmentRoute(route) ? RECRUITMENT_DOCUMENT_CACHE_CONTROL : 'no-cache',
+    'cache-control': isRecruitmentRoute(route) || route.kind === 'admin' ? RECRUITMENT_DOCUMENT_CACHE_CONTROL : 'no-cache',
     'x-content-type-options': 'nosniff',
   };
   // C6-T2: the T1 diagnostic, carried through — only when the API answered
@@ -241,6 +245,8 @@ export async function renderDocument(pathname, { template, config, jobs, jobApiP
   // The same directive as the meta tag, for clients that read only headers.
   if (head.robots) headers['x-robots-tag'] = head.robots;
   if (resolved.status === 503) headers['retry-after'] = '60';
+  // E1: activation and reset links carry their token in the URL fragment; never leak a referrer from Admin pages (Doc 11 s128).
+  if (route.kind === 'admin') headers['referrer-policy'] = 'no-referrer';
   const preload = jobApiPreloadTag({ route, resolved, base: jobApiPreloadBase });
   return { status: resolved.status, headers, body: injectHead(template, head, preload), head, route, preload };
 }

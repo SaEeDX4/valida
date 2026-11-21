@@ -77,15 +77,19 @@ describe('db:indexes:apply', () => {
     expect(await indexSummary()).toEqual(afterFirst);
   }, 120_000);
 
-  it('creates exactly the six required indexes plus _id — nothing speculative, no TTL', async () => {
+  it('creates exactly the required jobs and applications indexes plus _id — nothing speculative, no TTL on business records', async () => {
     expect(indexCommand('apply').code).toBe(0);
     const summary = await indexSummary();
     expect(summary.jobs.map((index) => index.name).sort()).toEqual(['_id_', 'public_listing', 'slug_unique'].sort());
     expect(summary.applications.map((index) => index.name).sort()).toEqual(
-      ['_id_', 'candidateEmail_job_submittedAt', 'idempotency_keyHash_unique', 'job_submittedAt', 'resume_storageKey_unique'].sort(),
+      // E5 adds status_submittedAt for the Admin list (Doc 10 section 130).
+      ['_id_', 'candidateEmail_job_submittedAt', 'idempotency_keyHash_unique', 'job_submittedAt', 'resume_storageKey_unique', 'status_submittedAt'].sort(),
     );
     const raw = await collection('applications').indexes();
     raw.forEach((index) => expect(index.expireAfterSeconds).toBeUndefined());
+    // E1: the only TTL index is on Admin session documents (Doc 11 section 98).
+    const sessions = await collection('admin_sessions').indexes();
+    expect(sessions.filter((index) => index.expireAfterSeconds !== undefined).map((index) => index.name)).toEqual(['admin_session_expires_ttl']);
   }, 60_000);
 });
 

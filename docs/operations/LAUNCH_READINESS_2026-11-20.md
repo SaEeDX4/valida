@@ -84,3 +84,5 @@
 1. Send the H2 email's headers (Titan → ⋯ → show original), with addresses redacted, and the iOS Safari answers with your iOS version.
 2. Confirm the owner record (§§1–5).
 3. Accept the release SHA (RG), so act I (`main` fast-forward) lands before 2026-12-18.
+
+**Act I is ready (checked 2026-11-21):** `origin/main` is `e2c7ce7` and is an ancestor of `2b39e8e`. The fast-forward is clean (49 commits), and PR #1's head is `2b39e8e`. After the owner's RG, the step is `git push origin 2b39e8e799329428f0f68b4fb70f88f85c6eda69:refs/heads/main`. Then protect `main` with the required `ci` check (D-10, GitHub settings).

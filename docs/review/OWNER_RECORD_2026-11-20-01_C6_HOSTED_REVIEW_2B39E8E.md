@@ -64,6 +64,8 @@ Evidence: `C:\ME\Valida-H2-2026-11-21\HANDOFF.md` and `evidence\`. G-ACCESS pass
 
 H2 cost ≈ US$0.06 (Render $0.04, Atlas ≈ $0.02). All Reviews to date ≈ US$1.23.
 
+**RG and act I (2026-11-21):** the owner accepted `2b39e8e799329428f0f68b4fb70f88f85c6eda69` as the Review/release SHA in session ("Yes, accept and push"). `main` was fast-forwarded `e2c7ce7..2b39e8e` (no merge commit), and GitHub marks PR #1 as merged. The GHSA-fc5q-39xc-vjpf deadline (2026-12-18T05:31Z) is therefore met for RG and act I. Still open: D-10 branch protection on `main` with the required `ci` check (GitHub settings, owner).
+
 ## 6. Unchanged
 
 No implementation, publication, `main` change, Production resource, DNS change, live email or recruitment activation is authorised by this record. Production acknowledgements stay disabled; the genuine vacancy stays Draft through E6.

@@ -30,7 +30,7 @@
 
 ## 2. Genuine launch blockers (in order)
 
-1. ~~H2 hosted session~~ (done 2026-11-21; Safari evidence and email headers pending) → **RG** and **act I** before **2026-12-18**.
+1. ~~H2 hosted session~~ (done 2026-11-21; Safari evidence and email headers pending) → ~~RG and act I~~ (done 2026-11-21: `main` = `2b39e8e`, PR #1 merged) → **D-10: protect `main`** with the required `ci` check.
 2. **Production stage + C7** (§4), with recruitment in `testers` mode only (Doc 18 §182).
 3. **Release D gaps**: DNS cut-over, `www` TLS, DMARC reporting, transactional identity decision, mailbox/MFA confirmation.
 4. **Release E E1–E5 implementation** — the largest item; starts only after Release C is VERIFIED.
@@ -85,4 +85,4 @@
 2. Confirm the owner record (§§1–5).
 3. Accept the release SHA (RG), so act I (`main` fast-forward) lands before 2026-12-18.
 
-**Act I is ready (checked 2026-11-21):** `origin/main` is `e2c7ce7` and is an ancestor of `2b39e8e`. The fast-forward is clean (49 commits), and PR #1's head is `2b39e8e`. After the owner's RG, the step is `git push origin 2b39e8e799329428f0f68b4fb70f88f85c6eda69:refs/heads/main`. Then protect `main` with the required `ci` check (D-10, GitHub settings).
+**Done 2026-11-21:** the owner accepted RG, and act I fast-forwarded `main` `e2c7ce7..2b39e8e`. Next: D-10 protection, then Production step 2 (§4, its own authorisation). Pre-push check, kept for the record: `origin/main` is `e2c7ce7` and is an ancestor of `2b39e8e`. The fast-forward is clean (49 commits), and PR #1's head is `2b39e8e`. After the owner's RG, the step is `git push origin 2b39e8e799329428f0f68b4fb70f88f85c6eda69:refs/heads/main`. Then protect `main` with the required `ci` check (D-10, GitHub settings).

@@ -45,14 +45,17 @@
     "ops:recovery:restore-verify": "node scripts/mongo-recovery.mjs restore-verify",
     "ops:resume:scan": "node scripts/resume-scan.mjs",
     "verify:b6": "node scripts/verify-b6.mjs",
-    "verify:b7": "node scripts/verify-b7.mjs"
+    "verify:b7": "node scripts/verify-b7.mjs",
+    "admin:provision": "node --env-file-if-exists=.env scripts/admin-provision.mjs"
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.2",
     "@sentry/core": "11.10.0",
+    "connect-mongo": "6.0.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
+    "express-session": "1.19.0",
     "helmet": "^8.3.0",
     "mongoose": "^9.11.4",
     "nodemailer": "10.1.4",

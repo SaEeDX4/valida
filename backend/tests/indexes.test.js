@@ -15,7 +15,7 @@ const find = (collection, key) =>
 
 describe('required index set', () => {
   it('declares exactly the twelve required indexes (B2-B5 six; B7 suppression register six, rev 8.3)', () => {
-    expect(REQUIRED_INDEXES).toHaveLength(12);
+    expect(REQUIRED_INDEXES).toHaveLength(19);
   });
 
   it.each([
@@ -45,18 +45,20 @@ describe('required index set', () => {
     expect(index.options.unique).toBeUndefined();
   });
 
-  it('declares no TTL index (Doc 10 section 127)', () => {
+  it('declares no TTL index on business records (Doc 10 section 127)', () => {
     // Deleting only the MongoDB record would orphan the private resume object.
-    REQUIRED_INDEXES.forEach((index) => expect(index.options.expireAfterSeconds).toBeUndefined());
+    const ttl = REQUIRED_INDEXES.filter((index) => index.options.expireAfterSeconds !== undefined);
+    // E1: Admin session documents are infrastructure state with a TTL (Doc 11 section 98).
+    expect(ttl.map((index) => `${index.collection}.${index.name}`)).toEqual(['admin_sessions.admin_session_expires_ttl']);
   });
 
-  it('declares no speculative Phase 3 status index (Doc 10 section 130)', () => {
-    expect(find('applications', { status: 1, submittedAt: -1 })).toBeUndefined();
+  it('declares the Phase 3 status index now that the Admin list needs it (Doc 10 section 130; E5)', () => {
+    expect(find('applications', { status: 1, submittedAt: -1 })).toBeDefined();
   });
 
   it('gives every index a documented reason', () => {
     // The register is the approved Doc 10 addition of the suppression design (B7).
-    REQUIRED_INDEXES.forEach((index) => expect(index.reason).toMatch(index.collection === 'recipient_suppressions' ? /Suppression design §3\.1/ : /Doc 10 section/));
+    REQUIRED_INDEXES.forEach((index) => expect(index.reason).toMatch(index.collection === 'recipient_suppressions' ? /Suppression design §3\.1/ : /Doc 1[01] section/));
   });
 });
 
@@ -111,6 +113,17 @@ describe('diff classification', () => {
       { name: 'email_job', key: { 'candidate.emailNormalized': 1, jobId: 1, submittedAt: -1 } },
       { name: 'idem', key: { 'idempotency.keyHash': 1 }, unique: true },
       { name: 'storage', key: { 'resume.storageKey': 1 }, unique: true },
+      { name: 'status', key: { status: 1, submittedAt: -1 } },
+    ],
+    admins: [{ name: 'email', key: { emailNormalized: 1 }, unique: true }],
+    audit_events: [
+      { name: 'resource', key: { 'resource.type': 1, 'resource.id': 1, occurredAt: -1 } },
+      { name: 'actor', key: { 'actor.type': 1, 'actor.id': 1, occurredAt: -1 } },
+      { name: 'time', key: { occurredAt: -1 } },
+    ],
+    admin_sessions: [
+      { name: 'ttl', key: { expires: 1 }, expireAfterSeconds: 0 },
+      { name: 'principal', key: { 'session.principalId': 1 } },
     ],
     recipient_suppressions: [
       { name: 'lookup', key: { 'lookup.keyId': 1, 'lookup.digest': 1, scope: 1 }, unique: true },
@@ -125,7 +138,7 @@ describe('diff classification', () => {
 
   it('reports a fully indexed database as satisfied', () => {
     const { satisfied, missing, incompatible } = diffIndexes(REQUIRED_INDEXES, actualFor());
-    expect(satisfied).toHaveLength(12);
+    expect(satisfied).toHaveLength(REQUIRED_INDEXES.length);
     expect(missing).toHaveLength(0);
     expect(incompatible).toHaveLength(0);
   });
@@ -139,7 +152,7 @@ describe('diff classification', () => {
 
   it('reports an empty database as all missing', () => {
     const { missing } = diffIndexes(REQUIRED_INDEXES, { jobs: [], applications: [], recipient_suppressions: [] });
-    expect(missing).toHaveLength(12);
+    expect(missing).toHaveLength(REQUIRED_INDEXES.length);
   });
 
   it('reports a non-unique slug index as incompatible, not missing', () => {

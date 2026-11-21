@@ -80,6 +80,8 @@
 
 ## 6. Next executable step toward public activation
 
+**Superseded 2026-11-21** by `docs/operations/COMPLETE_LAUNCH_REQUEST_2026-11-21.md`: the owner's goal is one launch with recruitment fully operational. The next step is the SA-1 sequencing amendment; the steps below are kept for history.
+
 **Owner (phone is fine):**
 1. Send the H2 email's headers (Titan → ⋯ → show original), with addresses redacted, and the iOS Safari answers with your iOS version.
 2. Confirm the owner record (§§1–5).

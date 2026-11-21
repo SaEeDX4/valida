@@ -52,8 +52,8 @@ Prices are from the Nov 19–21 Render and Atlas invoices. CAD is at **1.40** CA
 
 | Step | What | Cost | Needs |
 | --- | --- | --- | --- |
-| 1 | **Approve SA-1** | $0 | Owner (now, phone OK) |
-| 2 | Build E1–E5 locally with the full Doc 11/17 auth, IDOR, quarantine and audit suites; CI green; review branch and PR | $0 | Claude; owner design review of the `/admin` screens |
+| 1 | ~~Approve SA-1~~ — approved 2026-11-21 (OD-2026-11-21-01) | $0 | Done |
+| 2 | ~~Build E1–E5 locally~~ — IMPLEMENTED on `e-work`, tests green locally, review PR open (`docs/review/E1_E5_HANDOFF_2026-11-21.md`) | $0 | Owner: review the PR and the `/admin` screens |
 | 3 | Meanwhile, owner inputs: P-1, P-2, P-4, P-5, real vacancy (P-6); DMARC `rua=` mailbox choice; D2 mailbox MFA | $0 | Owner |
 | 4 | **Spending approval** (§3), then Production: Atlas Flex project "Valida Production", Render API Starter + website + scanner cron, **private** (`SITE_ACCESS=private`); hosted Review of the Admin SHA | §3 monthly | Owner approval; laptop ~5 min for database users; Titan password typed into Render |
 | 5 | C7 end-to-end with a QA candidate → **Release C VERIFIED**; after +24 h, Production restore rehearsal → recovery VERIFIED | ≈ $1 one-time | Claude |

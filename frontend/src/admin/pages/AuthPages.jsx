@@ -16,6 +16,9 @@ import styles from '../admin.module.css';
  */
 
 function AuthCard({ title, lead, wide = false, children }) {
+  useEffect(() => {
+    document.title = `${title} | Valida Admin`;
+  }, [title]);
   return (
     <main className={styles.authScreen}>
       <div className={wide ? styles.authCardWide : styles.authCard}>

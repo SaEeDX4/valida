@@ -233,7 +233,7 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     ['an unknown slug', '/careers/qa-no-such-role'],
     ['an invalid slug (never sent to the API)', '/careers/qa_not%20a%20slug'],
     ['an unknown public route', '/qa-no-such-page'],
-    ['a reserved private namespace', '/admin'],
+    ['a look-alike of the Admin namespace', '/administrator'],
     ['too many segments', '/careers/qa-open/apply/extra'],
   ])('%s: 404, the branded page, "noindex, follow" — never a soft 404', async (_label, pathname) => {
     const before = apiRequests.length;
@@ -244,6 +244,23 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     expect(headOf(html)).toContain('<meta name="robots" content="noindex, follow">');
     expect(html).toContain('<div id="root"></div>');
     if (pathname.includes('%20')) expect(apiRequests.length).toBe(before);
+  });
+
+  it('the Admin namespace (E2): 200, the private Admin shell — never indexed, stored or referred, never an API read', async () => {
+    const before = apiRequests.length;
+    for (const pathname of ['/admin', '/admin/login', '/admin/applications']) {
+      const response = await get(indexed, pathname);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(headOf(html)).toContain('<title>Valida Admin</title>');
+      expect(headOf(html)).toContain('<meta name="robots" content="noindex, nofollow">');
+      expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(jsonLdOf(html)).toEqual([]);
+      expect(headOf(html)).not.toContain('rel="canonical"');
+    }
+    expect(apiRequests.length).toBe(before);
   });
 
   it('Apply: open and closed 200, unknown 404 — always "noindex, follow", never JobPosting', async () => {

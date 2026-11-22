@@ -155,7 +155,7 @@ describe('restore-rebaseline: the deletion gate first, then the Admin', () => {
     // The applicant deletion holds; only then was the Admin touched.
     expect(await target.db(t.db).collection('applications').countDocuments({ _id: new ObjectId(state.ids[0]) })).toBe(0);
     const [owner, recruiter] = await adminsOf(t.db);
-    expect(owner).toMatchObject({ email: OWNER, status: 'ACTIVE', authentication: { passwordHash: null, resetTokenHash: null, authVersion: 4, restoreEpoch: 1, activationTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) }, mfa: { enabled: false, secretCiphertext: null, recoveryCodes: [] } });
+    expect(owner).toMatchObject({ email: OWNER, status: 'ACTIVE', authentication: { passwordHash: null, resetTokenHash: null, authVersion: 4, restoreFence: { targetId: t.targetId, epoch: 1 }, activationTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) }, mfa: { enabled: false, secretCiphertext: null, recoveryCodes: [] } });
     expect(recruiter).toMatchObject({ email: RECRUITER, status: 'DISABLED', authentication: { passwordHash: null, activationTokenHash: null, authVersion: 4 }, mfa: { enabled: false, secretCiphertext: null } });
     expect(await target.db(t.db).collection('admin_sessions').countDocuments({})).toBe(0);
     expect(await gateOn(t.db)).toMatchObject({ open: true, basis: 'REBASELINED' });

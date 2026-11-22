@@ -9,7 +9,7 @@ import request from 'supertest';
 import { startServer, formatStartupFailure } from '../../src/server.js';
 import { loadConfig } from '../../src/config/env.js';
 import { REQUIRED_INDEXES } from '../../src/db/indexes.js';
-import { ADMIN_RESTORE_STATE_COLLECTION, PENDING_LEASE_MS, adminStartupGate, initLiveAnchor, rebaselineAdmins } from '../../src/modules/admin/restoreRebaseline.js';
+import { ADMIN_RESTORE_STATE_COLLECTION, PENDING_LEASE_MS, RUN_LEASE_MS, adminStartupGate, initLiveAnchor, rebaselineAdmins } from '../../src/modules/admin/restoreRebaseline.js';
 import { TEST_RECRUITMENT_ENV, freePort } from '../helpers.js';
 import { requireTestDatabase } from './testDatabase.js';
 import { ADMIN_ORIGIN, OTHER_PASSWORD, STRONG_PASSWORD, activateAndEnroll, agentFor, csrfFor, currentCode, provisionAdmin, testClock } from './adminHarness.js';
@@ -44,6 +44,8 @@ const TARGET2_ID = randomBytes(16).toString('hex');
 const OWNER = `qa-owner-${randomBytes(3).toString('hex')}@example.invalid`;
 const RECRUITER = `qa-recruiter-${randomBytes(3).toString('hex')}@example.invalid`;
 const INVITED = `qa-invited-${randomBytes(3).toString('hex')}@example.invalid`;
+const OTHER_OWNER = `qa-owner2-${randomBytes(3).toString('hex')}@example.invalid`;
+const OLD_TARGET = 'f'.repeat(32);
 const SESSION_SECRET = randomBytes(32).toString('base64url');
 const MFA_KEYS = `qa1:${randomBytes(32).toString('base64')}`;
 const NEW_PASSWORD = 'QA fresh owner passphrase 4 harbours';
@@ -88,7 +90,7 @@ async function on(db, fn) {
   try {
     return await fn();
   } finally {
-    await mongoose.disconnect();
+    await mongoose.connection.close(); // only the default connection (a worker's own connection stays open)
   }
 }
 
@@ -153,6 +155,11 @@ describe('D-3: the Admin is bound to its database', () => {
     expect((await startOutcome(RESTORED_DB))?.reason).toBe('ADMIN_RESTORE_NOT_REBASELINED');
     await expect(initLiveAnchor(admin.db(RESTORED_DB))).rejects.toMatchObject({ reason: 'ANCHOR_OF_ANOTHER_DATABASE' }); // it cannot be re-declared live
     await authorise(RESTORED_DB, TARGET_ID);
+    // Restored data as it may really look: a second owner, and a recruiter carrying fences left by an EARLIER restore
+    // (an old restoreFence of another target, a high epoch, and the legacy restoreEpoch field). None of it may spare them.
+    const seed = await admins(RESTORED_DB).findOne({ emailNormalized: OWNER });
+    await admins(RESTORED_DB).insertOne({ ...seed, _id: new mongoose.Types.ObjectId(), email: OTHER_OWNER, emailNormalized: OTHER_OWNER, displayName: 'QA Owner 2' });
+    await admins(RESTORED_DB).updateOne({ emailNormalized: RECRUITER }, { $set: { 'authentication.restoreFence': { targetId: OLD_TARGET, epoch: 999 }, 'authentication.restoreEpoch': 999 } });
     const refused = await startOutcome(RESTORED_DB);
     expect(refused?.name).toBe('AdminRestoreClosedError');
     expect(formatStartupFailure(refused)).toMatch(/Admin surface is closed \(ADMIN_RESTORE_NOT_REBASELINED\)/);
@@ -192,39 +199,53 @@ describe('D-3: the Admin is bound to its database', () => {
     expect((await gate(RESTORED_DB)).open).toBe(false);
   }, 60_000);
 
-  it('concurrent attempts: exactly one claim wins, the loser leaves no file and no change; the winner is interrupted, stays closed, and RESUMES with the same link', async () => {
+  it('one claim, one active run, bound owner: concurrent attempts -> one winner; interrupted; a resume is refused while a run holds the lease, for another owner, and twice at once; exactly one resume completes with the same link', async () => {
     const a = linkPath('a.txt');
     const b = linkPath('b.txt');
-    let interrupt = true;
+    const interrupted = { afterClaim: async () => { throw new Error('interrupted after the claim'); } };
     const results = await on(RESTORED_DB, () => Promise.allSettled([
-      rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: a, appOrigin: ADMIN_ORIGIN, hooks: { afterClaim: async () => { if (interrupt) throw new Error('interrupted after the claim'); } } }),
-      rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: b, appOrigin: ADMIN_ORIGIN, hooks: { afterClaim: async () => { if (interrupt) throw new Error('interrupted after the claim'); } } }),
+      rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: a, appOrigin: ADMIN_ORIGIN, hooks: interrupted }),
+      rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: b, appOrigin: ADMIN_ORIGIN, hooks: interrupted }),
     ]));
-    const reasons = results.map((r) => r.reason?.reason ?? r.reason?.message);
-    expect(reasons.sort()).toEqual(['REBASELINE_IN_PROGRESS', 'interrupted after the claim']); // one winner (then interrupted), one loser
+    expect(results.map((r) => r.reason?.reason ?? r.reason?.message).sort()).toEqual(['REBASELINE_IN_PROGRESS', 'interrupted after the claim']);
     const winnerFile = fs.existsSync(a) ? a : b;
     expect(fs.readdirSync(dir)).toEqual([path.basename(winnerFile)]); // the loser removed its own delivery
     expect(fs.statSync(winnerFile).mode & 0o777).toBe(0o600);
     const claim = await admin.db(RESTORED_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET_ID });
     expect(claim).toMatchObject({ state: 'PENDING', epoch: 1, tokenHash: sha(tokenIn(winnerFile)), setName: 'standalone', database: RESTORED_DB });
-    expect((await gate(RESTORED_DB)).open).toBe(false); // marker not published: closed
+    expect(claim.adminIds).toHaveLength(4); // exactly the restored Admins: the revocation is scoped to them
+    expect(String(claim.ownerAdminId)).toBe(String((await admins(RESTORED_DB).findOne({ emailNormalized: OWNER }))._id));
+    expect((await gate(RESTORED_DB)).open).toBe(false);
     expect((await startOutcome(RESTORED_DB))?.reason).toBe('ADMIN_RESTORE_NOT_REBASELINED');
 
-    // Without the delivered file a retry cannot take over a live claim...
-    await on(RESTORED_DB, () => expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: linkPath('other.txt'), appOrigin: ADMIN_ORIGIN })).rejects.toMatchObject({ reason: 'REBASELINE_IN_PROGRESS', detail: { pendingAttempt: claim.attempt } }));
-    // ...nor restart it before the lease expires.
-    await on(RESTORED_DB, () => expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: linkPath('other.txt'), appOrigin: ADMIN_ORIGIN, restartPending: claim.attempt })).rejects.toMatchObject({ reason: 'REBASELINE_IN_PROGRESS' }));
+    const later = () => new Date(Date.now() + RUN_LEASE_MS + 60_000);
+    await on(RESTORED_DB, async () => {
+      // No delivered file: no takeover; a restart before its lease: refused.
+      await expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: linkPath('other.txt'), appOrigin: ADMIN_ORIGIN })).rejects.toMatchObject({ reason: 'REBASELINE_IN_PROGRESS', detail: { pendingAttempt: claim.attempt } });
+      await expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: linkPath('other.txt'), appOrigin: ADMIN_ORIGIN, restartPending: claim.attempt, clock: later })).rejects.toMatchObject({ reason: 'REBASELINE_IN_PROGRESS' });
+      // The interrupted run's lease still holds: no second active run.
+      await expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: winnerFile, appOrigin: ADMIN_ORIGIN })).rejects.toMatchObject({ reason: 'REBASELINE_IN_PROGRESS' });
+      // Bound to the original owner: another owner, even after the lease, is refused.
+      await expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OTHER_OWNER, linkFile: winnerFile, appOrigin: ADMIN_ORIGIN, clock: later })).rejects.toMatchObject({ reason: 'OWNER_MISMATCH' });
+    });
     expect(fs.existsSync(linkPath('other.txt'))).toBe(false);
+    expect(await admin.db(RESTORED_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET_ID })).toMatchObject({ state: 'PENDING', epoch: 1 });
 
-    // Resume with the SAME file: the same link is completed; the marker is published last.
-    interrupt = false;
+    // Two resumes at once after the lease: exactly one runs; it completes with the SAME link.
     const tokenBefore = tokenIn(winnerFile);
-    state.done = await on(RESTORED_DB, () => rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: winnerFile, appOrigin: ADMIN_ORIGIN }));
-    expect(state.done).toMatchObject({ resumed: true, attempt: claim.attempt, adminsDisabled: 3 });
+    const resumes = await on(RESTORED_DB, () => Promise.allSettled([1, 2].map(() => rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: winnerFile, appOrigin: ADMIN_ORIGIN, clock: later }))));
+    const won = resumes.filter((r) => r.status === 'fulfilled');
+    expect(won).toHaveLength(1);
+    expect(resumes.find((r) => r.status === 'rejected').reason).toMatchObject({ reason: 'REBASELINE_IN_PROGRESS' });
+    expect(won[0].value).toMatchObject({ resumed: true, attempt: claim.attempt, epoch: 2, adminsDisabled: 4 });
     expect(tokenIn(winnerFile)).toBe(tokenBefore);
     state.token = tokenBefore;
-    expect(await admin.db(RESTORED_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET_ID })).toMatchObject({ state: 'REBASELINED', attempt: claim.attempt, setName: 'standalone', database: RESTORED_DB });
-    expect((await admins(RESTORED_DB).findOne({ emailNormalized: OWNER })).authentication.activationTokenHash).toBe(sha(tokenBefore));
+    expect(await admin.db(RESTORED_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET_ID })).toMatchObject({ state: 'REBASELINED', attempt: claim.attempt, epoch: 2 });
+    expect((await admins(RESTORED_DB).findOne({ emailNormalized: OWNER })).authentication).toMatchObject({ activationTokenHash: sha(tokenBefore), restoreFence: { targetId: TARGET_ID, epoch: 2 } });
+    // An old restoreFence / restoreEpoch spared nobody.
+    const recruiter = await admins(RESTORED_DB).findOne({ emailNormalized: RECRUITER });
+    expect(recruiter).toMatchObject({ status: 'DISABLED', authentication: { passwordHash: null, restoreFence: { targetId: TARGET_ID, epoch: 2 } }, mfa: { enabled: false, secretCiphertext: null } });
+    expect((await admins(RESTORED_DB).findOne({ emailNormalized: OTHER_OWNER })).status).toBe('DISABLED');
     expect(await gate(RESTORED_DB)).toMatchObject({ open: true, basis: 'REBASELINED' });
     await on(RESTORED_DB, () => expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: winnerFile, appOrigin: ADMIN_ORIGIN })).rejects.toMatchObject({ reason: 'ALREADY_REBASELINED' }));
   }, 60_000);
@@ -269,35 +290,59 @@ describe('D-3: the Admin is bound to its database', () => {
     }
   }, 90_000);
 
-  it('a restore carrying an OLDER completion marker stays closed until its own recovery completes; a stale attempt cannot overwrite the newer link', async () => {
-    // A snapshot of the re-baselined database, restored elsewhere: it carries the old authorisation AND the old marker.
+  it('a restore carrying an OLDER completion marker stays closed until its own recovery; a LATE worker cannot disable the recovered owner, clear sessions or touch an Admin created after recovery', async () => {
+    // A snapshot of the re-baselined, now-used database (its authorisation, its marker, its fences, its sessions), restored elsewhere.
     await copyDatabase(RESTORED_DB, RESTORED2_DB);
     expect(await admin.db(RESTORED2_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).countDocuments({ _id: TARGET_ID, state: 'REBASELINED' })).toBe(1);
     expect(await gate(RESTORED2_DB)).toEqual({ open: false, reason: 'ADMIN_RESTORE_NOT_REBASELINED' });
     expect((await startOutcome(RESTORED2_DB))?.reason).toBe('ADMIN_RESTORE_NOT_REBASELINED');
-    // The inherited authorisation cannot be re-used here, and does not count as this target's own.
     await on(RESTORED2_DB, () => expect(rebaselineAdmins({ targetId: TARGET_ID, ownerEmail: OWNER, linkFile: linkPath('old.txt'), appOrigin: ADMIN_ORIGIN })).rejects.toMatchObject({ reason: 'AUTHORISATION_FOR_OTHER_DATABASE' }));
     await authorise(RESTORED2_DB, TARGET2_ID);
     expect((await gate(RESTORED2_DB)).open).toBe(false);
 
-    // A stale attempt X claims and stalls; after the lease the owner restarts it as R; R completes; X resumes too late.
+    // Worker X claims on its OWN connection and stalls. Its run lease lapses; the owner restarts it as R (a new link).
+    const xConn = await mongoose.createConnection(uriFor(RESTORED2_DB)).asPromise();
     let release;
     const stalled = new Promise((resolve) => { release = resolve; });
     const t0 = Date.now();
-    const x = on(RESTORED2_DB, () => rebaselineAdmins({ targetId: TARGET2_ID, ownerEmail: OWNER, linkFile: linkPath('x.txt'), appOrigin: ADMIN_ORIGIN, clock: () => new Date(t0), hooks: { afterClaim: () => stalled } }));
+    const x = rebaselineAdmins({ targetId: TARGET2_ID, ownerEmail: OWNER, linkFile: linkPath('x.txt'), appOrigin: ADMIN_ORIGIN, clock: () => new Date(t0), hooks: { afterClaim: () => stalled }, connection: xConn });
     for (let i = 0; i < 50 && !(await admin.db(RESTORED2_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET2_ID })); i += 1) await new Promise((r) => setTimeout(r, 50));
     const claimX = await admin.db(RESTORED2_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET2_ID });
-    const later = () => new Date(t0 + PENDING_LEASE_MS + 60_000);
-    // R runs while X is stalled (on the same, still-open connection to the restored database).
-    const r = await rebaselineAdmins({ targetId: TARGET2_ID, ownerEmail: OWNER, linkFile: linkPath('r.txt'), appOrigin: ADMIN_ORIGIN, restartPending: claimX.attempt, clock: later });
-    expect(r).toMatchObject({ resumed: false });
+    // The inherited fences ({ TARGET_ID, epoch 2 }) are another restore's: they will not spare anyone from THIS one.
+    const r = await on(RESTORED2_DB, () => rebaselineAdmins({ targetId: TARGET2_ID, ownerEmail: OWNER, linkFile: linkPath('r.txt'), appOrigin: ADMIN_ORIGIN, restartPending: claimX.attempt, clock: () => new Date(t0 + PENDING_LEASE_MS + 60_000) }));
+    expect(r).toMatchObject({ resumed: false, epoch: 2, adminsDisabled: 4 });
     expect(await admin.db(RESTORED2_DB).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: TARGET2_ID })).toMatchObject({ state: 'REBASELINED', epoch: 2, attempt: r.attempt, setName: 'standalone', database: RESTORED2_DB });
-    release();
-    await expect(x).rejects.toMatchObject({ reason: 'REBASELINE_SUPERSEDED' });
-    // The winner's link is intact: the owner's token is R's, not X's.
-    const ownerNow = await admins(RESTORED2_DB).findOne({ emailNormalized: OWNER });
-    expect(ownerNow.authentication.activationTokenHash).toBe(sha(tokenIn(linkPath('r.txt'))));
-    expect(ownerNow.authentication.activationTokenHash).not.toBe(sha(tokenIn(linkPath('x.txt'))));
+    for (const a of await admins(RESTORED2_DB).find({}).toArray()) expect(a.authentication.restoreFence).toEqual({ targetId: TARGET2_ID, epoch: 2 });
+    expect(await admin.db(RESTORED2_DB).collection('admin_sessions').countDocuments({})).toBe(0);
+
+    // The recovered owner activates, enrols and signs in; an Admin is invited after recovery.
+    const server = await serve(RESTORED2_DB);
+    try {
+      const clock = testClock(Date.now());
+      const owner = agentFor(server.base);
+      await activateAndEnroll({ client: owner, token: tokenIn(linkPath('r.txt')), clock, password: NEW_PASSWORD });
+      await owner.get('/api/v1/admin/overview').expect(200);
+      const config = loadConfig(envFor(RESTORED2_DB));
+      await provisionAdmin({ config, clock, email: `qa-after-${randomBytes(3).toString('hex')}@example.invalid`, displayName: 'QA After Recovery', roles: ['RECRUITMENT_ADMIN'] });
+      const before = { admins: await admins(RESTORED2_DB).find({}).sort({ _id: 1 }).toArray(), sessions: await admin.db(RESTORED2_DB).collection('admin_sessions').find({}).sort({ _id: 1 }).toArray() };
+      expect(before.sessions.length).toBeGreaterThanOrEqual(1);
+
+      // Now the late worker X wakes: it is fenced out of every write.
+      release();
+      await expect(x).rejects.toMatchObject({ reason: 'REBASELINE_SUPERSEDED' });
+      expect(await admins(RESTORED2_DB).find({}).sort({ _id: 1 }).toArray()).toEqual(before.admins); // owner still ACTIVE with password and MFA; the new Admin untouched
+      expect(await admin.db(RESTORED2_DB).collection('admin_sessions').find({}).sort({ _id: 1 }).toArray()).toEqual(before.sessions); // no session cleared
+      const recovered = before.admins.find((a) => a.emailNormalized === OWNER);
+      expect(recovered).toMatchObject({ status: 'ACTIVE', mfa: { enabled: true } });
+      expect(recovered.authentication.passwordHash).toMatch(/^\$argon2id\$/);
+      await owner.get('/api/v1/admin/overview').expect(200); // the recovered owner's session still works
+      // The winner's link was R's; X's never armed anyone.
+      expect(recovered.authentication.activationTokenHash).toBeNull(); // consumed by the activation
+      expect(sha(tokenIn(linkPath('x.txt')))).not.toBe(sha(tokenIn(linkPath('r.txt'))));
+    } finally {
+      await server.shutdown('test');
+      await xConn.close();
+    }
     expect(await gate(RESTORED2_DB)).toMatchObject({ open: true, basis: 'REBASELINED' });
   }, 90_000);
 });

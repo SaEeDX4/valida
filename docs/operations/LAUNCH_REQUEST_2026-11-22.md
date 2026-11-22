@@ -228,6 +228,18 @@ The owner re-enrols MFA and re-invites the other Admins.
 
 **D-3 implemented (2026-11-22; correction 1 on the same PR #4; review branch `ccr-a5e61e13-8rm3ng`, not on `main`):**
 
+**Correction 2 (Astra's review of `a861476`):**
+- **One active run.** The original attempt, every resume and every restart take an exclusive 5-minute run lease on the claim and a **new epoch**. A second run while one holds the lease is refused (`REBASELINE_IN_PROGRESS`). A worker whose lease lapsed is stale: its writes are fenced out.
+- **Bound owner.** A resume or restart re-arms only the owner recorded in the **original** claim (`OWNER_MISMATCH` otherwise).
+- **Scoped revocation.** The claim records the restored Admins and sessions. Only those are revoked or removed, and only under a fence of **this** restore (`authentication.restoreFence { targetId, epoch }`).
+  - A fence left by another restore, a high old epoch or the legacy `restoreEpoch` field spares nobody.
+  - Admins and sessions created after the recovery are never touched by a late worker.
+- **Proven:**
+  - A late worker woken after the recovered owner has activated, enrolled and signed in, and after a new Admin was invited, changes **nothing**: the owner stays ACTIVE with their password and MFA, the session keeps working, and the new Admin is untouched.
+  - An old `restoreFence`/`restoreEpoch 999` does not spare the recruiter.
+  - Two concurrent resumes: exactly one runs.
+  - Mutation checks: removing the fence, scoping the fence only by epoch, or wiping all sessions each makes these tests fail.
+
 **Correction 1 (owner, 2026-11-22):**
 - **Bound to its database.** The Admin opens only when the connection's replica-set name equals `ADMIN_DATABASE_REPLICA_SET`, and the database is either:
   - the intended live one: its `database_identity` anchor, written once at provisioning by `db:identity:init`, names exactly this cluster and database; or

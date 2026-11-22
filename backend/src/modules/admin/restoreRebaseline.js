@@ -3,6 +3,7 @@ import path from 'node:path';
 import mongoose from 'mongoose';
 import { ADMIN_POLICY } from '../../config/adminAuth.js';
 import { Admin } from '../../models/Admin.js';
+import { AuditEvent } from '../../models/AuditEvent.js';
 import { normalizeEmail } from '../../models/Application.js';
 import { RESTORE_AUTHORIZATION_COLLECTION } from '../../ops/backup/restoreTarget.js';
 import { createAuditWriter } from './audit.js';
@@ -44,14 +45,17 @@ import { randomToken, sha256Hex } from './auth/secrets.js';
  *                write, fsync'd, renamed into place by a hard link, directory fsync'd.
  *                Any failure: nothing in the database changed.
  *   2. claim     admin_restore_state { _id: targetId, state: PENDING, attempt, epoch,
- *                tokenHash } by insert: of concurrent attempts exactly one wins; a
- *                loser removes its own file and writes nothing else.
- *   3. revoke    every Admin DISABLED, authVersion + 1, credentials cleared, sessions
- *                removed (idempotent).
- *   4. arm       the owner re-enabled with the claimed token hash, FENCED by the claim
- *                epoch on the owner document: a stale attempt can never overwrite a
- *                newer attempt's token.
- *   5. publish   PENDING -> REBASELINED, conditional on this attempt and epoch.
+ *                tokenHash, ownerAdminId, adminIds, sessionIds, runner, runLeaseUntil }
+ *                by insert: of concurrent attempts exactly one wins; a loser removes its
+ *                own file and writes nothing else. adminIds and sessionIds are the
+ *                restored ones: nothing created later is ever revoked by this restore.
+ *   3. revoke    those Admins DISABLED, authVersion + 1, credentials cleared; those
+ *                sessions removed — under THIS restore's fence (restoreFence
+ *                { targetId, epoch }), so a stale run cannot touch them again.
+ *   4. arm       the claim's owner re-enabled with the claim's token hash, same fence.
+ *   5. publish   PENDING -> REBASELINED, only by the run holding the claim at its epoch.
+ * Every run (original, resume, restart) takes an exclusive run lease and a new epoch:
+ * one active run at a time, and a run whose lease lapsed is fenced out (correction 2).
  *
  * Interrupted after 2: run again with the SAME link file — the delivered link and
  * attempt are read back from it (and checked against the claim), and steps 3-5
@@ -66,8 +70,10 @@ export const LIVE_ANCHOR_ID = 'live';
 export const REBASELINED = 'REBASELINED';
 export const PENDING = 'PENDING';
 export const STANDALONE = 'standalone';
-/** A pending claim may be restarted only this long after it was made (an interrupted attempt). */
+/** A pending claim may be restarted (a new link) only this long after it was made (an interrupted attempt). */
 export const PENDING_LEASE_MS = 15 * 60_000;
+/** One run at a time: the original attempt, a resume or a restart holds the claim this long; after it, another run may take over. */
+export const RUN_LEASE_MS = 5 * 60_000;
 const WRITE_CONCERN = Object.freeze({ w: 'majority', j: true });
 const LINK_MARKER = '# valida restore-rebaseline';
 
@@ -234,22 +240,39 @@ const REVOKE_ALL = Object.freeze({
   'mfa.pendingExpiresAt': null,
 });
 
+/** The fence of one restore: only a fence of THIS restore, at this epoch or later, protects a document. */
+const fenceFor = (targetId, epoch) => ({ $or: [{ 'authentication.restoreFence.targetId': { $ne: targetId } }, { 'authentication.restoreFence.epoch': { $lte: epoch } }] });
+
 /**
  * Runs on the default Mongoose connection, which the caller points at the RESTORED
  * database with an owner credential for that cluster only.
  *
+ * Correction 2 (review of a861476):
+ *   - ONE active run: the original attempt and every resume or restart take an exclusive
+ *     run lease on the claim and a NEW epoch. A worker whose lease lapsed is stale: every
+ *     write it could still make is fenced out by the newer epoch.
+ *   - Scoped revocation: only the Admins and sessions that existed when the claim was made
+ *     (the restored ones, recorded in the claim) are revoked or removed, and only under a
+ *     fence of THIS restore. A fence left by another restore (an older restoreFence, or the
+ *     legacy restoreEpoch field) protects nothing; an Admin or session created after the
+ *     recovery (owner sign-in, a new invitation) is never touched by a late worker.
+ *   - Bound owner: a resume or restart re-arms only the owner recorded in the original claim.
+ *
  * @param {object} o
  * @param {string} o.targetId        the restore target id (the `prepare-target` authorisation)
- * @param {string} o.ownerEmail      the one owner to re-enable
+ * @param {string} o.ownerEmail      the one owner to re-enable (a resume must name the SAME owner)
  * @param {string} o.linkFile        the owner's private file for the activation link
  * @param {string} o.appOrigin       the origin that serves /admin
  * @param {string} [o.restartPending] the stale attempt id the owner deliberately replaces
  * @param {() => Date} [o.clock]
  * @param {object} [o.fs]            test seam (node:fs/promises shape)
  * @param {object} [o.hooks]         test seam: { afterClaim, afterRevoke, afterArm } (interruption points)
+ * @param {object} [o.connection]    the Mongoose connection to the restored database (default: the default connection)
  */
-export async function rebaselineAdmins({ targetId, ownerEmail, linkFile, appOrigin, restartPending = null, clock = () => new Date(), fs = fsp, hooks = {} }) {
-  const db = mongoose.connection.db;
+export async function rebaselineAdmins({ targetId, ownerEmail, linkFile, appOrigin, restartPending = null, clock = () => new Date(), fs = fsp, hooks = {}, connection = mongoose.connection }) {
+  const db = connection.db;
+  const AdminModel = connection === mongoose.connection ? Admin : connection.models.Admin ?? connection.model('Admin', Admin.schema, 'admins');
+  const AuditModel = connection === mongoose.connection ? AuditEvent : connection.models.AuditEvent ?? connection.model('AuditEvent', AuditEvent.schema, 'audit_events');
   if (typeof targetId !== 'string' || !/^[0-9a-f]{32}$/.test(targetId)) throw new AdminRestoreRefused('TARGET_ID_INVALID');
   if (typeof linkFile !== 'string' || linkFile === '') throw new AdminRestoreRefused('LINK_FILE_REQUIRED');
   const identity = await databaseIdentity(db);
@@ -259,43 +282,56 @@ export async function rebaselineAdmins({ targetId, ownerEmail, linkFile, appOrig
   const state = db.collection(ADMIN_RESTORE_STATE_COLLECTION);
   const existing = await state.findOne({ _id: targetId });
   if (existing?.state === REBASELINED) throw new AdminRestoreRefused('ALREADY_REBASELINED');
-  const owner = await Admin.findOne({ emailNormalized: normalizeEmail(ownerEmail ?? '') });
+  const owner = await AdminModel.findOne({ emailNormalized: normalizeEmail(ownerEmail ?? '') });
   if (!owner || !owner.roles.includes('ADMIN_OWNER')) throw new AdminRestoreRefused('OWNER_NOT_FOUND');
+  // A resume or restart is bound to the owner of the ORIGINAL claim.
+  if (existing && String(existing.ownerAdminId) !== String(owner._id)) throw new AdminRestoreRefused('OWNER_MISMATCH');
 
+  const runner = randomToken(12);
+  const leaseFrom = (t) => new Date(t.getTime() + RUN_LEASE_MS);
   let claim;
-  let token;
   let resumed = false;
   if (existing?.state === PENDING) {
     const delivered = await readDelivered(linkFile, targetId, fs);
+    const now = clock();
     if (delivered && delivered.attempt === existing.attempt && sha256Hex(delivered.token) === existing.tokenHash) {
-      claim = existing; // resume with the SAME delivered link
-      token = delivered.token;
-      resumed = true;
-    } else if (restartPending && restartPending === existing.attempt) {
-      if (clock().getTime() - new Date(existing.claimedAt).getTime() < PENDING_LEASE_MS) throw new AdminRestoreRefused('REBASELINE_IN_PROGRESS', { pendingAttempt: existing.attempt });
-      const attempt = randomToken(16);
-      token = randomToken(32);
-      await deliverPrivately(linkFile, linkText({ appOrigin, token, attempt, targetId }), { fs });
-      const replaced = await state.findOneAndUpdate(
-        { _id: targetId, state: PENDING, attempt: existing.attempt, epoch: existing.epoch },
-        { $set: { attempt, tokenHash: sha256Hex(token), claimedAt: clock() }, $inc: { epoch: 1 } },
+      // Resume with the SAME delivered link — only when no other run holds the lease (one active resume).
+      claim = await state.findOneAndUpdate(
+        { _id: targetId, state: PENDING, attempt: existing.attempt, tokenHash: existing.tokenHash, runLeaseUntil: { $lte: now } },
+        { $set: { runner, runLeaseUntil: leaseFrom(now) }, $inc: { epoch: 1 } },
         { returnDocument: 'after', writeConcern: WRITE_CONCERN },
       );
-      if (!replaced) {
+      if (!claim) throw new AdminRestoreRefused('REBASELINE_IN_PROGRESS', { pendingAttempt: existing.attempt });
+      resumed = true;
+    } else if (restartPending && restartPending === existing.attempt) {
+      if (now.getTime() - new Date(existing.claimedAt).getTime() < PENDING_LEASE_MS || new Date(existing.runLeaseUntil).getTime() > now.getTime()) {
+        throw new AdminRestoreRefused('REBASELINE_IN_PROGRESS', { pendingAttempt: existing.attempt });
+      }
+      const attempt = randomToken(16);
+      const token = randomToken(32);
+      await deliverPrivately(linkFile, linkText({ appOrigin, token, attempt, targetId }), { fs });
+      claim = await state.findOneAndUpdate(
+        { _id: targetId, state: PENDING, attempt: existing.attempt, epoch: existing.epoch, runLeaseUntil: { $lte: now } },
+        { $set: { attempt, tokenHash: sha256Hex(token), claimedAt: now, runner, runLeaseUntil: leaseFrom(now) }, $inc: { epoch: 1 } },
+        { returnDocument: 'after', writeConcern: WRITE_CONCERN },
+      );
+      if (!claim) {
         await removeOwnDelivery(linkFile, targetId, attempt, fs);
         throw new AdminRestoreRefused('REBASELINE_IN_PROGRESS');
       }
-      claim = replaced;
     } else {
       throw new AdminRestoreRefused('REBASELINE_IN_PROGRESS', { pendingAttempt: existing.attempt });
     }
   } else {
     const attempt = randomToken(16);
-    token = randomToken(32);
+    const token = randomToken(32);
     // 1. Private, durable delivery BEFORE anything changes in the database.
     await deliverPrivately(linkFile, linkText({ appOrigin, token, attempt, targetId }), { fs });
-    // 2. The claim: of concurrent attempts exactly one inserts it.
-    claim = { _id: targetId, state: PENDING, attempt, epoch: 1, tokenHash: sha256Hex(token), setName: identity.setName, database: identity.database, ownerAdminId: owner._id, claimedAt: clock() };
+    // 2. The claim, recording exactly what this restore revokes: the Admins and sessions restored with it.
+    const now = clock();
+    const adminIds = (await AdminModel.collection.find({}, { projection: { _id: 1 } }).toArray()).map((d) => d._id);
+    const sessionIds = (await db.collection('admin_sessions').find({}, { projection: { _id: 1 } }).toArray()).map((d) => d._id);
+    claim = { _id: targetId, state: PENDING, attempt, epoch: 1, tokenHash: sha256Hex(token), setName: identity.setName, database: identity.database, ownerAdminId: owner._id, adminIds, sessionIds, claimedAt: now, runner, runLeaseUntil: leaseFrom(now) };
     try {
       await state.insertOne(claim, { writeConcern: WRITE_CONCERN });
     } catch (error) {
@@ -305,41 +341,45 @@ export async function rebaselineAdmins({ targetId, ownerEmail, linkFile, appOrig
     }
   }
   await hooks.afterClaim?.();
+  const mine = { _id: targetId, state: PENDING, attempt: claim.attempt, epoch: claim.epoch, runner };
+  const stillMine = async () => {
+    if (!(await state.findOne(mine))) throw new AdminRestoreRefused('REBASELINE_SUPERSEDED');
+  };
 
-  // 3. Every restored Admin revoked (idempotent), FENCED by the epoch: a stale attempt cannot clear a newer
-  //    attempt's armed owner. Then every session removed, while this attempt still holds the claim.
+  // 3. The restored Admins revoked under THIS restore's fence; then the restored sessions removed.
   const now = clock();
-  const fence = { $or: [{ 'authentication.restoreEpoch': { $exists: false } }, { 'authentication.restoreEpoch': { $lte: claim.epoch } }] };
-  const revoked = await Admin.collection.updateMany(fence, { $set: { ...REVOKE_ALL, 'authentication.restoreEpoch': claim.epoch, updatedAt: now }, $inc: { 'authentication.authVersion': 1 } }, { writeConcern: WRITE_CONCERN });
-  if (!(await state.findOne({ _id: targetId, state: PENDING, attempt: claim.attempt, epoch: claim.epoch }))) throw new AdminRestoreRefused('REBASELINE_SUPERSEDED');
-  const sessions = await db.collection('admin_sessions').deleteMany({}, { writeConcern: WRITE_CONCERN });
+  const fence = fenceFor(targetId, claim.epoch);
+  const stamp = { 'authentication.restoreFence': { targetId, epoch: claim.epoch } };
+  const revoked = await AdminModel.collection.updateMany(
+    { _id: { $in: claim.adminIds }, ...fence },
+    { $set: { ...REVOKE_ALL, ...stamp, updatedAt: now }, $inc: { 'authentication.authVersion': 1 } },
+    { writeConcern: WRITE_CONCERN },
+  );
+  await stillMine();
+  const sessions = await db.collection('admin_sessions').deleteMany({ _id: { $in: claim.sessionIds } }, { writeConcern: WRITE_CONCERN });
   await hooks.afterRevoke?.();
 
-  // 4. The owner armed with THIS claim's token, fenced by its epoch: a stale attempt cannot overwrite it.
+  // 4. The claim's owner armed with the claim's token, under the same fence.
+  await stillMine();
   const activationExpiresAt = new Date(now.getTime() + ADMIN_POLICY.activationLifetimeMs);
-  const armed = await Admin.collection.updateOne(
-    { _id: owner._id, ...fence },
-    { $set: { status: 'ACTIVE', 'authentication.activationTokenHash': claim.tokenHash, 'authentication.activationExpiresAt': activationExpiresAt, 'authentication.restoreEpoch': claim.epoch, updatedAt: now } },
+  const armed = await AdminModel.collection.updateOne(
+    { _id: claim.ownerAdminId, ...fence },
+    { $set: { status: 'ACTIVE', 'authentication.activationTokenHash': claim.tokenHash, 'authentication.activationExpiresAt': activationExpiresAt, ...stamp, updatedAt: now } },
     { writeConcern: WRITE_CONCERN },
   );
   if (armed.matchedCount !== 1) throw new AdminRestoreRefused('REBASELINE_SUPERSEDED');
   await hooks.afterArm?.();
 
-  const result = { ownerAdminId: String(owner._id), adminsDisabled: revoked.modifiedCount, sessionsRemoved: sessions.deletedCount, attempt: claim.attempt, resumed };
-  await createAuditWriter({ clock }).record({
+  // 5. LAST, and only by the run that still holds the claim at this epoch.
+  const result = { ownerAdminId: String(claim.ownerAdminId), adminsDisabled: revoked.modifiedCount, sessionsRemoved: sessions.deletedCount, attempt: claim.attempt, epoch: claim.epoch, resumed };
+  const published = await state.updateOne(mine, { $set: { state: REBASELINED, rebaselinedAt: clock(), adminsDisabled: result.adminsDisabled, sessionsRemoved: result.sessionsRemoved } }, { writeConcern: WRITE_CONCERN });
+  if (published.matchedCount !== 1) throw new AdminRestoreRefused('REBASELINE_SUPERSEDED');
+  await createAuditWriter({ model: AuditModel, clock }).record({
     actor: { type: 'SYSTEM' },
     action: 'ADMIN_RESTORE_REBASELINED',
-    resource: { type: 'ADMIN', id: owner._id },
+    resource: { type: 'ADMIN', id: claim.ownerAdminId },
     // Only allowlisted keys (audit.js): the outcome and the number of Admins revoked.
     metadata: { outcome: REBASELINED, count: result.adminsDisabled },
   });
-
-  // 5. LAST, and only for the attempt that still holds the claim.
-  const published = await state.updateOne(
-    { _id: targetId, state: PENDING, attempt: claim.attempt, epoch: claim.epoch },
-    { $set: { state: REBASELINED, rebaselinedAt: clock(), adminsDisabled: result.adminsDisabled, sessionsRemoved: result.sessionsRemoved } },
-    { writeConcern: WRITE_CONCERN },
-  );
-  if (published.matchedCount !== 1) throw new AdminRestoreRefused('REBASELINE_SUPERSEDED');
   return { activationExpiresAt, ...result };
 }

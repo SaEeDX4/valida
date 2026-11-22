@@ -205,6 +205,7 @@ const ACTION_LABELS = {
   APPLICATION_STATUS_CHANGED: 'Status changed',
   APPLICATION_NOTE_ADDED: 'Note added',
   APPLICATION_COMMUNICATION_RECORDED: 'Communication recorded',
+  ADMIN_RESTORE_REBASELINED: 'Admin re-baselined after a restore',
 };
 
 function describeMetadata(metadata) {

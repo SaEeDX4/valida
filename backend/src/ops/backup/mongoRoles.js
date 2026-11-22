@@ -35,6 +35,11 @@ export function roleDefinitions(db) {
       on('admins', ['find', 'insert', 'update']),
       on('admin_sessions', ['find', 'insert', 'update', 'remove']),
       on('audit_events', ['find', 'insert']),
+      // D-3: read-only, for the start-up gate that binds the Admin to its database (the live anchor) and keeps it
+      // closed on a restore until that restore's own re-baseline marker exists.
+      on('database_identity', ['find']),
+      on('restore_authorization', ['find']),
+      on('admin_restore_state', ['find']),
     ],
     // The API's storage user (RESUME_STORAGE_MONGODB_URI): résumé documents only; never update.
     valida_resume_storage: [on('resume_files', ['find', 'insert', 'remove'])],

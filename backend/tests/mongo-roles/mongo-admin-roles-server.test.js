@@ -55,6 +55,8 @@ beforeAll(async () => {
   }
   // Provisioning as the Atlas Project Owner: the required indexes only (no data).
   for (const required of REQUIRED_INDEXES) await db.collection(required.collection).createIndex(required.key, { name: required.name, ...required.options });
+  // D-3: the live anchor, as `npm run db:identity:init` writes it (owner, provisioning). This disposable server is standalone.
+  await db.collection('database_identity').insertOne({ _id: 'live', setName: 'standalone', database: DB, recordedAt: new Date() });
 
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-admin-runtime-'));
   const port = await freePort();
@@ -63,7 +65,7 @@ beforeAll(async () => {
     MONGODB_URI: uris.valida_api_runtime, CORS_ALLOWED_ORIGINS: ADMIN_ORIGIN,
     RESUME_STORAGE_DRIVER: 'mongodb', RESUME_STORAGE_MONGODB_URI: uris.valida_resume_storage, APPLICATION_RATE_LIMIT_MAX: '1000',
     ADMIN_AUTH: 'enabled', ADMIN_SESSION_SECRET: randomBytes(32).toString('base64url'),
-    ADMIN_MFA_KEYS: `qa1:${randomBytes(32).toString('base64')}`, ADMIN_MFA_CURRENT_KEY_ID: 'qa1', ADMIN_APP_ORIGIN: ADMIN_ORIGIN, ADMIN_LOGIN_RATE_LIMIT_MAX: '1000',
+    ADMIN_MFA_KEYS: `qa1:${randomBytes(32).toString('base64')}`, ADMIN_MFA_CURRENT_KEY_ID: 'qa1', ADMIN_APP_ORIGIN: ADMIN_ORIGIN, ADMIN_LOGIN_RATE_LIMIT_MAX: '1000', ADMIN_DATABASE_REPLICA_SET: 'standalone',
   };
   server = await startServer({ env, uploadTempBaseDirectory: root });
   server.base = `http://127.0.0.1:${port}`;
@@ -158,6 +160,18 @@ describe('the Recruitment Admin with only the least-privilege users', () => {
     const login = await owner.post('/api/v1/auth/login', { realm: 'ADMIN', email: OWNER_EMAIL, password: STRONG_PASSWORD }, csrf).expect(200);
     await owner.post('/api/v1/auth/mfa/verify', { code: currentCode(enrolled.secret, clock) }, login.body.data.csrfToken).expect(200);
     await owner.get('/api/v1/admin/overview').expect(200);
+
+    // D-3: the runtime user can read the anchor and the restore state (the start-up gate) but forge neither.
+    const runtime = new MongoClient(uris.valida_api_runtime);
+    await runtime.connect();
+    try {
+      for (const name of ['database_identity', 'admin_restore_state', 'restore_authorization']) {
+        await expect(runtime.db(DB).collection(name).insertOne({ _id: 'qa-forged' })).rejects.toMatchObject({ code: 13 });
+      }
+      await expect(runtime.db(DB).collection('database_identity').updateOne({ _id: 'live' }, { $set: { database: 'x' } })).rejects.toMatchObject({ code: 13 });
+    } finally {
+      await runtime.close();
+    }
 
     // Nothing was written outside the expected collections.
     const names = (await admin.db(DB).listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name);

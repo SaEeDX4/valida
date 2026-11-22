@@ -48,10 +48,18 @@ describe('admin configuration is fail-closed (Doc 11 §§12-18, 34, 67, 234-238)
     ['ADMIN_ARGON2_MEMORY_KIB', '8192'],
     ['ADMIN_ARGON2_PASSES', '1'],
     ['ADMIN_LOGIN_RATE_LIMIT_MAX', '0'],
+    ['ADMIN_DATABASE_REPLICA_SET', 'atlas set/with space'],
+    ['ADMIN_DATABASE_REPLICA_SET', 'standalone'], // refused in production (D-3)
   ])('refuses %s=%s with fixed text that never echoes the value', (variable, value) => {
     const resolved = resolveAdminAuth({ ...validEnv(), [variable]: value }, { isProduction: true });
     expect(resolved.ok).toBe(false);
     expect(JSON.stringify(resolved.problems)).not.toContain(value === '8192' || value === '1' || value === '0' ? 'never-match' : value);
+  });
+
+  it('D-3: ADMIN_DATABASE_REPLICA_SET binds the Admin to a cluster; optional in configuration, `standalone` only outside production', () => {
+    expect(resolveAdminAuth({ ...validEnv(), ADMIN_DATABASE_REPLICA_SET: 'atlas-abc123-shard-0' }, { isProduction: true }).databaseReplicaSet).toBe('atlas-abc123-shard-0');
+    expect(resolveAdminAuth(validEnv(), { isProduction: true }).databaseReplicaSet).toBeNull(); // the start-up gate then keeps the Admin closed
+    expect(resolveAdminAuth({ ...validEnv(), ADMIN_APP_ORIGIN: 'http://localhost:5173', ADMIN_DATABASE_REPLICA_SET: 'standalone' }, { isProduction: false }).databaseReplicaSet).toBe('standalone');
   });
 
   it('stops the backend on a malformed enabled setup, and allows plain HTTP only for a local origin', () => {

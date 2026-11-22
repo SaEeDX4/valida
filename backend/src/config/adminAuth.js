@@ -18,6 +18,9 @@
  *                               from it, never from a request's Host header — Doc 11 s32; it is also the only
  *                               origin allowed to make credentialed Admin requests — s116, s120)
  *   ADMIN_LOGIN_RATE_LIMIT_MAX  default 30 per 15 minutes per client address (s139)
+ *   ADMIN_DATABASE_REPLICA_SET  the replica-set name of the database the Admin is bound to (D-3). Optional here;
+ *                               without it the Admin does not START (modules/admin/restoreRebaseline.js).
+ *                               `standalone` (no replica set) is refused in production
  *   ADMIN_ARGON2_MEMORY_KIB / ADMIN_ARGON2_PASSES  may only RAISE the Doc 11 s34 baseline
  */
 
@@ -51,6 +54,7 @@ const PROBLEMS = Object.freeze({
   MFA_CURRENT: { variable: 'ADMIN_MFA_CURRENT_KEY_ID', rule: 'is required with ADMIN_AUTH=enabled and must name one of the ADMIN_MFA_KEYS entries' },
   APP_ORIGIN: { variable: 'ADMIN_APP_ORIGIN', rule: 'is required with ADMIN_AUTH=enabled: an origin (scheme, host, optional port; no path); https in production' },
   LOGIN_LIMIT: { variable: 'ADMIN_LOGIN_RATE_LIMIT_MAX', rule: 'must be an integer between 1 and 1000' },
+  DATABASE_SET: { variable: 'ADMIN_DATABASE_REPLICA_SET', rule: 'must be the replica-set name the live database reports (1-128 letters, digits, . _ -); a replica set is required in production' },
   ARGON2: { variable: 'ADMIN_ARGON2_MEMORY_KIB', rule: 'ADMIN_ARGON2_MEMORY_KIB (>= 19456, <= 1048576) and ADMIN_ARGON2_PASSES (>= 2, <= 10) may only raise the Doc 11 baseline' },
 });
 
@@ -123,6 +127,9 @@ export function resolveAdminAuth(env = {}, { isProduction = false } = {}) {
   const loginMax = boundedInteger(env.ADMIN_LOGIN_RATE_LIMIT_MAX, { min: 1, max: 1000, fallback: 30 });
   if (loginMax === null) problems.push(PROBLEMS.LOGIN_LIMIT);
 
+  const databaseReplicaSet = env.ADMIN_DATABASE_REPLICA_SET === undefined || env.ADMIN_DATABASE_REPLICA_SET === '' ? null : String(env.ADMIN_DATABASE_REPLICA_SET);
+  if (databaseReplicaSet !== null && (!/^[A-Za-z0-9._-]{1,128}$/.test(databaseReplicaSet) || (isProduction && databaseReplicaSet === 'standalone'))) problems.push(PROBLEMS.DATABASE_SET);
+
   const memoryKiB = boundedInteger(env.ADMIN_ARGON2_MEMORY_KIB, { min: ARGON2_BASELINE.memoryKiB, max: 1_048_576, fallback: ARGON2_BASELINE.memoryKiB });
   const passes = boundedInteger(env.ADMIN_ARGON2_PASSES, { min: ARGON2_BASELINE.passes, max: 10, fallback: ARGON2_BASELINE.passes });
   if (memoryKiB === null || passes === null) problems.push(PROBLEMS.ARGON2);
@@ -140,6 +147,7 @@ export function resolveAdminAuth(env = {}, { isProduction = false } = {}) {
     loginRateLimit: Object.freeze({ windowMs: ADMIN_POLICY.loginWindowMs, max: loginMax }),
     argon2: Object.freeze({ memoryKiB, passes, parallelism: ARGON2_BASELINE.parallelism }),
     policy: ADMIN_POLICY,
+    databaseReplicaSet,
   };
   // Secrets are non-enumerable: absent from every serialised or logged view of the configuration.
   Object.defineProperty(resolved, 'secrets', {

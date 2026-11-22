@@ -18,6 +18,8 @@
     "test:coverage": "vitest run --coverage",
     "db:indexes:check": "node --env-file-if-exists=.env scripts/db-indexes.mjs check",
     "db:indexes:apply": "node --env-file-if-exists=.env scripts/db-indexes.mjs apply",
+    "db:identity:init": "node --env-file-if-exists=.env scripts/db-identity.mjs init",
+    "db:identity:check": "node --env-file-if-exists=.env scripts/db-identity.mjs check",
     "verify:b2": "node scripts/verify-b2.mjs",
     "jobs:provision:plan": "node --env-file-if-exists=.env scripts/provision-job.mjs plan",
     "jobs:provision:apply": "node --env-file-if-exists=.env scripts/provision-job.mjs apply",

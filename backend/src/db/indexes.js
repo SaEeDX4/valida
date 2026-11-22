@@ -109,6 +109,56 @@ export const REQUIRED_INDEXES = [
     options: {},
     reason: 'Suppression design §3.1, §9.6 (rev 8.3) — the send path reads the highest prune sequence before and after its coverage and match reads (one index point read each).',
   },
+  // E1-E5 — the Recruitment Admin (OD-2026-11-21-01).
+  {
+    collection: 'admins',
+    name: 'admin_emailNormalized_unique',
+    key: { emailNormalized: 1 },
+    options: { unique: true },
+    reason: 'Doc 10 section 145 — one Admin per normalized email.',
+  },
+  {
+    collection: 'audit_events',
+    name: 'audit_resource_occurredAt',
+    key: { 'resource.type': 1, 'resource.id': 1, occurredAt: -1 },
+    options: {},
+    reason: 'Doc 10 section 154 — the history of one resource, newest first.',
+  },
+  {
+    collection: 'audit_events',
+    name: 'audit_actor_occurredAt',
+    key: { 'actor.type': 1, 'actor.id': 1, occurredAt: -1 },
+    options: {},
+    reason: 'Doc 10 section 154 — what one actor did, newest first.',
+  },
+  {
+    collection: 'audit_events',
+    name: 'audit_occurredAt',
+    key: { occurredAt: -1 },
+    options: {},
+    reason: 'Doc 11 section 198 — the owner audit view, newest first.',
+  },
+  {
+    collection: 'admin_sessions',
+    name: 'admin_session_expires_ttl',
+    key: { expires: 1 },
+    options: { expireAfterSeconds: 0 },
+    reason: 'Doc 11 section 98 — session documents expire at their absolute lifetime (TTL), never kept as business records.',
+  },
+  {
+    collection: 'admin_sessions',
+    name: 'admin_session_principal',
+    key: { 'session.principalId': 1 },
+    options: {},
+    reason: 'Doc 11 sections 92, 101-103 — revoke or list the sessions of one Admin.',
+  },
+  {
+    collection: 'applications',
+    name: 'status_submittedAt',
+    key: { status: 1, submittedAt: -1 },
+    options: {},
+    reason: 'Doc 10 section 130, Doc 12 sections 153-154 — the Admin list filtered by status, newest first.',
+  },
 ];
 
 /** Option keys that make an existing index incompatible if they differ. */

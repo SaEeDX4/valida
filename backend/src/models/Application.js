@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { WORK_ARRANGEMENTS, EMPLOYMENT_TYPES, COMPENSATION_UNITS, UUID_PATTERN } from './Job.js';
 import { restrictToValidatedSaves } from './writeGuards.js';
@@ -27,7 +28,35 @@ import { restrictToValidatedSaves } from './writeGuards.js';
  *    rejected (see writeGuards.js).
  */
 
-export const APPLICATION_STATUSES = ['RECEIVED'];
+/*
+ * E5 — Doc 12 sections 70-84 (Doc 10 s110: the Phase 1 field, its values expanded
+ * in a controlled schema update). RECEIVED stays the initial status.
+ */
+export const APPLICATION_STATUSES = [
+  'RECEIVED',
+  'IN_REVIEW',
+  'SCREENING',
+  'INTERVIEW',
+  'ASSESSMENT',
+  'FINAL_REVIEW',
+  'ON_HOLD',
+  'SELECTED',
+  'NOT_SELECTED',
+  'WITHDRAWN',
+];
+export const COMMUNICATION_CHANNELS = ['EMAIL'];
+export const COMMUNICATION_DIRECTIONS = ['OUTBOUND', 'INBOUND'];
+export const COMMUNICATION_KINDS = [
+  'APPLICATION_ACKNOWLEDGEMENT',
+  'SCREENING',
+  'INTERVIEW',
+  'ASSESSMENT',
+  'GENERAL_RECRUITMENT',
+  'SELECTION',
+  'NOT_SELECTED',
+  'WITHDRAWAL',
+];
+export const COMMUNICATION_STATUSES = ['PENDING', 'SENT', 'FAILED', 'RECORDED_EXTERNAL'];
 export const RESUME_SCAN_STATUSES = ['NOT_SCANNED', 'PENDING', 'CLEAN', 'QUARANTINED', 'FAILED'];
 export const NOTIFICATION_STATUSES = ['NOT_REQUIRED', 'PENDING', 'SENT', 'FAILED'];
 export const RESUME_EXTENSIONS = ['.pdf', '.docx'];
@@ -283,6 +312,48 @@ const notificationChannelSchema = new mongoose.Schema(
   { _id: false },
 );
 
+/* E5 — Doc 12 s91-95: one status transition. Append-only. */
+const statusHistoryEntrySchema = new mongoose.Schema(
+  {
+    entryId: { type: String, required: true, match: [UUID_PATTERN, 'entryId must be a UUID'] },
+    fromStatus: { type: String, default: null, enum: [...APPLICATION_STATUSES, null] },
+    toStatus: { type: String, required: true, enum: APPLICATION_STATUSES },
+    changedByAdminId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    changedAt: { type: Date, required: true },
+    reason: { type: String, default: null, trim: true, maxlength: 1000 },
+  },
+  { _id: false },
+);
+
+/* E5 — Doc 12 s96-103: an internal note. Plain text, append-only. */
+const noteSchema = new mongoose.Schema(
+  {
+    noteId: { type: String, required: true, match: [UUID_PATTERN, 'noteId must be a UUID'] },
+    authorAdminId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    body: { type: String, required: true, trim: true, minlength: 1, maxlength: 5000 },
+    createdAt: { type: Date, required: true },
+  },
+  { _id: false },
+);
+
+/* E5 — Doc 12 s104-114: recruitment communication context (not an email client). */
+const communicationSchema = new mongoose.Schema(
+  {
+    communicationId: { type: String, required: true, match: [UUID_PATTERN, 'communicationId must be a UUID'] },
+    channel: { type: String, required: true, enum: COMMUNICATION_CHANNELS },
+    direction: { type: String, required: true, enum: COMMUNICATION_DIRECTIONS },
+    kind: { type: String, required: true, enum: COMMUNICATION_KINDS },
+    status: { type: String, required: true, enum: COMMUNICATION_STATUSES },
+    subject: { type: String, default: null, trim: true, maxlength: 300 },
+    summary: { type: String, default: null, trim: true, maxlength: 1000 },
+    actorType: { type: String, required: true, enum: ['ADMIN', 'SYSTEM'] },
+    actorAdminId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    occurredAt: { type: Date, required: true },
+    providerReference: { type: String, default: null, maxlength: 200 },
+  },
+  { _id: false },
+);
+
 const applicationSchema = new mongoose.Schema(
   {
     // Doc 10 sections 73-75.
@@ -320,6 +391,10 @@ const applicationSchema = new mongoose.Schema(
 
     // Sections 123-124 — the business timestamp, distinct from createdAt.
     submittedAt: { type: Date, required: true, default: () => new Date() },
+    // E5 — append-only histories (Doc 12 s90-114). Mutated only by the Admin application services.
+    statusHistory: { type: [statusHistoryEntrySchema], default: [] },
+    notes: { type: [noteSchema], default: [] },
+    communications: { type: [communicationSchema], default: [] },
 
     /*
      * Sections 125-126 — structure only. Both values stay null until a real
@@ -354,6 +429,47 @@ applicationSchema.pre('validate', function enforceOneAnswerPerQuestion() {
 applicationSchema.pre('validate', function deriveNormalizedEmail() {
   if (this.isNew && typeof this.candidate?.email === 'string') {
     this.candidate.emailNormalized = normalizeEmail(this.candidate.email);
+  }
+});
+
+/* E5 — Doc 12 s95: a new Application records its initial, system-made status entry. */
+applicationSchema.pre('validate', function recordInitialStatus() {
+  if (this.isNew && (this.statusHistory?.length ?? 0) === 0) {
+    this.statusHistory = [
+      { entryId: randomUUID(), fromStatus: null, toStatus: this.status ?? 'RECEIVED', changedByAdminId: null, changedAt: this.submittedAt ?? new Date(), reason: null },
+    ];
+  }
+});
+
+/*
+ * E5 — Doc 12 s93, s102: status history, notes and communications are
+ * append-only. What was loaded must still be there, unchanged and in order;
+ * only new entries may follow. Records saved before E5 have no history and
+ * gain it from their first transition.
+ */
+const APPEND_ONLY_PATHS = [
+  ['statusHistory', 'entryId'],
+  ['notes', 'noteId'],
+  ['communications', 'communicationId'],
+];
+applicationSchema.post('init', function rememberAppendOnlyEntries() {
+  this.$locals.appendOnly = Object.fromEntries(
+    APPEND_ONLY_PATHS.map(([path]) => [path, JSON.stringify((this.get(path) ?? []).map((entry) => (typeof entry?.toObject === 'function' ? entry.toObject() : entry)))]),
+  );
+});
+applicationSchema.pre('validate', function protectAppendOnlyEntries() {
+  if (this.isNew || !this.$locals.appendOnly) return;
+  for (const [path] of APPEND_ONLY_PATHS) {
+    const before = JSON.parse(this.$locals.appendOnly[path] ?? '[]');
+    const now = (this.get(path) ?? []).map((entry) => (typeof entry?.toObject === 'function' ? entry.toObject() : entry));
+    const prefix = JSON.stringify(now.slice(0, before.length));
+    if (now.length < before.length || prefix !== JSON.stringify(before)) {
+      this.invalidate(path, `${path} is append-only: existing entries cannot be changed or removed`);
+    }
+  }
+  const history = this.statusHistory ?? [];
+  if (history.length > 0 && history[history.length - 1].toStatus !== this.status) {
+    this.invalidate('status', 'status must equal the latest statusHistory entry');
   }
 });
 

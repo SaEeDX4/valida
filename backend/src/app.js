@@ -28,6 +28,7 @@ import { createSuppressionGate } from './modules/suppression/suppressionGate.js'
 import { createSuppressionRegister } from './modules/suppression/suppressionRegister.js';
 import { keyringFromConfig } from './modules/suppression/suppressionKeys.js';
 import { DISABLED_ERROR_MONITOR } from './lib/monitoring/errorMonitor.js';
+import { ADMIN_PATH_PREFIXES, createAdminSurface } from './modules/admin/index.js';
 
 /** The one public API base path — Doc 09 section 5. */
 export const API_BASE_PATH = '/api/v1';
@@ -135,6 +136,11 @@ export function createApp({
    * passes the monitor built from SENTRY_DSN; the default sends nothing.
    */
   errorMonitor = DISABLED_ERROR_MONITOR,
+  /**
+   * E1 — the Admin session store (tests inject one; production uses MongoDB
+   * through the connected Mongoose client). Used only when config.adminAuth.enabled.
+   */
+  adminSessionStore,
   suppressionGate = createSuppressionGate({
     register: createSuppressionRegister({ timeoutMs: config?.suppression?.lookupTimeoutMs ?? 2_000, writeTimeoutMs: config?.databaseQueryTimeoutMs }),
     keyring: keyringFromConfig(config?.suppression),
@@ -228,7 +234,15 @@ export function createApp({
   app.use(`${API_BASE_PATH}/jobs`, noValidators());
 
   // 5. CORS, from the explicit allowlist.
-  app.use(corsMiddleware(config.corsAllowedOrigins));
+  /*
+   * E1 — the Admin surface sets its own credentialed CORS policy for its own
+   * origin (Doc 11 s120); the public policy (no credentials, GET/POST) steps
+   * aside for those paths only.
+   */
+  const adminEnabled = config.adminAuth?.enabled === true;
+  const isAdminPath = (path) => ADMIN_PATH_PREFIXES.some((prefix) => path === `${API_BASE_PATH}${prefix}` || path.startsWith(`${API_BASE_PATH}${prefix}/`));
+  const publicCors = corsMiddleware(config.corsAllowedOrigins);
+  app.use((req, res, next) => (adminEnabled && isAdminPath(req.path) ? next() : publicCors(req, res, next)));
 
   /*
    * 5b. Recruitment access gate — C6-T1 (middleware/recruitmentAccess.js).
@@ -280,6 +294,13 @@ export function createApp({
     '/jobs',
     applicationsRouter({ service: applicationSubmission, uploadArea, resumeStorage, rateLimit: config.applicationRateLimit ?? { windowMs: 900_000, max: 10 } }),
   );
+
+  if (adminEnabled) {
+    const surface = createAdminSurface({ adminAuth: config.adminAuth, clock, logger, notificationService, resumeStorage, sessionStore: adminSessionStore });
+    app.locals.adminSurface = surface;
+    api.use('/auth', surface.front, surface.auth);
+    api.use('/admin', surface.front, surface.admin);
+  }
 
   if (typeof registerTestRoutes === 'function') {
     registerTestRoutes(api, { resumeStorage, uploadArea, logger });

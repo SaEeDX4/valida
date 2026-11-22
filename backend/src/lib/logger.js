@@ -18,6 +18,8 @@ const REDACT_PATHS = [
   'req.headers["proxy-authorization"]',
   // C6-T2: the document server's delegation key (never logged by any call site).
   'req.headers["x-valida-internal-key"]',
+  // E1: the Admin CSRF header (never logged by any call site).
+  'req.headers["x-csrf-token"]',
   'res.headers["set-cookie"]',
   'password',
   '*.password',

@@ -45,6 +45,12 @@ export const STATIC_HEAD_BY_PATH = Object.freeze({
 /** Unknown route, and an unknown / Draft / Archived Job (Doc 16 sections 115-120). */
 export const NOT_FOUND_HEAD = Object.freeze({ title: 'Page Not Found | Valida', robots: ROBOTS.NOINDEX_FOLLOW });
 
+/**
+ * The Recruitment Admin application (E2; Doc 11 s254, Doc 12 s23). Never indexed and
+ * never followed; robots directives are not authentication — the API enforces that.
+ */
+export const ADMIN_HEAD = Object.freeze({ title: 'Valida Admin', robots: 'noindex, nofollow' });
+
 /** Job Detail while the Job loads (client only; unchanged from C2). */
 export const JOB_LOADING_HEAD = Object.freeze({ title: 'Careers at Valida' });
 

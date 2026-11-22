@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { parseTrustedHops, resolveRecruitmentAccess, resolveServiceDelegation } from './recruitmentAccess.js';
 import { SITE_ACCESS_PROBLEM_TEXT, SITE_ACCESS_PROBLEM_VARIABLE, resolveSiteAccess } from './siteAccess.js';
+import { resolveAdminAuth } from './adminAuth.js';
 import { resolveReleaseIdentity } from './releaseIdentity.js';
 import { resolveErrorMonitoring } from './errorMonitoring.js';
 import { parseMongoUri } from '../db/connectionString.js';
@@ -985,6 +986,12 @@ export function loadConfig(env = process.env) {
    */
   const monitoring = resolveErrorMonitoring({ dsn: env?.SENTRY_DSN, appEnv: config.APP_ENV, nodeEnv: config.NODE_ENV });
   if (!monitoring.ok) missing.push({ variable: monitoring.variable, rule: monitoring.rule });
+  /*
+   * E1 — Recruitment Admin authentication (config/adminAuth.js; OD-2026-11-21-01).
+   * Disabled unless ADMIN_AUTH=enabled; a malformed enabled setup stops the backend.
+   */
+  const adminAuth = resolveAdminAuth(env ?? {}, { isProduction });
+  if (!adminAuth.ok) missing.push(...adminAuth.problems);
   if (isProduction && (!config.CORS_ALLOWED_ORIGINS || config.CORS_ALLOWED_ORIGINS.length === 0)) {
     missing.push({ variable: 'CORS_ALLOWED_ORIGINS', rule: RULE_TEXT.CORS_REQUIRED_IN_PRODUCTION });
   }
@@ -1179,6 +1186,8 @@ export function loadConfig(env = process.env) {
     logLevel: config.LOG_LEVEL,
     trustProxy: config.TRUST_PROXY,
     corsAllowedOrigins: Object.freeze(corsAllowedOrigins),
+    // E1 — the Admin surface; secrets are non-enumerable (never serialised).
+    adminAuth,
     /*
      * The URI is carried in the config object because the connection code
      * needs it. It is never logged, never included in an error and never

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import PublicLayout from '../layouts/PublicLayout.jsx';
 import ApplyLayout from '../layouts/ApplyLayout.jsx';
@@ -11,6 +12,14 @@ import PrivacyPage from '../pages/PrivacyPage.jsx';
 import LegalPage from '../pages/LegalPage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
 import { ROUTES } from './paths.js';
+
+/*
+ * E2 — the Recruitment Admin is a separate, lazily loaded application under
+ * /admin (OD-2026-11-21-01). Public visitors never download it; its code is
+ * fetched only when an /admin URL is opened.
+ */
+const AdminApp = lazy(() => import('../admin/AdminApp.jsx'));
+export const ADMIN_ROUTE = '/admin/*';
 
 /**
  * Application routes — Doc 08 sections 15-16, Doc 04 section 6.
@@ -76,6 +85,15 @@ export function AppRoutes() {
       <Route element={<ApplyLayout />}>
         <Route path={ROUTES.APPLY} element={<ApplyPage />} />
       </Route>
+
+      <Route
+        path={ADMIN_ROUTE}
+        element={
+          <Suspense fallback={<p role="status">Loading Valida Admin…</p>}>
+            <AdminApp />
+          </Suspense>
+        }
+      />
       </Routes>
     </>
   );

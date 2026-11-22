@@ -410,6 +410,39 @@ export function createNotificationService({
       return failed(failureCode(result.error, result.timedOut), safeDiagnostic(result.error?.notificationDiagnostic));
     },
 
+    /**
+     * E1 — one Admin account message (activation, password reset, security
+     * notice; Doc 11 s28, s127, s193-194). Same transport, sender rule and
+     * non-production recipient allowlist as application mail. The caller has
+     * already rendered the message; it never contains a password, MFA secret,
+     * recovery code or session id. Never throws.
+     *
+     * @param {{ event: 'ADMIN_ACTIVATION'|'ADMIN_PASSWORD_RESET'|'ADMIN_SECURITY_NOTICE', adminId: string, to: string, subject: string, text: string, html: string, reference: string }} input
+     */
+    async deliverAdminMessage({ event, adminId, to, subject, text, html, reference }) {
+      if (transport === null) return { status: NOTIFICATION_OUTCOMES.NOT_ATTEMPTED, reason: 'NOT_CONFIGURED' };
+      const attemptedAt = clock();
+      const failed = (errorCode) => ({ status: NOTIFICATION_OUTCOMES.FAILED, attemptedAt, errorCode, errorClass: classifyErrorCode(errorCode) });
+      if (!isDeliverableAddress(fromAddress)) return failed('SENDER_NOT_CONFIGURED');
+      if (!isDeliverableAddress(to)) return failed('INVALID_RECIPIENT');
+      if (!isAllowedRecipient(to, recipientAllowlist)) return failed('RECIPIENT_NOT_ALLOWED');
+      const message = Object.freeze({
+        event,
+        from: Object.freeze({ address: fromAddress, name: fromName }),
+        to: Object.freeze([to]),
+        replyTo: null,
+        subject,
+        text,
+        html,
+        tracking: Object.freeze({ opens: false, links: false }),
+        metadata: Object.freeze({ event, adminId: String(adminId) }),
+      });
+      const result = await bounded((signal) => transport.send(message, { signal, idempotencyKey: `${event}/${reference}` }));
+      if (!result.settled) return failed('TIMEOUT');
+      if (result.ok) return { status: NOTIFICATION_OUTCOMES.SENT, attemptedAt, sentAt: clock() };
+      return failed(failureCode(result.error, result.timedOut));
+    },
+
     /** Closes the transport, if it holds resources. */
     async close() {
       if (transport && typeof transport.close === 'function') await transport.close();

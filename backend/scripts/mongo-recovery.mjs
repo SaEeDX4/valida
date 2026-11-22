@@ -43,6 +43,14 @@
  *                                 --owner-attestation <owner-record ref> is only RECORDED in the report: a
  *                                 statement cannot prove that no later deletion occurred, so it never opens
  *
+ *   restore-rebaseline --owner <email> --link-out <file> --snapshot-id <id> --anchor <count>:<sha256>
+ *                                 (D-3) OWNER. Exactly restore-verify first (same variables, same freshness rule);
+ *                                 ONLY on RECOVERY VERIFIED, with RECOVERY_TARGET_ADMIN_MONGODB_URI (an admin of the
+ *                                 verified target cluster, never the live one) and ADMIN_APP_ORIGIN: every restored
+ *                                 Admin revoked, every Admin session removed, ONE owner re-enabled with a fresh
+ *                                 activation link written to --link-out (0600), then the REBASELINED mark that lets
+ *                                 the API start its Admin there (modules/admin/restoreRebaseline.js). Any other
+ *                                 verdict: admin CLOSED, no Admin write
  *   backup-create                 (r3, D-MN-2) RECOVERY_BACKUP_READER_MONGODB_URI (role valida_backup_reader),
  *                                 BACKUP_RECIPIENT_PUBLIC_KEYS (>= 2 PEM public keys), BACKUP_DUMP_WRITER_* and
  *                                 BACKUP_COPY_BUCKET. One snapshot read, encrypted, written, read back. Prints the
@@ -71,6 +79,7 @@ import { restoreTargetRoleDefinitions } from '../src/ops/backup/mongoRoles.js';
 import { RECOVERY_COLLECTIONS, RESTORE_AUTHORIZATION_COLLECTION, uriIdentity } from '../src/ops/backup/restoreTarget.js';
 import { createRecoveryCopy, restoreRecoveryCopy, s3RecoveryStore } from '../src/ops/backup/recoveryCopy.js';
 import { safeErrorSummary } from '../src/lib/safeError.js';
+import { AdminRestoreRefused, rebaselineAdmins } from '../src/modules/admin/restoreRebaseline.js';
 
 const { MongoClient } = mongoose.mongo;
 const [command, ...rest] = process.argv.slice(2);
@@ -94,6 +103,8 @@ const { values } = parseArgs({
     'backup-id': { type: 'string' },
     'manifest-sha256': { type: 'string' },
     'private-key-file': { type: 'string' },
+    owner: { type: 'string' },
+    'link-out': { type: 'string' },
   },
 });
 const print = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -274,19 +285,31 @@ try {
       await target.close();
       await live?.close();
     }
-  } else if (command === 'restore-verify') {
+  } else if (command === 'restore-verify' || command === 'restore-rebaseline') {
+    const rebaseline = command === 'restore-rebaseline';
     const snapshotId = values['snapshot-id'];
     if (!/^[A-Za-z0-9._:-]{1,64}$/.test(snapshotId ?? '')) refuse('--snapshot-id is required (the Atlas snapshot id or time)');
     const anchor = parseAnchor(values.anchor);
     const targetUri = uriOf('RECOVERY_RESTORED_MONGODB_URI');
     if (!process.env.RECOVERY_RESTORE_TARGET_ID) refuse('RECOVERY_RESTORE_TARGET_ID is required');
     if (!process.env.RECOVERY_LIVE_REPLICA_SET) refuse('RECOVERY_LIVE_REPLICA_SET is required');
+    // D-3: everything the re-baseline needs is checked BEFORE the gate, so a refusal changes nothing.
+    let adminUri = null;
+    let appOrigin = null;
+    if (rebaseline) {
+      if (!/^[^@\s]{1,64}@[^@\s]{1,255}$/.test(values.owner ?? '')) refuse('--owner is required: the email of the ONE owner to re-enable for fresh activation');
+      if (!values['link-out']) refuse('--link-out <file> is required: the one-time activation link is written there (mode 0600), never printed');
+      adminUri = uriOf('RECOVERY_TARGET_ADMIN_MONGODB_URI');
+      appOrigin = process.env.ADMIN_APP_ORIGIN ?? '';
+      if (!/^(https:\/\/[a-z0-9.-]+|http:\/\/(localhost|127\.0\.0\.1))(:\d{1,5})?$/.test(appOrigin)) refuse('ADMIN_APP_ORIGIN is required (the https origin that serves /admin) for the activation link');
+    }
     const history = values['journal-file'] ? deletionJournal(exportJournalStore(JSON.parse(readFileSync(values['journal-file'], 'utf8'))), { namespace: namespace() }) : journalFor('journal-reader');
     const liveUri = process.env.RECOVERY_LIVE_MONGODB_URI ?? null;
     const target = await client(targetUri);
     let live = null;
     try {
       if (liveUri) live = await client(liveUri).catch(() => null);
+      // The applicant-deletion gate, unchanged and MANDATORY for both commands.
       const report = await runMongoRestore({
         targetClient: target, targetUri, liveUris: [liveUri, process.env.RECOVERY_OPERATOR_MONGODB_URI, process.env.RECOVERY_JOURNAL_MONGODB_URI, process.env.MONGODB_URI], liveClient: live,
         history, anchor, freshness: await freshnessOf(Boolean(values['journal-file'])), snapshot: { id: snapshotId },
@@ -294,14 +317,40 @@ try {
       // A live cluster that cannot be reached (a disaster) leaves the alias check to the replica-set name.
       const notes = liveUri && !live ? ['LIVE_UNREACHABLE: alias checked by replica-set name and authorisation only'] : [];
       if (values.report) writeFileSync(values.report, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
-      print({ command, snapshot: report.snapshot, verdict: report.verdict, reasons: report.reasons, notes, target: report.target, history: report.history, applied: report.applied, checked: report.checked, missing: report.missing.length, mismatched: report.mismatched.length, orphans: report.orphans });
-      process.exitCode = report.verdict === 'RECOVERY VERIFIED' ? 0 : 1;
+      const summary = { command, snapshot: report.snapshot, verdict: report.verdict, reasons: report.reasons, notes, target: report.target, history: report.history, applied: report.applied, checked: report.checked, missing: report.missing.length, mismatched: report.mismatched.length, orphans: report.orphans };
+      if (!rebaseline) {
+        print(summary);
+        process.exitCode = report.verdict === 'RECOVERY VERIFIED' ? 0 : 1;
+      } else if (report.verdict !== 'RECOVERY VERIFIED') {
+        // No Admin write of any kind: the Admin stays closed with the target.
+        print({ ...summary, admin: 'CLOSED' });
+        process.exitCode = 1;
+      } else {
+        await mongoose.connect(adminUri, { dbName: report.target.database, serverSelectionTimeoutMS: 10_000, autoIndex: false, autoCreate: false });
+        try {
+          const hello = await mongoose.connection.db.admin().command({ hello: 1 });
+          if (!hello.setName || hello.setName === process.env.RECOVERY_LIVE_REPLICA_SET || hello.setName !== report.target.setName) {
+            print({ ...summary, admin: 'CLOSED', reasons: ['ADMIN_URI_NOT_THE_VERIFIED_TARGET'] });
+            process.exitCode = 1;
+          } else {
+            const done = await rebaselineAdmins({ targetId: report.target.targetId, ownerEmail: values.owner });
+            writeFileSync(values['link-out'], `${appOrigin}/admin/activate#token=${done.token}\n`, { mode: 0o600 });
+            print({ ...summary, admin: 'REBASELINED', ownerAdminId: done.ownerAdminId, adminsDisabled: done.adminsDisabled, sessionsRemoved: done.sessionsRemoved, activationExpiresAt: done.activationExpiresAt });
+          }
+        } catch (error) {
+          if (!(error instanceof AdminRestoreRefused)) throw error;
+          print({ ...summary, admin: 'CLOSED', reasons: [`ADMIN_${error.reason}`] });
+          process.exitCode = 1;
+        } finally {
+          await mongoose.disconnect();
+        }
+      }
     } finally {
       await target.close();
       await live?.close();
     }
   } else {
-    refuse('usage: mongo-recovery.mjs journal-init | delete-application | journal-head | journal-export | prepare-target | restore-verify | backup-create | backup-restore');
+    refuse('usage: mongo-recovery.mjs journal-init | delete-application | journal-head | journal-export | prepare-target | restore-verify | restore-rebaseline | backup-create | backup-restore');
   }
 } catch (error) {
   if (error instanceof BackupConfigurationError) refuse(error.message);

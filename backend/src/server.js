@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
+import mongoose from 'mongoose';
 import { createApp } from './app.js';
 import { loadConfig, ConfigurationError } from './config/env.js';
 import { describeRecruitmentAccess } from './config/recruitmentAccess.js';
@@ -18,6 +19,7 @@ import { serveUnlessConnectionClosing } from './lib/http/stagedClose.js';
 import { applyServerTimeouts } from './lib/http/serverTimeouts.js';
 import { createNotificationService, notificationServiceOptions } from './integrations/notifications/notificationService.js';
 import { createNotificationTransport } from './integrations/notifications/transport.js';
+import { adminRestoreGate } from './modules/admin/restoreRebaseline.js';
 
 /**
  * Backend process entry point — Doc 09 section 8, Doc 15 section 50.
@@ -264,6 +266,25 @@ export async function startServer({
     throw error;
   }
   onShutdown('mongodb', () => database.disconnect({ logger, readiness }));
+
+  /*
+   * D-3 — the Admin on a RESTORED database (modules/admin/restoreRebaseline.js).
+   * A restore target carries a `restore_authorization` document; its Admin
+   * stays closed until it has been re-baselined, because revocations made after
+   * the snapshot cannot be proven. With ADMIN_AUTH=enabled the backend refuses
+   * to start while that gate is closed (and when it cannot be read). The
+   * applicant API is not affected: run without ADMIN_AUTH to serve it closed.
+   */
+  if (config.adminAuth?.enabled === true) {
+    const adminGate = await adminRestoreGate(mongoose.connection.db);
+    if (!adminGate.open) {
+      logger.error({ adminRestore: 'closed', reason: adminGate.reason }, 'the Admin surface is closed on this restored database until it is re-baselined (mongo-recovery.mjs restore-rebaseline); unset ADMIN_AUTH to start without it');
+      readiness.beginShutdown();
+      await runShutdownHooks(cleanupTimeoutMs);
+      throw new AdminRestoreClosedError(adminGate.reason);
+    }
+    logger.info({ adminRestore: adminGate.restored ? 'rebaselined' : 'not_a_restore' }, 'admin restore state');
+  }
 
   /*
    * B6 — transactional email (Doc 14 sections 93-114).
@@ -596,7 +617,23 @@ export function isMainModule(moduleUrl = import.meta.url, entryPath = process.ar
  *
  * Exported so its wording can be tested without spawning a process.
  */
+/** D-3: the Admin is closed on a restored database that has not been re-baselined. `reason` is a fixed code. */
+export class AdminRestoreClosedError extends Error {
+  constructor(reason) {
+    super(`admin restore gate closed: ${reason}`);
+    this.name = 'AdminRestoreClosedError';
+    this.reason = reason;
+  }
+}
+
 export function formatStartupFailure(error) {
+  if (error instanceof AdminRestoreClosedError) {
+    return (
+      `[valida-backend] failed to start: the Admin surface is closed on this restored database (${error.reason}). ` +
+      'Admin revocations made after the snapshot cannot be proven. Re-baseline it with ' +
+      '`mongo-recovery.mjs restore-rebaseline` after RECOVERY VERIFIED, or unset ADMIN_AUTH to start without the Admin.'
+    );
+  }
   if (error instanceof ConfigurationError) {
     return `[valida-backend] failed to start:\n${error.message}`;
   }

@@ -111,7 +111,16 @@ jobs:
           docker run -d --name qa-mongo-auth -p 127.0.0.1:27018:27017 \
             -e MONGO_INITDB_ROOT_USERNAME=qa_admin -e MONGO_INITDB_ROOT_PASSWORD="$pwd" \
             mongo:8.0@sha256:bdc216e9d5a6ec2cfdac789b5832fdab64cd32055f59885cae918a92de63c361
-          for i in $(seq 1 60); do docker exec qa-mongo-auth mongosh --quiet -u qa_admin -p "$pwd" --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
+          ready=no
+          for i in $(seq 1 90); do docker exec qa-mongo-auth mongosh --quiet -u qa_admin -p "$pwd" --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && { ready=yes; break; }; sleep 1; done
+          # Fail here, with the container's state, instead of as connection timeouts in every test file
+          # (main f1f70ab, 2026-11-22: the container never answered and all three files failed at connect).
+          if [ "$ready" != yes ]; then
+            echo "::error::the disposable MongoDB did not answer within 90 s"
+            docker ps -a --filter name=qa-mongo-auth
+            docker logs --tail 80 qa-mongo-auth 2>&1 | grep -v -i 'password' || true
+            exit 1
+          fi
           echo "MONGODB_ROLES_ADMIN_URI=mongodb://qa_admin:$pwd@127.0.0.1:27018/admin?authSource=admin" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run test:mongo-roles

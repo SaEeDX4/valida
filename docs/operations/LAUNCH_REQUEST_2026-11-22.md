@@ -3,10 +3,11 @@
 | | |
 | --- | --- |
 | Supersedes | `COMPLETE_LAUNCH_REQUEST_2026-11-21.md` §§3–5, and the first version of this file (commit `cf9fa5b`). That version wrongly re-added S3 from the pre-CR-AN plan (`C6_HOSTING_STAGE_ASSIGNMENT.md` §8) |
-| Base | `main` = `60bb58a` (merge of PR #2, head `ebace49`, CI 9/9). E1–E5 **IMPLEMENTED** on `main`, not VERIFIED |
+| Base | **Reviewed release SHA `f1f70ab`** (`main`, merge of PR #3; PR head `101491c` CI 9/9). E1–E5 **IMPLEMENTED**, not VERIFIED. D-3 (§4.4) is on the review branch `ccr-a5e61e13-8rm3ng`, not yet on `main` |
 | Stack (owner, 2026-11-22; CR-2026-11-18-AN) | **Render:** hosting and scanning. **MongoDB Atlas Flex:** records, résumés (`RESUME_STORAGE_DRIVER=mongodb`) and native recovery (daily Flex snapshots, deletion journal in Atlas). **Bluehost / Titan:** domains, DNS and email (already paid). **No S3, no external journal, no encrypted export, no backup cron** |
 | Finish line | One public launch with the full recruitment flow VERIFIED, including the **candidate acknowledgement** and the **authorised HR download of the original CLEAN résumé** |
-| Status | Prepared by Claude at $0. **Nothing here authorises spending, deployment, a DNS change or public recruitment** (§5) |
+| Status | Prepared by Claude at $0. **Nothing here authorises spending, deployment, a DNS change, live email or public recruitment** (§5) |
+| **Owner budget (2026-11-22)** | **CAD 26 / month in total** for the new Render and Atlas services, including scanning, usage, tax, currency conversion and card fees. **Neither provider can enforce it** (§2.1): flagged before provisioning |
 
 ## 1. Zero-cost preparation completed on 2026-11-22
 
@@ -19,8 +20,60 @@
 | Z-5 | **Audit gate expiry (verified before marking resolved)** | `ops/ci/audit-gate.mjs` checks an exception's expiry **only while its advisory is reported**. **Today's live `npm audit`** (backend and frontend, full dependency tree) reports 0 findings: the gate gives **PASS at 2026-11-22, 2026-12-19 and 2027-06-01**. **Replaying the 2026-11-18 report** gives PASS WITH APPROVED EXCEPTION at 05:30:59Z and **FAIL `EXPIRED` at exactly 2026-12-18T05:31:00Z**, so it still fails closed if the advisory returns. **GitHub's runner** on `ebace49` printed `AUDIT GATE backend: PASS` with no exception applied. Gate tests: 23/23. **Resolved** for the deadline; picomatch is still at 4.0.7 (no new release), so the gate stays the guard |
 | Z-6 | **Acknowledgement path** | Production refuses `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` at start-up, unconditionally (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`, `backend/src/config/env.js`). OD-2026-11-04-02: lifting it is **a separate owner decision after the G-SUP evidence is accepted**. G-COPY is still PROPOSED. Decisions in §5 (A-5) |
 | Z-7 | **Recovery of the new Admin data** | A Flex snapshot restore returns the whole database as of up to 24 h earlier, including `admins`, `admin_sessions` and `audit_events`. The added checks are in §4.3 |
+| Z-8 | **D-3: Admin closed on a restored database** (review branch) | Implemented and proven with synthetic data (§4.4). Local evidence: offline 3079 passed; database 327 passed (including the new 4); recovery 42 passed (including the new 5); roles 5/5; frontend Admin 13/13 |
+| Z-9 | **`main` CI incident, `f1f70ab`** | The first push run failed in the roles job only. The disposable MongoDB container never answered (`ECONNREFUSED 127.0.0.1:27018` in all three files, including two this PR did not touch); the setup loop did not stop the job. **One re-run: green** (MongoDB ready in 13 s), so `ci` is 8/8 on `main`. The D-3 branch makes that step **fail fast with the container's logs** (`.github/workflows/ci.yml`) |
 
 ## 2. Corrected monthly budget (CAD, tax-inclusive)
+
+### 2.1 Against the owner's CAD 26 ceiling — and whether it can be enforced
+
+**Flag before provisioning: neither provider offers a hard spending cap. Only alerts exist, and Render has no billing alert at all.**
+- **Render:** no spend limit or billing alert was found; a spend limit is an open feature request on Render's feedback site. Current usage and projected charges are visible on the billing page, and services can be suspended at any time to stop charges.
+- **Atlas:** billing alerts notify on "monthly pending invoice total" above a USD amount; they do not stop charges. Flex has a built-in maximum of **US$30/month**, which is above this budget.
+
+**Fixed by configuration, so it cannot drift:**
+- the API on Render Starter, US$7.00, prorated;
+- the website on Render's free tier;
+- two custom domains, inside Hobby's included two.
+
+**Usage-dependent:**
+- the scanner cron: $1 minimum; a daily run of a few minutes stays at the minimum;
+- Atlas Flex: US$8.03 at ≤ 100 ops/s, more above that, up to $30.
+
+| CAD per month (lowest plan, private stage) | 5 % GST | 11 % (SK) | 12 % (BC/MB) | 13 % (ON) | 15 % (NB/NL/PE) |
+| --- | --- | --- | --- | --- | --- |
+| US$16.03 at 1.43, with tax | 24.07 | 25.44 | 25.67 | 25.90 | 26.36 |
+| **+ 2.5 % card foreign-transaction fee** | **24.67** | 26.08 ✗ | 26.31 ✗ | 26.55 ✗ | 27.02 ✗ |
+| Headroom to CAD 26 | **+1.33** | −0.08 | −0.31 | −0.55 | −1.02 |
+
+**Verdict:** CAD 26 holds **only** in one of these cases:
+- **(a)** the billing location pays GST only (5 %); at 5 % plus the card fee, it holds up to 1.507 CAD/USD;
+- **(b)** a GST number is on both billing profiles: CAD 23.49 with the card fee;
+- **(c)** you pay with a card that has no foreign-transaction fee: CAD 25.44 at 11 %, 25.67 at 12 %, 25.90 at 13 %.
+
+Otherwise the lowest plan exceeds CAD 26 by CAD 0.08–1.02 a month. There is no cheaper sustainable configuration: the API must be paid for SMTP, Flex is the cheapest tier with backups, and scanning is required to release résumés.
+
+At 5 % plus the card fee, the CAD 1.33 headroom equals about **US$0.86** of usage per month. Flex above 100 ops/s, extra scanner runs or Render bandwidth beyond the included allowance could use it up.
+
+**Controls we can apply** (detection plus a stop rule, not a cap):
+- an Atlas billing alert at **US$9** month-to-date, and an Atlas Flex operations alert;
+- a weekly look at Render's projected charges (owner, about 1 min);
+- **stop rule:** if the projected month exceeds the equivalent of CAD 26, suspend the Render services and pause recruitment, then report. Suspending stops Render charges at once. Atlas Flex keeps billing until the cluster is terminated, which would also end recovery.
+
+**Public stage:** the apex and `www` plus `api.` may count as 3 domains (+US$0.25, ≈ CAD 0.39). That is still within CAD 26 at 5 % with the card fee (CAD 25.06).
+
+### 2.2 One-time costs (itemised)
+
+| Item | When | USD | CAD at 5 % + 2.5 % fee |
+| --- | --- | --- | --- |
+| Hosted check session (§4.2) | Day 1 | 0 extra: the services already running, plus scanner runs within the $1 minimum | 0.00 |
+| Restore rehearsal target: Flex, billed hourly, ≥ 24 h (§4.3) | Day 2–3 | ≈ 0.26 (≤ 0.79 if kept 3 days) | ≈ 0.40 (≤ 1.21) |
+| Restore-rebaseline check on the target (D-3) | Same window | 0: run from the existing API's Render shell | 0.00 |
+| DNS records, TLS | Day 1 | 0 (Bluehost, Render) | 0.00 |
+| **Total one-time** | | **≈ 0.26 (≤ 0.79)** | **≈ 0.40 (≤ 1.21)** |
+
+**First calendar month:** the services are prorated from the day they are created. A full month plus the rehearsal is ≈ CAD 25.07 at 5 % with the card fee, within CAD 26. (The earlier "≈ US$1 one-time for C7" over-estimated: C7 adds nothing beyond the running services.)
+
 
 **Assumptions**
 - **Prices:** USD list prices from the Nov 19–21 Render and Atlas invoices.
@@ -70,9 +123,20 @@ Figures in brackets include the possible third domain. Other rates for the lowes
 
 **Still open from H2:** the iOS Safari evidence, and the SPF/DKIM/DMARC headers of one delivered message.
 
-## 4. Grouped request: private deployment, with the DNS it needs (approval P)
+## 4. Deployment request: one bounded private rollout on Render and Atlas (approval P)
 
-One approval covers §§4.1–4.4. Everything stays **private** (`SITE_ACCESS=private`, `RECRUITMENT_MODE=testers`) with synthetic data only, and nothing is public. The cost is §2's lowest plan, from the day it is created.
+One approval covers §§4.1–4.5.
+- **Private throughout:** `SITE_ACCESS=private`, `RECRUITMENT_MODE=testers`, synthetic data only, nothing public.
+- **Cost:** §2 from the day the services are created, within the CAD 26 ceiling only under §2.1's conditions.
+
+**Bounds:**
+- **Scope:** one Atlas Flex project and one Render API (Starter), website (free) and scanner cron, plus two DNS records. Nothing else is created.
+- **Sessions:**
+  - **Session 1 (day 1, about 3 h, owner present for the ⓞ steps):** provisioning and **every hosted recruitment check** in §4.2, in one sitting.
+  - **Session 2 (after the first +24 h Flex snapshot, about 1 h, mostly Claude):** the §4.3 recovery checks.
+- **Live email:** only the C7 internal notification, to **one owner-controlled recipient**, **at most 3 messages** in session 1 (as H2). Candidate acknowledgements stay off until A-5.
+- **Stop rule:** a failed check that cannot be fixed by a new reviewed commit in the session, a projected month above CAD 26 (§2.1), or your word. Stopping means the API, website and cron are suspended (Render charges stop), recruitment stays closed, and the synthetic data is deleted through the journal. The Flex cluster is terminated only on your instruction, because that ends recovery.
+- **After the rollout:** the services stay private, at §2's monthly cost, until A-4 and A-6, or are suspended if you prefer.
 
 ### 4.1 Resources and settings
 
@@ -87,7 +151,10 @@ One approval covers §§4.1–4.4. Everything stays **private** (`SITE_ACCESS=pr
 | P-g | Render | Add `app.cybervalida.com` and `api.cybervalida.com`; TLS issued; confirm the domain counter shows 2/2 | Claude |
 | P-h | Render shell | `npm run admin:provision create --email <owner mailbox> --name "<name>"` | **Owner** |
 
-**SHA:** `60bb58a` as merged, or `main` after this branch's PR (roles test and corrected docs; runtime code unchanged). The Atlas roles in P-a follow Z-1 either way.
+**SHA:** the **reviewed release SHA `f1f70ab`** (`main`).
+- **D-3 is not in it.** On `f1f70ab`, a restored database is kept closed by procedure only (§4.4, step 1).
+- If you merge the D-3 branch first, the release SHA becomes that merge, and the API itself refuses to open the Admin on an un-re-baselined restore. **Recommended before session 2.**
+- The Atlas roles in P-a follow `mongoRoles.js` **at the deployed SHA**. D-3 adds `find` on `restore_authorization` and `admin_restore_state` to `valida_api_runtime`.
 
 ### 4.2 Hosted checks, in order (with carried-forward checks excluded)
 
@@ -105,8 +172,8 @@ Expected codes are those on `main`. ⓞ marks steps the owner does.
 | H-8 | ⓞ Sign-out, sign-in; 5 wrong TOTP → `MFA_CHALLENGE_ENDED`; 5 wrong passwords → generic `INVALID_CREDENTIALS` and a 15 min lock; 31st attempt → 429; 30 min idle → `SESSION_EXPIRED`; step-up → `RECENT_AUTH_REQUIRED`; reset link 30 min, single use, all sessions revoked | As stated |
 | H-9 | A QA `RECRUITMENT_ADMIN`: `/admins` and `/audit` → 403; revoking its session → 401 `SESSION_REVOKED` | As stated |
 | H-10 | E3: a QA Job, Draft → publish (listed testers only) → close → archive, all audited | As stated |
-| H-11 | **C7**: a QA candidate applies through the real Apply | 201. The `careers@` notification arrives. The application is listed in Admin with its applied-role snapshot |
-| H-12 | Résumé before the scan → **409 `RESUME_NOT_AVAILABLE`**; anonymous → 401. Scanner cron run → `CLEAN` | As stated |
+| H-11 | **C7**: a QA candidate applies through the real Apply with a synthetic PDF whose SHA-256 is recorded first | 201. The internal notification reaches the one owner-controlled recipient (live email, ≤ 3 messages). The application is listed in Admin with its applied-role snapshot |
+| H-12 | **Real scanning:** the résumé before the scan → **409 `RESUME_NOT_AVAILABLE`**; anonymous → 401. Trigger the Render scanner cron manually: real `clamd` with current official signatures → `CLEAN`, bound to the stored version and digest. Optional negative case: a synthetic DOCX whose member is the standard EICAR test file, **if** the Apply validator accepts it → `QUARANTINED`, never released. If Apply rejects it at upload, that negative case stays covered by CI's real-ClamAV job (`clamd-scanner.test.js`, which seeds the record directly) | As stated |
 | H-13 | **HR download of the original:** ⓞ the owner downloads the résumé in Admin | `attachment`, `nosniff`, `private, no-store`. **SHA-256 of the download = SHA-256 of the file the QA candidate uploaded** (recorded on both sides). `RESUME_ACCESSED` audited first |
 | H-14 | E5: status change; a stale change → 409 `STATUS_CONFLICT`; note; recorded communication; owner audit view | As stated |
 | H-15 | ⓞ iOS Safari: public pages and Admin sign-in | No blocker |
@@ -115,7 +182,7 @@ Expected codes are those on `main`. ⓞ marks steps the owner does.
 
 ### 4.3 Recovery: only the checks the new Admin data and the Production gate add
 
-All run in **one** Production Flex→Flex rehearsal after the first +24 h snapshot. That rehearsal is CR-AN G3, the only one, and carries its ≈ CAD 1.50 one-time cost. The rest of the procedure is carried forward (§3).
+All run in **one** Production Flex→Flex rehearsal, in session 2 after the first +24 h snapshot. That rehearsal is CR-AN G3, the only one, and carries the ≈ CAD 0.40 (≤ 1.21) one-time cost of §2.2. The rest of the procedure is carried forward (§3). R-A2 to R-A4 are carried out by `restore-rebaseline` (§4.4) when D-3 is deployed.
 
 | # | Check | Why | Pass |
 | --- | --- | --- | --- |
@@ -159,29 +226,60 @@ The deletion gate is unchanged: freshness must come from `LIVE_JOURNAL`, or the 
 
 The owner re-enrols MFA and re-invites the other Admins.
 
-**Today this needs a small new command** (proposed: `admin:provision restore-rebaseline --target-id <id> --owner <email>`, with tests). `reissue` refuses activated accounts, and hand-editing documents in Atlas is not an acceptable control. **Decision D-3** (§5) authorises building it at $0. It would also make the API **refuse to start with `ADMIN_AUTH=enabled` on a restored target** until a verification or re-baseline mark exists, which enforces step 1 instead of relying on configuration. Until it exists, an unverifiable restore keeps recruitment closed.
+**D-3 implemented (2026-11-22, review branch `ccr-a5e61e13-8rm3ng`, not on `main`):**
 
-### 4.5 Proposed spending ceiling (approval P)
+- **The API refuses to start with `ADMIN_AUTH=enabled` on any restored database** (one that carries a `restore_authorization`) until a `REBASELINED` mark exists for that target. A read error also refuses (fail closed). The fixed message is `AdminRestoreClosedError`, with reason `ADMIN_RESTORE_NOT_REBASELINED`. Without `ADMIN_AUTH`, the applicant API runs and no Admin route exists. `backend/src/server.js`; `backend/src/modules/admin/restoreRebaseline.js`.
+- **`mongo-recovery.mjs restore-rebaseline`** (owner):
+  - It runs the **unchanged applicant-deletion gate first**, with the same inputs and freshness rule as `restore-verify`.
+  - **Any verdict but RECOVERY VERIFIED:** Admin CLOSED, zero Admin writes.
+  - **After VERIFIED, and only against the verified target cluster** (never the live one), it:
+    - disables every restored Admin and adds 1 to `authVersion`;
+    - clears passwords, activation and reset tokens, MFA secrets, pending enrolments and recovery codes;
+    - removes every Admin session;
+    - re-enables **one** named owner with **no password**, and writes a fresh activation link (8 h) to a 0600 file, never to stdout;
+    - writes the mark last.
+  - **An interrupted run** leaves the Admin closed and is safe to repeat. A second run refuses with `ALREADY_REBASELINED`.
+- **Not implemented:** the live-comparison route of step 2. Until it exists, every restored database reopens its Admin only by re-baselining.
+- **The offline Admin-change record** stays a **proposal pending your decision**; nothing depends on it.
 
-| | Expected | **Ceiling (stop and report)** |
-| --- | --- | --- |
-| Monthly, steady state, tax-inclusive | ≈ CAD 24.07 (5 % GST) to 26.77 (15 %, third domain) | **CAD 70 / month** (covers the worst case of the lowest plan at any Canadian rate: ≤ CAD 67.01) |
-| First month including one-time items (C7, one-day restore target) | ≈ CAD 26 | **CAD 75** (the ceiling of the 2026-11-19 Review) |
-| Atlas billing alert | — | **US$15** month-to-date (a Flex cluster at the base rate reaches about US$8) |
+**Proven with synthetic data:**
 
-Exceeding a ceiling means stopping and reporting before anything else is created. Upgrading the website to Starter (≈ CAD 34.58) or Atlas to M10 (≈ US$57) is **not** included and needs its own approval.
+`backend/tests/db/d3-admin-restore-rebaseline.test.js` (4 tests: real server, real session store, real Argon2id):
+- **Restored and not re-baselined:** the Admin is closed. It refuses to start with `ADMIN_AUTH`, and without it the Admin routes are 404. The recruiter, revoked after the snapshot and ACTIVE again in the restored data, cannot get in.
+- **An interrupted re-baseline** keeps it closed.
+- **After the re-baseline**, with the **same** session secret (worst case):
+  - old cookies → 401; the control is the same cookie answering 200 on the live server;
+  - old passwords → `INVALID_CREDENTIALS`; the old invitation → `ACTIVATION_INVALID`;
+  - the old TOTP secret and an old recovery code are refused at the MFA step.
+- **Only the owner**, freshly activated with a new password and a new MFA secret, signs in.
+
+`backend/tests/recovery/admin-rebaseline.test.js` (5 tests, two replica sets):
+- missing inputs refuse with zero writes;
+- **deletion gate not passed** (live journal unavailable, export only): `RECOVERY FAILED`, Admin CLOSED, **zero writes** on both clusters, no link;
+- VERIFIED but the admin URI names the live cluster: Admin CLOSED, no Admin write anywhere;
+- VERIFIED on the target: the deletion is re-applied, then every Admin revoked, one owner re-enabled, the link file mode 0600, the mark written;
+- a second run re-verifies the deletion gate and refuses the Admin step.
+
+### 4.5 Spending ceiling: the owner's CAD 26 (replaces the earlier CAD 70/75 proposal)
+
+| | Expected (5 % GST + 2.5 % card fee) | Ceiling | Enforced by |
+| --- | --- | --- | --- |
+| Monthly, all new Render and Atlas services | ≈ CAD 24.67 | **CAD 26** (owner) | **Nothing at the providers** (§2.1): an Atlas alert at US$9, a weekly look at Render's projection, and the stop rule |
+| First month including one-time items | ≈ CAD 25.07 | CAD 26 | Same |
+
+Upgrading the website to Starter (≈ CAD 35.4 with fee) or Atlas to M10 (≈ US$57) would break the ceiling; neither is planned.
 
 ## 5. Approvals (each separate; none is given by this document)
 
 | # | Approval | Cost | Unblocks |
 | --- | --- | --- | --- |
-| **P** | **Private deployment:** spending (lowest plan, ≈ **CAD 24.07/month** at 5 % GST, plus ≈ CAD 1.50 one-time), Atlas Production project, Render services, the deployment of the SHA, and **DNS: the two new CNAMEs `app.` and `api.`** (§4.1) | §2 | §4.2 and §4.3: C7, E1–E5 VERIFIED, and Production recovery VERIFIED |
-| D-3 | **Restore re-baseline command** (§4.4) and the offline Admin-change record rule | $0 (code and CI) | Reopening after a restore whose Admin revocations cannot be verified |
+| **P** | **Bounded private rollout** (§4): spending within CAD 26, **accepting that the providers can only alert** (§2.1); the Atlas Production project; the Render services; the deployment of the release SHA; **DNS: the two new CNAMEs `app.` and `api.`**; **live email: the C7 internal notification only, one recipient, ≤ 3 messages** | ≈ CAD 24.67/month + ≈ CAD 0.40 one-time | §4.2 and §4.3: C7, E1–E5 VERIFIED, and Production recovery VERIFIED |
+| D-3 | **Merge** the re-baseline branch (§4.4), after its CI. **Separately:** adopt or decline the offline Admin-change record | $0 | The coded Admin closure on restore |
 | A-4 | **DNS, public:** apex and `www` to the website, TLS, `www` → apex redirect; DMARC `rua=` record; remove `app.`. Admin moves to `https://cybervalida.com`, then a short re-check of H-5 to H-7 | $0 (or + CAD 0.38/month for a third domain) | Public hostnames |
 | A-5 | **Candidate acknowledgement:** the decision sheet in §5.1 | $0 | Hosted check **H-18:** a QA candidate receives the acknowledgement, and a suppressed QA address receives none |
 | A-6 | **Public recruitment:** `SITE_ACCESS=public`, indexing on (R3, R12, HSTS), the real vacancy published, `RECRUITMENT_MODE=open` (E6), JobPosting validated (G7), then **E7** end-to-end with acknowledgement and HR download | — | **Launch.** Needs §6 first |
 
-**Smallest next step:** send the billing tax location, then approve **P**. Everything in §4 then runs in one hosted window, plus the +24 h rehearsal. A-5 can be decided in parallel, at $0.
+**Smallest next step:** send the billing tax location (it decides whether CAD 26 holds, §2.1). Then merge D-3 and approve **P**. Session 1 runs every recruitment check; session 2 the rehearsal after +24 h. A-5 can be decided in parallel, at $0.
 
 ### 5.1 Decision sheet: candidate acknowledgement (A-5)
 

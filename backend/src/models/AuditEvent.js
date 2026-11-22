@@ -47,6 +47,8 @@ export const AUDIT_ACTIONS = Object.freeze([
   'APPLICATION_STATUS_CHANGED',
   'APPLICATION_NOTE_ADDED',
   'APPLICATION_COMMUNICATION_RECORDED',
+  // D-3 — every restored Admin revoked; one owner re-enabled for fresh activation (restoreRebaseline.js)
+  'ADMIN_RESTORE_REBASELINED',
 ]);
 
 const auditEventSchema = new mongoose.Schema(

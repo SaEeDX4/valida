@@ -1,201 +1,183 @@
-# Launch of cybervalida.com — consolidated owner request (2026-11-22)
+# Launch of cybervalida.com — consolidated owner request (2026-11-22, corrected)
 
 | | |
 | --- | --- |
-| Supersedes | `COMPLETE_LAUNCH_REQUEST_2026-11-21.md` §§3–5 (kept for history) |
-| Base | `main` = `60bb58a` (merge of PR #2, 2026-11-22; head `ebace49`, 9/9 checks green). E1–E5 are **IMPLEMENTED** on `main`, not VERIFIED |
-| Status | Prepared by Claude at $0. **Nothing here authorises spending, deployment, a DNS change or public recruitment.** Each needs the owner's explicit approval (§5) |
+| Supersedes | `COMPLETE_LAUNCH_REQUEST_2026-11-21.md` §§3–5, and the first version of this file (commit `cf9fa5b`). That version wrongly re-added S3 from the pre-CR-AN plan (`C6_HOSTING_STAGE_ASSIGNMENT.md` §8) |
+| Base | `main` = `60bb58a` (merge of PR #2, head `ebace49`, CI 9/9). E1–E5 **IMPLEMENTED** on `main`, not VERIFIED |
+| Stack (owner, 2026-11-22; CR-2026-11-18-AN) | **Render:** hosting and scanning. **MongoDB Atlas Flex:** records, résumés (`RESUME_STORAGE_DRIVER=mongodb`) and native recovery (daily Flex snapshots, deletion journal in Atlas). **Bluehost / Titan:** domains, DNS and email (already paid). **No S3, no external journal, no encrypted export, no backup cron** |
+| Finish line | One public launch with the full recruitment flow VERIFIED, including the **candidate acknowledgement** and the **authorised HR download of the original CLEAN résumé** |
+| Status | Prepared by Claude at $0. **Nothing here authorises spending, deployment, a DNS change or public recruitment** (§5) |
 
-## 1. Where the launch stands
+## 1. Zero-cost preparation completed on 2026-11-22
 
-| Item | State |
-| --- | --- |
-| E1–E5 Recruitment Admin | On `main` (`60bb58a`). CI 9/9 on `ebace49`. Hosted evidence outstanding (§3) |
-| C7 / Release C VERIFIED | Not started: needs Production (spend) |
-| Production recovery | Restore VERIFIED in Review. Needs a Production rehearsal after its first +24 h snapshot |
-| Email | Titan SMTP verified (H2). Needs a paid API instance (Render free blocks SMTP) |
-| Release D (DNS, `www` TLS, DMARC `rua=`) | Prepared. Owner approval needed. **New finding (§2.3):** the hosted Admin checks need two DNS records **before** the apex cut-over |
-| Vacancy and privacy | AWAITING INPUT (§4) |
-| Dependency audit | `npm audit` (backend and frontend, committed lockfiles) reports **0** findings on 2026-11-22. The GHSA-fc5q-39xc-vjpf exception is only checked while the advisory is reported, so its 2026-12-18 expiry no longer fails CI as long as the advisory stays absent. To be confirmed on the next CI run |
+| # | Item | Result |
+| --- | --- | --- |
+| Z-1 | **Least-privilege gap (fixed on this branch).** `valida_api_runtime` had no privileges on `admins`, `admin_sessions` or `audit_events`, and only `find` on `jobs` | **Shown:** the real API with Admin enabled, under the production users only, failed at the first step (`not authorized … insert: "admins"`); Job creation then failed for want of `listIndexes`. **Fixed** in `backend/src/ops/backup/mongoRoles.js`: `jobs` find/insert/update/listIndexes; `admins` find/insert/update; `admin_sessions` find/insert/update/remove; `audit_events` find/insert (append-only). **New test** `backend/tests/mongo-roles/mongo-admin-roles-server.test.js` drives the whole HR path under those users. The path covers provisioning, activation, MFA, Job create and publish, the public Apply, the scanner's `CLEAN` verdict, the HR download (**byte-identical and SHA-256-equal to the uploaded file**), status, note, communication, audit, overview, sign-out and sign-in. **Roles suite 5/5 locally** (auth-enabled MongoDB 8.0, CI's pinned image). The handoff's Atlas role instructions are corrected to match. CI runs it on the next PR into `main` |
+| Z-2 | **Document-server routing** (`frontend/server/documentServer.js`) | GET and HEAD only. It serves every `/admin` path as the Admin shell, with `private, no-store`, `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer`. Its only outbound calls are public Jobs reads and the visitor-address delegation. **It does not proxy the API**, so the website and the API are always two origins. Making them one origin would need a new reverse proxy (new security-relevant code); this is not proposed |
+| Z-3 | **Admin sign-in and hostnames** | The session cookie is `__Host-valida.sid`: Secure, HttpOnly, `SameSite=Strict`, host-only. `onrender.com` is a public suffix, so two `*.onrender.com` services are **cross-site** and the cookie never travels. **Cheapest supported way, with no change to the cookie protections:** two new CNAMEs at Bluehost, `app.cybervalida.com` (website) and `api.cybervalida.com` (API). Both are under one registrable domain, so they are same-site. The apex, `www`, MX, SPF, DKIM and DMARC records stay untouched. $0 at Bluehost, and within Render Hobby's 2 included domains |
+| Z-4 | **Render domain count** | Render docs: Hobby **includes 2** custom domains, and **each beyond costs $0.25/month**, so there is no hard block. Adding an apex makes Render **add `www` automatically**, redirecting to the apex; adding `www` adds the apex. **Whether the auto-added half counts toward the 2 is not stated** in the docs found, so the budget carries it as a possible $0.25. Public stage: apex + `www` + `api.` = 2 or 3 domains, after `app.` is removed at cut-over. Confirm with the dashboard counter when adding the domains (zero cost) |
+| Z-5 | **Audit gate expiry (verified before marking resolved)** | `ops/ci/audit-gate.mjs` checks an exception's expiry **only while its advisory is reported**. **Today's live `npm audit`** (backend and frontend, full dependency tree) reports 0 findings: the gate gives **PASS at 2026-11-22, 2026-12-19 and 2027-06-01**. **Replaying the 2026-11-18 report** gives PASS WITH APPROVED EXCEPTION at 05:30:59Z and **FAIL `EXPIRED` at exactly 2026-12-18T05:31:00Z**, so it still fails closed if the advisory returns. **GitHub's runner** on `ebace49` printed `AUDIT GATE backend: PASS` with no exception applied. Gate tests: 23/23. **Resolved** for the deadline; picomatch is still at 4.0.7 (no new release), so the gate stays the guard |
+| Z-6 | **Acknowledgement path** | Production refuses `APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` at start-up, unconditionally (`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`, `backend/src/config/env.js`). OD-2026-11-04-02: lifting it is **a separate owner decision after the G-SUP evidence is accepted**. G-COPY is still PROPOSED. Decisions in §5 (A-5) |
+| Z-7 | **Recovery of the new Admin data** | A Flex snapshot restore returns the whole database as of up to 24 h earlier, including `admins`, `admin_sessions` and `audit_events`. The added checks are in §4.3 |
 
-## 2. Lowest sustainable monthly cost, tax-inclusive, in CAD
+## 2. Corrected monthly budget (CAD, tax-inclusive)
 
-### 2.1 Basis
-
-- **Prices:** USD list prices from the Nov 19–21 Render and Atlas invoices (`COMPLETE_LAUNCH_REQUEST_2026-11-21.md` §3), plus S3 (`C6_HOSTING_STAGE_ASSIGNMENT.md` §8), which the 2026-11-21 total left out.
-- **Exchange rate:** **1.43 CAD/USD**, the mid-November 2026 market level (≈ 1.42–1.43). The Bank of Canada rate and your card's rate will differ.
-- **Tax:** the invoices' tax lines are not in this repository, Gmail or Drive, so tax is computed, not read.
-  - **Atlas** documents that it adds GST for a Canadian billing address unless a valid GST number is on the billing profile.
-  - **AWS** charges GST/HST, and PST/QST where applicable, to Canadian accounts.
-  - **Render:** its Canadian tax policy was not found. This assumes it charges the same rate, the conservative case.
-- **Headline rate:** **5 % GST** (Alberta, Yukon, NWT, Nunavut). Your commits carry UTC−07:00, which fits Alberta but also parts of BC (12 %). §2.4 gives every rate.
-
-### 2.2 The plans
+**Assumptions**
+- **Prices:** USD list prices from the Nov 19–21 Render and Atlas invoices.
+- **Exchange rate:** **1.43 CAD/USD**, the mid-November 2026 market level.
+- **Tax:**
+  - **5 % GST** is the headline (Alberta, Yukon, NWT, Nunavut; your commits carry UTC−07:00, which also fits parts of BC).
+  - Atlas documents charging GST to Canadian billing addresses that have no GST number. Render's policy was not found, so the same rate is assumed.
+  - Provincial PST, if a provider applies it, is shown in the other rows.
+  - No card foreign-transaction fee is included; about +2.5 % if you pay USD with a CAD card.
+- **The invoices' own tax lines were not available:** confirm with the first Production invoice.
 
 | Component | Choice | USD/month |
 | --- | --- | --- |
 | API (Admin, Apply, email) | Render Starter, required for SMTP | 7.00 |
-| Public website and `/admin` shell | Render **free**: the first visit after 15 idle minutes waits about 1 minute | 0.00 |
-| Résumé scanning | Render cron (ClamAV), **daily**; the $1 minimum dominates | 1.00 |
-| Database with daily backups | Atlas **Flex** Frankfurt ($0.011/h at ≤ 100 ops/s, cap $30) | 8.03 |
-| Private storage and backups | AWS S3 Frankfurt, megabytes; a budget figure, not a measured one | 0.50 |
-| Email, domain, DNS, TLS, native alerts | Titan, Network Solutions, Bluehost (already paid); Render TLS; Render/Atlas alerts | 0.00 |
-| **Lowest, before tax** | | **16.53** |
+| Website and `/admin` shell | Render free (about 1 min first load after 15 idle min) | 0.00 |
+| Résumé scanning | Render cron (ClamAV) daily; $1 minimum | 1.00 |
+| Records, résumés, recovery | Atlas Flex Frankfurt ($0.011/h at ≤ 100 ops/s; cap $30). **5 GB hard storage cap, including résumé bytes** | 8.03 |
+| Domains, DNS, email, TLS, alerts | Bluehost, Titan, Network Solutions (paid); Render TLS; Render and Atlas native alerts | 0.00 |
+| Third custom domain, only if the auto-added `www` counts | Render | 0.25 |
 
-| Plan | Before tax | Tax-inclusive (5 % GST) | **CAD / month** |
+| Plan | USD before tax | **CAD at 5 % GST** | 12 % (BC/MB) | 15 % (NB/NL/PE) | With a GST number |
+| --- | --- | --- | --- | --- | --- |
+| **Lowest sustainable** | 16.03 (16.28) | **24.07 (24.44)** | 25.67 (26.07) | 26.36 (26.77) | 22.92 (23.28) |
+| Website always on (+ Starter $7) | 23.03 (23.28) | 34.58 (34.95) | 36.88 (37.29) | 37.87 (38.28) | 32.93 (33.29) |
+| Worst case, lowest plan (Flex at $30, scanner hourly) | 40.50 (40.75) | 60.81 (61.19) | 64.86 (65.27) | 66.60 (67.01) | 57.91 (58.27) |
+| **One-time:** C7 run and the one-day Flex restore target | ≈ 1.00 | **≈ 1.50** | 1.60 | 1.64 | 1.43 |
+
+Figures in brackets include the possible third domain. Other rates for the lowest plan: SK 11 % CAD 25.44; ON 13 % 25.90; NS 14 % 26.13; QC 14.975 % 26.36; billed to Valida MB without an EU VAT number (21 %) 27.74. Billed to Valida MB with an EU VAT number: reverse charge, no VAT on the invoice.
+
+**Removed from the budget:** S3 (all buckets), the backup copy and manifest workflows, and the second restore rehearsal (CR-2026-11-18-AN).
+
+**Storage watch:** with no retention period decided (P-3), nothing is deleted automatically. At the 5 MiB maximum, 5 GB holds about 900 résumés, and many more at typical sizes. Set Atlas's storage alert at 80 %. M10 (≈ US$57/month) is the next tier and is not budgeted.
+
+## 3. Checks carried forward (not repeated)
+
+| From | Check | Carried forward as | Re-run? |
 | --- | --- | --- | --- |
-| **Lowest sustainable** | US$16.53 | US$17.36 | **≈ CAD 24.82** |
-| Recommended: website always on (+ Render Starter $7) | US$23.53 | US$24.71 | ≈ CAD 35.33 |
-| Lowest, worst case (Flex at its $30 cap, scanner hourly ≈ $3.50) | US$41.00 | US$43.05 | ≈ CAD 61.56 |
-| Recommended, worst case | US$48.00 | US$50.40 | ≈ CAD 72.07 |
-| **One-time** at activation (C7 run, one-day Flex restore target) | ≈ US$1.00 | US$1.05 | ≈ CAD 1.50 |
+| Review of `2b39e8e`, 2026-11-19/20 | **B-R Flex→Flex restore**: RECOVERY VERIFIED, freshness `LIVE_JOURNAL`, deletion re-applied (1 application, 1 file), live users refused on the restored cluster 16/16 | The procedure, the freshness rule, target identification and deletion replay are proven | One Production rehearsal is the gate (§4.3); the procedure is not re-proven |
+| Same | Rollback rehearsal (both services to `f383fa1` and back, 13/13) | The procedure | No |
+| Same | Scanner: real ClamAV on a Render cron (1 CLEAN) | The host set-up (4 GB, cron env vars first) | One Production scan (P-4) |
+| Same / H2 | Host facts: `TRUST_PROXY=2`; documents build `npm ci --include=dev`; first Flex snapshot at +24 h | Configuration | No |
+| H2, 2026-11-21 | Titan SMTP delivery (1 message, `notifications@` → `careers@`); closed-mode readiness 200 with email configured; R1 (503 + `Retry-After`); R10 (429 per client); Lighthouse R12 (Careers 100, Job 95–100) | Results | R12 again only at public activation (indexing on) |
+| PR #2, 2026-11-22 | E1–E5 local suites; CI 9/9 on `ebace49` | Results | No |
+| This branch | Z-1 to Z-5 | Results | Z-1 on CI at the next PR |
 
-**Card fee:** paying USD with a CAD card usually adds a foreign-transaction fee of about 2.5 %. That is not a tax, and it brings the lowest plan to ≈ CAD 25.44.
+**Hostname- or SHA-bound, so repeated:** G-ACCESS R0, R1–R14 (R14 names the new SHA), the Atlas least-privilege check (the API role changed in Z-1), and R13 with Admin traffic.
 
-### 2.3 Hosting facts that change the plan (found 2026-11-22)
+**Still open from H2:** the iOS Safari evidence, and the SPF/DKIM/DMARC headers of one delivered message.
 
-1. **`onrender.com` is a public suffix.** Browsers treat `x.onrender.com` and `y.onrender.com` as **different sites**, so the Admin session cookie (`__Host-valida.sid`, `SameSite=Strict`) never travels from the website to the API on Render's default hostnames. **Admin sign-in cannot be tested hosted without custom subdomains of `cybervalida.com`.** The handoff already requires the same-site layout (`E1_E5_HANDOFF_2026-11-21.md` §4.1).
-   - Smallest fix: two new records at Bluehost, **leaving the apex, `www`, MX, SPF, DKIM and DMARC untouched**: `app.cybervalida.com` (website, private) and `api.cybervalida.com` (API).
-   - At public activation, the apex and `www` move to the website service and `ADMIN_APP_ORIGIN` becomes `https://cybervalida.com`. The short re-check in §3.4 then runs.
-2. **Render custom-domain allowance.** Render states that a **newly created Hobby workspace may add at most 2 custom domains** in total; workspaces created earlier are not limited. Step 1 needs 2 (`app.`, `api.`). Public activation needs the apex, `www` and `api.`.
-   - **Zero-cost check (owner, ~1 min):** Render → Workspace settings → the custom-domain count and limit.
-   - If you are limited to 2: before activation, decide on Render Professional or a `www` redirect served elsewhere. Neither is priced in §2.2.
-3. **Render log retention** on Hobby is **7 days** (Render documentation). This is a proposed answer to P-4 (§4.2).
+## 4. Grouped request: private deployment, with the DNS it needs (approval P)
 
-### 2.4 Tax-inclusive CAD by tax location (lowest / recommended / one-time)
+One approval covers §§4.1–4.4. Everything stays **private** (`SITE_ACCESS=private`, `RECRUITMENT_MODE=testers`) with synthetic data only, and nothing is public. The cost is §2's lowest plan, from the day it is created.
 
-| Billing tax location | Rate | Lowest | Recommended | One-time |
-| --- | --- | --- | --- | --- |
-| AB, YT, NT, NU (GST) | 5 % | **24.82** | 35.33 | 1.50 |
-| SK (GST + PST) | 11 % | 26.24 | 37.35 | 1.59 |
-| BC, MB (GST + PST/RST) | 12 % | 26.47 | 37.69 | 1.60 |
-| ON (HST) | 13 % | 26.71 | 38.02 | 1.62 |
-| NS (HST) | 14 % | 26.95 | 38.36 | 1.63 |
-| QC (GST + QST) | 14.975 % | 27.18 | 38.69 | 1.64 |
-| NB, NL, PE (HST) | 15 % | 27.18 | 38.70 | 1.64 |
-| Billed to Valida MB (Lithuania) **without** an EU VAT number | 21 % | 28.60 | 40.71 | 1.73 |
+### 4.1 Resources and settings
 
-- **With a GST/HST registration number** on each billing profile, GST is not charged; Atlas documents this. If Valida is registered, the cost falls toward the before-tax figure, about **CAD 23.64**.
-- **Billed to Valida MB with an EU VAT number:** reverse charge applies, so no VAT appears on the invoice.
-- Provincial PST on hosting is applied by the provider's own rules. Confirm against your first invoice.
+| # | Where | What | Who |
+| --- | --- | --- | --- |
+| P-a | Atlas | New project **"Valida Production"**, Flex, Frankfurt. Custom roles exactly as `mongoRoles.js`: `valida_api_runtime` (with Z-1), `valida_resume_storage`, `valida_resume_scanner`, `valida_deletion_operator`, `valida_journal_reader`. One user per role, **each restricted to this cluster**. Access list: Render Frankfurt egress ranges | Claude prepares; **owner** creates users and roles in the console (≈ 5 min) |
+| P-b | Atlas | `npm run db:indexes:apply` (19 indexes, incl. the session TTL); `ops:recovery:journal-init`; owner records the anchor | Claude; owner records the anchor |
+| P-c | Render | API on **Starter**, website on **free**, scanner cron daily (4 GB). Auto-deploy Off; deploy the approved SHA by commit | Claude |
+| P-d | Render env (API) | `APP_ENV=production`, `TRUST_PROXY=2`, `RESUME_STORAGE_DRIVER=mongodb`, `RECRUITMENT_MODE=testers`, `ACCESS_ALLOWLIST`, `CORS_ALLOWED_ORIGINS=https://app.cybervalida.com`, `ADMIN_AUTH=enabled`, `ADMIN_APP_ORIGIN=https://app.cybervalida.com`, Titan SMTP from the mailbox you choose (H2 used `notifications@`), with `RECRUITMENT_NOTIFICATION_RECIPIENT=careers@`, `APPLICATION_ACKNOWLEDGEMENT_ENABLED=false` (until A-5) | Claude; **owner types every secret**: database URIs, `ADMIN_SESSION_SECRET`, `ADMIN_MFA_KEYS`, the Titan password, `INTERNAL_SERVICE_KEY` |
+| P-e | Render env (website) | `SITE_ACCESS=private`, the same allowlist and internal key; build `VITE_API_BASE_URL=https://api.cybervalida.com` | Claude |
+| **P-f** | **Bluehost DNS** | **Add two CNAMEs only:** `app` → the website's Render host, `api` → the API's Render host. **No existing record changes** | **Owner** (≈ 3 min), after Claude exports the current zone as a rollback copy |
+| P-g | Render | Add `app.cybervalida.com` and `api.cybervalida.com`; TLS issued; confirm the domain counter shows 2/2 | Claude |
+| P-h | Render shell | `npm run admin:provision create --email <owner mailbox> --name "<name>"` | **Owner** |
 
-## 3. Exact hosted recruitment checks
+**SHA:** `60bb58a` as merged, or `main` after this branch's PR (roles test and corrected docs; runtime code unchanged). The Atlas roles in P-a follow Z-1 either way.
 
-**Where:** Production, kept **private** (`SITE_ACCESS=private`, `RECRUITMENT_MODE=testers`), at `main` = `60bb58a` (or the SHA you approve), on `app.cybervalida.com` and `api.cybervalida.com`.
+### 4.2 Hosted checks, in order (with carried-forward checks excluded)
 
-**Data:** synthetic only, deleted through the journal afterwards. **Email:** one QA recipient you control.
-
-**Who:**
-- **Claude** prepares and checks.
-- **Owner** (marked ⓞ) types every secret and does every MFA step.
-
-### 3.1 Platform gate (existing runbooks, unchanged)
+Expected codes are those on `main`. ⓞ marks steps the owner does.
 
 | # | Check | Pass |
 | --- | --- | --- |
-| P-1 | Start-up lines: `site access` private, effective `recruitment access`, `release identity` = SHA; no secret printed. The API starts with `ADMIN_AUTH=enabled`; it refuses to start if any `ADMIN_*` secret is missing or malformed | As stated |
-| P-2 | **G-ACCESS R0.1–R0.10** (runbook 1 §3, `ops/review-host/check.mjs --mode production`, listed and unlisted) | Every row, every hostname, **before any synthetic Job** |
-| P-3 | **R1–R14** with a synthetic open and closed Job (runbook 1 §4). Operator rows: R1, R10, R11, R12, R13 (host logs) | 13/13 automated plus the operator rows |
-| P-4 | Scanner cron runs once by manual trigger: ClamAV signatures load; `CLEAN` / `QUARANTINED` / `INFECTED` written | Run log |
+| H-1 | Start-up lines; Reading 1 (deploy record) and Reading 3 (served assets equal a local build) | `site access` private; `release identity` = SHA; no secret printed |
+| H-2 | **G-ACCESS R0.1–R0.10** on `app.` and `api.` (runbook 1 §3; checker `--mode production`, listed and unlisted) | Every row; deviations A, C and D as accepted |
+| H-3 | **R1–R14** with a synthetic open and closed Job; R11 and R13 operator rows | 13/13 automated plus operator rows |
+| H-4 | **Atlas least privilege** with the Z-1 roles; live users cannot authenticate on any other cluster | All pass |
+| H-5 | Admin document and API refusals: `/admin` headers as Z-2; `GET /api/v1/admin/overview` without a cookie → **401 `AUTHENTICATION_REQUIRED`**; with a foreign `Origin` → **403 `ORIGIN_REJECTED`** | As stated |
+| H-6 | ⓞ Activation link (≤ 8 h, single use), password, TOTP enrolment, 10 recovery codes | Enrolled |
+| H-7 | Cookie in devtools: `__Host-valida.sid`, Secure, HttpOnly, SameSite=Strict, no Domain, sent to `api.` | This proves Z-3 |
+| H-8 | ⓞ Sign-out, sign-in; 5 wrong TOTP → `MFA_CHALLENGE_ENDED`; 5 wrong passwords → generic `INVALID_CREDENTIALS` and a 15 min lock; 31st attempt → 429; 30 min idle → `SESSION_EXPIRED`; step-up → `RECENT_AUTH_REQUIRED`; reset link 30 min, single use, all sessions revoked | As stated |
+| H-9 | A QA `RECRUITMENT_ADMIN`: `/admins` and `/audit` → 403; revoking its session → 401 `SESSION_REVOKED` | As stated |
+| H-10 | E3: a QA Job, Draft → publish (listed testers only) → close → archive, all audited | As stated |
+| H-11 | **C7**: a QA candidate applies through the real Apply | 201. The `careers@` notification arrives. The application is listed in Admin with its applied-role snapshot |
+| H-12 | Résumé before the scan → **409 `RESUME_NOT_AVAILABLE`**; anonymous → 401. Scanner cron run → `CLEAN` | As stated |
+| H-13 | **HR download of the original:** ⓞ the owner downloads the résumé in Admin | `attachment`, `nosniff`, `private, no-store`. **SHA-256 of the download = SHA-256 of the file the QA candidate uploaded** (recorded on both sides). `RESUME_ACCESSED` audited first |
+| H-14 | E5: status change; a stale change → 409 `STATUS_CONFLICT`; note; recorded communication; owner audit view | As stated |
+| H-15 | ⓞ iOS Safari: public pages and Admin sign-in | No blocker |
+| H-16 | One delivered message's headers (addresses redacted) | SPF, DKIM and DMARC pass |
+| H-17 | Teardown of synthetic data through the journal; QA Admin disabled | Owner records the anchor |
 
-### 3.2 E1–E5 Admin, hosted (makes E1–E5 VERIFIED)
+### 4.3 Recovery: only the checks the new Admin data and the Production gate add
 
-| # | Check | Pass (from the code on `main`) |
-| --- | --- | --- |
-| E-1 | `GET app…/admin/...` | 200; `Cache-Control: private, no-store`; `X-Robots-Tag: noindex, nofollow`; `Referrer-Policy: no-referrer`; no canonical or JSON-LD. Public pages never load the Admin chunk |
-| E-2 | `GET api…/api/v1/admin/overview`, no cookie | **401 `AUTHENTICATION_REQUIRED`**, `Cache-Control: no-store` |
-| E-3 | Same, with `Origin: https://example.org` | **403 `ORIGIN_REJECTED`**. No `Access-Control-Allow-Origin` for that origin; the Admin origin gets ACAO = itself plus `Allow-Credentials: true` |
-| E-4 | ⓞ First owner: `npm run admin:provision create --email <owner mailbox> --name "<name>"` in the Render shell | Activation email arrives through Titan, or `--print-link` on a trusted terminal. The link works once within 8 h, and the token leaves the address bar on load |
-| E-5 | ⓞ Password (12–128 characters), then TOTP enrolment (QR or key), then 10 recovery codes | Codes shown once; enrolment completes |
-| E-6 | Cookie in devtools | `__Host-valida.sid`; Secure; HttpOnly; SameSite=Strict; Path=/; **no Domain**; sent on every API call. This proves the same-site layout of §2.3 |
-| E-7 | ⓞ Sign out, then sign in with password + TOTP | The session id changes at the password step and at the MFA step; you return to the requested page |
-| E-8 | 5 wrong TOTP codes | **`MFA_CHALLENGE_ENDED`**; a replayed valid code is refused |
-| E-9 | 5 wrong passwords on a QA Admin | Locked 15 min. Every refusal is the generic **`INVALID_CREDENTIALS`**, and an unknown email answers the same way |
-| E-10 | 31 login attempts in 15 min from one address | 31st is **429 `RATE_LIMITED`**, counted per real client behind Render's proxy (`TRUST_PROXY=2`), as R10 |
-| E-11 | Idle 30 min | **401 `SESSION_EXPIRED`**. The 8 h absolute limit is enforced too: a session past it is refused and leaves the session list |
-| E-12 | A high-risk action more than 10 min after sign-in | **403 `RECENT_AUTH_REQUIRED`**; after re-authentication it succeeds |
-| E-13 | Password reset (forgot → email → reset) | Link valid 30 min and single use; every session revoked; MFA kept; no automatic sign-in; unknown email answers the same way |
-| E-14 | Owner invites a QA `RECRUITMENT_ADMIN` | `/admins` and `/audit` → **403 `AUTHORIZATION_DENIED`**; the last-owner protection refuses removing the only owner |
-| E-15 | Session list; revoke the other browser | That browser → **401 `SESSION_REVOKED`** |
-| E-16 | E3: a QA Job, Draft → preview → publish → close → reopen → archive | Readiness enforced; listed tester sees it, unlisted gets R0.3's answer; each step is in the audit log |
-| E-17 | **C7**: a QA candidate applies through the real public Apply (listed) | 201. The `careers@` notification arrives. The application is in the Admin list and search with the applied-role snapshot |
-| E-18 | Résumé before the scan | **409 `RESUME_NOT_AVAILABLE`** signed in; **401** anonymous |
-| E-19 | After the scanner run marks it `CLEAN` | Download as an attachment with `nosniff` and `private, no-store`; **`RESUME_ACCESSED` audit event written before the bytes**; R11 unauthenticated provider read refused |
-| E-20 | E5: status change; a stale change from a second tab; a note; a recorded communication | History appended. **409 `STATUS_CONFLICT`** for the stale one. Notes and communications append-only. The owner audit view shows every step |
-| E-21 | Argon2id timing on the instance (Doc 11 §35) | Recorded; raise `ADMIN_ARGON2_*` only if acceptable |
-| E-22 | ⓞ iOS Safari: the 5-screen public checklist (pending from H2) plus Admin sign-in | No blocker |
-| E-23 | Teardown | Synthetic Jobs and applications deleted through the journal; QA Admin disabled; costs recorded |
+All run in **one** Production Flex→Flex rehearsal after the first +24 h snapshot. That rehearsal is CR-AN G3, the only one, and carries its ≈ CAD 1.50 one-time cost. The rest of the procedure is carried forward (§3).
 
-### 3.3 Recovery (Production)
+| # | Check | Why | Pass |
+| --- | --- | --- | --- |
+| R-P | Production rehearsal: restore, freshness from `LIVE_JOURNAL`, deletion replay of the H-17 deletions | Production gate (Release C/E) | **RECOVERY VERIFIED** on Production |
+| R-A1 | The restored target holds `admins`, `admin_sessions`, `audit_events`, `scan_attempts` and `deletion_journal`; `db:indexes:check` shows all 19 indexes, incl. the session TTL | Admin collections and indexes are in the snapshot | All present |
+| R-A2 | **Sessions:** before any reopening, rotate `ADMIN_SESSION_SECRET` with **no** previous secret; a cookie issued before the snapshot → 401 | Restored sessions could include ones revoked or signed out after the snapshot | 401 |
+| R-A3 | **Admin state:** compare `admin:provision status` for every Admin with the owner's offline record of Admin changes. Re-apply any later disable, role change or MFA reset. Reissue any restored unexpired activation or reset token | Restore can revert a disable, a role change or a reset made after the snapshot | Matches the record |
+| R-A4 | **MFA keys:** every retired `ADMIN_MFA_KEYS` entry is kept ≥ 8 days (snapshot retention); one TOTP sign-in on the restored data | Restored MFA secrets must still decrypt | Sign-in works |
+| R-A5 | **Audit window:** the record notes that audit events after the snapshot (≤ 24 h) are not in the restored log | RPO ≤ 24 h (CR-AN G2) | Noted in the owner record |
+| R-A6 | Live users stay restricted to the live cluster; the restore writer to the target (the 16/16 check, with the Z-1 role) | CR-AN G4 | All refused as before |
 
-| # | Check | Pass |
-| --- | --- | --- |
-| B-1 | `backup-copy` manual run, then `backup-manifest` after the first snapshot | `complete: true`; `PRELIMINARY: NO DEFECT FOUND` |
-| B-2 | After +24 h: restore to a one-day Flex target (runbook 2 §5), damaged and healthy | **RECOVERY VERIFIED**, with RPO/RTO measured; target destroyed |
+**New operating rule (proposed):** after each Admin change (invite, disable, role change, MFA reset), the owner notes it offline, as is done for deletion anchors. This rule needs your approval.
 
-### 3.4 At public activation (after DNS approval)
-
-| # | Check | Pass |
-| --- | --- | --- |
-| D-1 | Apex and `www` on Render; TLS on both; `www` → apex one 301 | R4, R14 on the canonical host |
-| D-2 | `ADMIN_APP_ORIGIN=https://cybervalida.com`; re-run E-1, E-2, E-3, E-6, E-7 | As §3.2 |
-| D-3 | `SITE_ACCESS=public`, indexing on: R3 with `--indexing true`; HSTS (P9) | As runbook |
-| D-4 | DMARC `rua=` visible; one message's headers show SPF, DKIM and DMARC pass | Headers, addresses redacted |
-| D-5 | Real vacancy published; `RECRUITMENT_MODE=open` (E6); JobPosting with `applicantLocationRequirements` validated (G7); then E7 end-to-end | Doc 18 §§246–252 |
-
-## 4. Outstanding inputs (owner)
-
-### 4.1 Vacancy (P-6): the Cybersecurity Specialist Draft
-
-`backend/provisioning/jobs/cybersecurity-specialist.json` stays DRAFT, and publication is refused (`AWAITING_INPUT`), until each of these is supplied. **Nothing may be invented** (Doc 12 §45).
-
-| Field | Needed |
-| --- | --- |
-| `eligibleWorkCountries` | The ISO countries from which Valida may employ someone in this remote role, or a decision that none are stated yet. **This also drives the privacy applicability review (P-5)** |
-| `location` | The physical work location; "British Columbia, Canada" is only the historical planning value |
-| `employmentType` | For example employee or contractor, part-time |
-| `schedule` | Final wording (30 h/week is planning data) |
-| `description`, `responsibilities`, `requirements` | Real text |
-| `preferredQualifications`, `screeningQuestions`, `closesAt` | Each "none" or the real value |
-| Confirm planning data | Title, fully remote, 30 h/week, CAD 35.00/h gross |
-| `applicationConfig` | Collect phone? Collect a message? (both off by default) |
-
-### 4.2 Privacy
-
-| ID | Input | Ready-to-confirm proposal |
-| --- | --- | --- |
-| P-1 | Privacy contact method | `careers@cybervalida.com`, **only if you designate it** |
-| P-2 | Provider inventory (Doc 13 §§197–198) | Render (Frankfurt: API, website, logs, scanner); MongoDB Atlas (Frankfurt: applications, Admin accounts, sessions, audit); AWS S3 (Frankfurt: résumés, backups); GitHub Actions (backup copy runs); Titan / Bluehost (email: **its data location is to be confirmed**). Each provider's data processing terms accepted, and the transfer basis for these US companies (EU–US DPF or SCCs), are **for you or your adviser to confirm** |
-| P-3 | Recruitment retention period | **Your determination**; nothing is deleted automatically until then |
-| P-4 | Log destination and retention | Render logs, **7 days** on Hobby; no IP, user agent, body or cookie in the access log |
-| P-5 | Legal and privacy review of `/privacy` and `/legal` (Lithuanian entity, GDPR) | Required before public deployment (Doc 06 §§169, 178) |
-| New | Admin personal data (accounts, sessions with a device label, audit events) is not yet in `docs/privacy/DATA_INVENTORY.md` | I can draft the entry at $0 for your review |
-
-### 4.3 Other inputs
-
-- **Billing:** the tax province, or the billing entity (personal in Canada, or Valida MB); any GST/HST or EU VAT number; the tax line from the Nov 19–21 invoices.
-- **Render:** the workspace custom-domain limit (§2.3.2).
-- **Release D:** the DMARC `rua=` mailbox; mailbox MFA on `shervin@`, `careers@` and `info@` (D2); the sender stays `careers@` through Titan (D3, recommended, $0).
-- **From H2:** the iOS Safari answers and one email's headers, addresses redacted.
-- **Monitoring gaps:** application-error alerting and an uptime monitor. Both have $0 options: Sentry Developer (EU) and UptimeRobot free. The alternative is to accept native alerts only.
-- **Records:** the Doc 00 entry for OD-2026-11-21-01. Deleting the `e-work-write-time` branch (left for later).
-
-## 5. Approvals requested (each separate; none is given by this document)
+## 5. Approvals (each separate; none is given by this document)
 
 | # | Approval | Cost | Unblocks |
 | --- | --- | --- | --- |
-| A-1 | **Spending:** the lowest plan, ≈ **CAD 24.82/month** at 5 % GST (CAD 26.47 at 12 %, worst case CAD 61.56), plus ≈ CAD 1.50 one-time. Or the recommended plan, ≈ CAD 35.33 | §2 | Production: Atlas Flex "Valida Production", Render API Starter + website (free) + scanner cron, S3 |
-| A-2 | **DNS, private stage:** add `app.cybervalida.com` and `api.cybervalida.com` at Bluehost; nothing else changes | $0 | §3.1–§3.3 (Admin sign-in needs same-site hosts) |
-| A-3 | **Production deployment** of the approved SHA, private, with synthetic data only | within A-1 | §3 |
-| A-4 | **DNS, public:** apex and `www` to Render, TLS, DMARC `rua=` | $0 | §3.4 |
-| A-5 | **Public recruitment activation:** `SITE_ACCESS=public`, the real vacancy, `RECRUITMENT_MODE=open` (E6), then E7 | — | Launch. Needs §4.1 and §4.2 first |
+| **P** | **Private deployment:** spending (lowest plan, ≈ **CAD 24.07/month** at 5 % GST, plus ≈ CAD 1.50 one-time), Atlas Production project, Render services, the deployment of the SHA, and **DNS: the two new CNAMEs `app.` and `api.`** (§4.1) | §2 | §4.2 and §4.3: C7, E1–E5 VERIFIED, and Production recovery VERIFIED |
+| A-4 | **DNS, public:** apex and `www` to the website, TLS, `www` → apex redirect; DMARC `rua=` record; remove `app.`. Admin moves to `https://cybervalida.com`, then a short re-check of H-5 to H-7 | $0 (or + CAD 0.38/month for a third domain) | Public hostnames |
+| A-5 | **Candidate acknowledgement:** (1) accept the G-SUP evidence and authorise replacing the unconditional refusal with the design's suppression start-up check (code + CI at $0); (2) decide G-COPY: approve it and its evidence, or record an exception; (3) suppression secrets: `SUPPRESSION_HMAC_KEY`/`_KEY_ID`, the operator ids, and the location of the protected second key copy; (4) the acknowledgement budget (D2b) and the known Outlook.com Junk observation | $0 | Hosted check **H-18:** a QA candidate receives the acknowledgement, and a suppressed QA address receives none |
+| A-6 | **Public recruitment:** `SITE_ACCESS=public`, indexing on (R3, R12, HSTS), the real vacancy published, `RECRUITMENT_MODE=open` (E6), JobPosting validated (G7), then **E7** end-to-end with acknowledgement and HR download | — | **Launch.** Needs §6 first |
 
-**Smallest next step:** answer §4.3 "Billing" and "Render" (both at $0). Then approve A-1, A-2 and A-3 together. That lets the whole of §3 run in one hosted session, with Claude doing everything except the steps marked ⓞ.
+**Smallest next step:** send the billing tax location, then approve **P**. Everything in §4 then runs in one hosted window, plus the +24 h rehearsal. A-5 can be decided in parallel, at $0.
 
-## 6. Sources (read 2026-11-22)
+## 6. Missing inputs (owner)
 
-- MongoDB Atlas, [international usage and taxes](https://mongodb.com/docs/atlas/billing/international-usage): GST charged without a GST number.
-- AWS, [Canada tax help](https://aws.amazon.com/tax-help/canada).
-- Render: [cron jobs](https://render.com/docs/cronjobs) ($1 minimum); [logging](https://render.com/docs/logging) (Hobby 7 days); [custom domains](https://render.com/docs/custom-domains) and [platform features by plan](https://render.com/docs/platform-features-by-plan.md); Hobby limited to 2 custom domains per the Render changelog.
-- `onrender.com` on the Public Suffix List: [Render community](https://community.render.com/t/setting-samesite-attribute-for-cookies-from-different-render-domains/16868); [publicsuffix.org](https://publicsuffix.org/learn/).
-- USD/CAD mid-November 2026 ≈ 1.42–1.43: market references; the [Bank of Canada lookup](https://www.bankofcanada.ca/rates/exchange/daily-exchange-rates/) is authoritative.
+**Vacancy (P-6):** the Cybersecurity Specialist Draft is refused publication (`AWAITING_INPUT`) until these exist:
+- eligible work countries
+- physical work location
+- employment type
+- schedule wording
+- description, responsibilities and requirements
+- preferred qualifications, screening questions and closing date (each may be "none")
+- confirmation of the planning data (title, fully remote, 30 h/week, CAD 35.00/h gross)
+- whether to collect phone and message
+
+**Privacy:**
+- **P-1:** the privacy contact (`careers@` only if you designate it).
+- **P-2:** confirm the provider inventory:
+  - Render, Frankfurt: hosting, logs, scanning
+  - MongoDB Atlas, Frankfurt: applications, résumés, Admin accounts, sessions, audit, deletion journal, snapshots
+  - Bluehost/Titan: email (its data location is to be confirmed)
+  - GitHub: code and CI only, synthetic data
+
+  Also confirm each provider's data processing terms and the transfer basis for these US companies.
+- **P-3:** the recruitment retention period.
+- **P-4:** logs: Render, 7 days on Hobby; no IP, user agent, body or cookie in the access log.
+- **P-5:** the legal and privacy review of `/privacy` and `/legal` (Lithuanian entity, GDPR).
+- **Admin data (proposed inventory entry):**
+  - Admin name, email, roles, status and timestamps
+  - Argon2id hash
+  - encrypted TOTP secret and hashed recovery codes
+  - sessions with a coarse device label (browser and OS only), expiring by TTL
+  - append-only audit events with no candidate PII
+
+  Retention is part of P-3.
+
+**Also needed:** the billing tax location or entity, and any GST/HST or EU VAT number; the DMARC report mailbox; MFA confirmed on `shervin@`, `careers@` and `info@`.
+
+## 7. Sources (read 2026-11-22)
+
+- Render: [custom domains](https://render.com/docs/custom-domains) (Hobby includes 2; $0.25/month each beyond; apex and `www` added together); [Render accounts are now workspaces](https://render.com/changelog/render-accounts-are-now-workspaces); [cron jobs](https://render.com/docs/cronjobs); [logging](https://render.com/docs/logging).
+- MongoDB Atlas: [Flex limitations](https://mongodb.com/docs/atlas/reference/flex-limitations) (5 GB, 500 ops/s); [Flex costs](https://mongodb.com/docs/atlas/billing/atlas-flex-costs); [international usage and taxes](https://mongodb.com/docs/atlas/billing/international-usage).
+- `onrender.com` as a public suffix: [Render community](https://community.render.com/t/setting-samesite-attribute-for-cookies-from-different-render-domains/16868); [publicsuffix.org](https://publicsuffix.org/learn/).
+- Exchange rate: [Bank of Canada lookup](https://www.bankofcanada.ca/rates/exchange/daily-exchange-rates/) (authoritative); mid-November market level ≈ 1.42–1.43.

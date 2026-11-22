@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import mongoose from 'mongoose';
-import { ADMIN_RESTORE_STATE_COLLECTION, adminRestoreGate } from '../../src/modules/admin/restoreRebaseline.js';
-import { cli, connect, createLiveUsers, oplogMark, parts, requireAdmins, restoreInto, seed, tmpdir, writesSince } from './recoveryFixture.js';
+import { ADMIN_RESTORE_STATE_COLLECTION, adminStartupGate } from '../../src/modules/admin/restoreRebaseline.js';
+import { cli, connect, createLiveUsers, oplogMark, parts, requireAdmins, restoreInto, seed, sha256, tmpdir, writesSince } from './recoveryFixture.js';
 
 /**
  * D-3 (owner, 2026-11-22) — `mongo-recovery.mjs restore-rebaseline` between two
@@ -66,6 +66,8 @@ const rebaselineEnv = (t, extra = {}) => ({
 });
 const args = (t, extra = []) => ['restore-rebaseline', '--owner', OWNER, '--link-out', t.link, '--snapshot-id', 'qa-rb-s0', '--anchor', state.anchor1, ...extra];
 const adminsOf = (db) => target.db(db).collection('admins').find({}).sort({ email: 1 }).toArray();
+const TARGET_SET = parts(ADMIN.target).setName;
+const gateOn = (db) => adminStartupGate(target.db(db), { expectedReplicaSet: TARGET_SET });
 
 beforeAll(async () => {
   live = await connect(ADMIN.live);
@@ -75,6 +77,8 @@ beforeAll(async () => {
   expect((await cli(['journal-init'], writer())).code).toBe(0);
   state.ids = await seed(live, LIVE_DB, 2);
   await live.db(LIVE_DB).collection('admins').insertMany([adminDoc(OWNER, ['ADMIN_OWNER']), adminDoc(RECRUITER, ['RECRUITMENT_ADMIN'])]);
+  // The live anchor (`npm run db:identity:init`): every snapshot carries it.
+  await live.db(LIVE_DB).collection('database_identity').insertOne({ _id: 'live', setName: LIVE_SET, database: LIVE_DB, recordedAt: new Date() });
   await live.db(LIVE_DB).collection('admin_sessions').insertMany([{ _id: 'qa-sid-owner', expires: new Date(Date.now() + 3_600_000), session: { principalType: 'ADMIN' } }, { _id: 'qa-sid-recruiter', expires: new Date(Date.now() + 3_600_000), session: { principalType: 'ADMIN' } }]);
   state.s0 = await snapshotAll();
   // After the snapshot: an authorised deletion (the gate must re-apply it) and an Admin revocation (it cannot).
@@ -122,7 +126,7 @@ describe('restore-rebaseline: the deletion gate first, then the Admin', () => {
     expect(await writesSince(target, tm, `${t.db}.`)).toBe(0);
     expect(await writesSince(live, lm, `${LIVE_DB}.`)).toBe(0);
     expect(fs.existsSync(t.link)).toBe(false);
-    expect(await adminRestoreGate(target.db(t.db))).toEqual({ open: false, reason: 'ADMIN_RESTORE_NOT_REBASELINED' });
+    expect(await gateOn(t.db)).toEqual({ open: false, reason: 'ADMIN_RESTORE_NOT_REBASELINED' });
     // The restored data still holds the deleted applicant AND the revoked recruiter as ACTIVE: closed is the only safe state.
     expect(await target.db(t.db).collection('applications').countDocuments({ _id: new ObjectId(state.ids[0]) })).toBe(1);
     expect((await adminsOf(t.db)).find((a) => a.email === RECRUITER).status).toBe('ACTIVE');
@@ -151,15 +155,41 @@ describe('restore-rebaseline: the deletion gate first, then the Admin', () => {
     // The applicant deletion holds; only then was the Admin touched.
     expect(await target.db(t.db).collection('applications').countDocuments({ _id: new ObjectId(state.ids[0]) })).toBe(0);
     const [owner, recruiter] = await adminsOf(t.db);
-    expect(owner).toMatchObject({ email: OWNER, status: 'ACTIVE', authentication: { passwordHash: null, resetTokenHash: null, authVersion: 4, activationTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) }, mfa: { enabled: false, secretCiphertext: null, recoveryCodes: [] } });
+    expect(owner).toMatchObject({ email: OWNER, status: 'ACTIVE', authentication: { passwordHash: null, resetTokenHash: null, authVersion: 4, restoreEpoch: 1, activationTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) }, mfa: { enabled: false, secretCiphertext: null, recoveryCodes: [] } });
     expect(recruiter).toMatchObject({ email: RECRUITER, status: 'DISABLED', authentication: { passwordHash: null, activationTokenHash: null, authVersion: 4 }, mfa: { enabled: false, secretCiphertext: null } });
     expect(await target.db(t.db).collection('admin_sessions').countDocuments({})).toBe(0);
-    expect(await adminRestoreGate(target.db(t.db))).toEqual({ open: true, restored: true });
-    const link = fs.readFileSync(t.link, 'utf8').trim();
+    expect(await gateOn(t.db)).toMatchObject({ open: true, basis: 'REBASELINED' });
+    const [link] = fs.readFileSync(t.link, 'utf8').split('\n');
     expect(link).toMatch(new RegExp(`^${ORIGIN}/admin/activate#token=[A-Za-z0-9_-]{20,}$`));
+    // Delivered BEFORE the marker, and the marker names this attempt, this cluster and this database.
+    expect(await target.db(t.db).collection(ADMIN_RESTORE_STATE_COLLECTION).findOne({ _id: t.targetId })).toMatchObject({ state: 'REBASELINED', attempt: r.out.attempt, setName: TARGET_SET, database: t.db });
+    expect(owner.authentication.activationTokenHash).toBe(sha256(link.split('#token=')[1]));
     expect(fs.statSync(t.link).mode & 0o777).toBe(0o600);
     // The live cluster was not touched by the re-baseline.
     expect((await live.db(LIVE_DB).collection('admins').findOne({ email: OWNER })).authentication.authVersion).toBe(3);
+  });
+
+  it('a FRESH UNMARKED restore (snapshot restored, nothing prepared) is closed on its own cluster: the inherited anchor names the live database', async () => {
+    n += 1;
+    const db = `valida_test_rst_rb_${n}_${randomBytes(2).toString('hex')}`;
+    await restoreInto(target, db, state.s0);
+    expect(await gateOn(db)).toEqual({ open: false, reason: 'ADMIN_RESTORE_NOT_REBASELINED' });
+    expect(await adminStartupGate(target.db(db), { expectedReplicaSet: LIVE_SET })).toEqual({ open: false, reason: 'ADMIN_DATABASE_IDENTITY_MISMATCH' });
+  });
+
+  it('a SECOND-GENERATION restore carrying the older marker is closed; prepare-target ignores the inherited authorisation; only its own re-baseline opens it', async () => {
+    // A snapshot of the re-baselined database (its authorisation AND its REBASELINED marker inside), restored elsewhere.
+    const snap = {};
+    for (const { name } of await target.db(state.t.db).listCollections({}, { nameOnly: true }).toArray()) snap[name] = await target.db(state.t.db).collection(name).find({}).toArray();
+    expect(snap[ADMIN_RESTORE_STATE_COLLECTION]).toHaveLength(1);
+    const t2 = await preparedTarget(snap); // succeeds: the inherited authorisation is set aside, unchanged
+    expect(await target.db(t2.db).collection('restore_authorization').find({}, { projection: { _id: 0, targetId: 1 } }).toArray()).toEqual([{ targetId: t2.targetId }]);
+    expect(await target.db(t2.db).collection('restore_authorization_inherited').find({}, { projection: { _id: 0, targetId: 1, movedFor: 1 } }).toArray()).toEqual([{ targetId: state.t.targetId, movedFor: t2.targetId }]);
+    expect(await gateOn(t2.db)).toEqual({ open: false, reason: 'ADMIN_RESTORE_NOT_REBASELINED' }); // the older marker does not count
+    const r = await cli(args(t2), rebaselineEnv(t2));
+    expect(r.code, r.stderr).toBe(0);
+    expect(r.out).toMatchObject({ verdict: 'RECOVERY VERIFIED', admin: 'REBASELINED', target: { targetId: t2.targetId, database: t2.db } });
+    expect(await gateOn(t2.db)).toMatchObject({ open: true, basis: 'REBASELINED' });
   });
 
   it('a second run re-verifies the deletion gate and refuses the Admin step (ALREADY_REBASELINED)', async () => {

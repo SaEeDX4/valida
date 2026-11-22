@@ -143,9 +143,9 @@ One approval covers §§4.1–4.5.
 | # | Where | What | Who |
 | --- | --- | --- | --- |
 | P-a | Atlas | New project **"Valida Production"**, Flex, Frankfurt. Custom roles exactly as `mongoRoles.js`: `valida_api_runtime` (with Z-1), `valida_resume_storage`, `valida_resume_scanner`, `valida_deletion_operator`, `valida_journal_reader`. One user per role, **each restricted to this cluster**. Access list: Render Frankfurt egress ranges | Claude prepares; **owner** creates users and roles in the console (≈ 5 min) |
-| P-b | Atlas | `npm run db:indexes:apply` (19 indexes, incl. the session TTL); `ops:recovery:journal-init`; owner records the anchor | Claude; owner records the anchor |
+| P-b | Atlas | `npm run db:indexes:apply` (19 indexes, including the session TTL); **`npm run db:identity:init`**, which records the live database's identity anchor once, insert-only, with the same temporary owner-level user; `ops:recovery:journal-init`. The owner records the journal anchor | Claude; owner records the anchor |
 | P-c | Render | API on **Starter**, website on **free**, scanner cron daily (4 GB). Auto-deploy Off; deploy the approved SHA by commit | Claude |
-| P-d | Render env (API) | `APP_ENV=production`, `TRUST_PROXY=2`, `RESUME_STORAGE_DRIVER=mongodb`, `RECRUITMENT_MODE=testers`, `ACCESS_ALLOWLIST`, `CORS_ALLOWED_ORIGINS=https://app.cybervalida.com`, `ADMIN_AUTH=enabled`, `ADMIN_APP_ORIGIN=https://app.cybervalida.com`, Titan SMTP from the mailbox you choose (H2 used `notifications@`), with `RECRUITMENT_NOTIFICATION_RECIPIENT=careers@`, `APPLICATION_ACKNOWLEDGEMENT_ENABLED=false` (until A-5) | Claude; **owner types every secret**: database URIs, `ADMIN_SESSION_SECRET`, `ADMIN_MFA_KEYS`, the Titan password, `INTERNAL_SERVICE_KEY` |
+| P-d | Render env (API) | `APP_ENV=production`, `TRUST_PROXY=2`, `RESUME_STORAGE_DRIVER=mongodb`, `RECRUITMENT_MODE=testers`, `ACCESS_ALLOWLIST`, `CORS_ALLOWED_ORIGINS=https://app.cybervalida.com`, `ADMIN_AUTH=enabled`, `ADMIN_APP_ORIGIN=https://app.cybervalida.com`, **`ADMIN_DATABASE_REPLICA_SET=<the Flex cluster's replica-set name>`** (D-3: without it the Admin does not start), Titan SMTP from the mailbox you choose (H2 used `notifications@`), with `RECRUITMENT_NOTIFICATION_RECIPIENT=careers@`, `APPLICATION_ACKNOWLEDGEMENT_ENABLED=false` (until A-5) | Claude; **owner types every secret**: database URIs, `ADMIN_SESSION_SECRET`, `ADMIN_MFA_KEYS`, the Titan password, `INTERNAL_SERVICE_KEY` |
 | P-e | Render env (website) | `SITE_ACCESS=private`, the same allowlist and internal key; build `VITE_API_BASE_URL=https://api.cybervalida.com` | Claude |
 | **P-f** | **Bluehost DNS** | **Add two CNAMEs only:** `app` → the website's Render host, `api` → the API's Render host. **No existing record changes** | **Owner** (≈ 3 min), after Claude exports the current zone as a rollback copy |
 | P-g | Render | Add `app.cybervalida.com` and `api.cybervalida.com`; TLS issued; confirm the domain counter shows 2/2 | Claude |
@@ -226,7 +226,24 @@ The deletion gate is unchanged: freshness must come from `LIVE_JOURNAL`, or the 
 
 The owner re-enrols MFA and re-invites the other Admins.
 
-**D-3 implemented (2026-11-22, review branch `ccr-a5e61e13-8rm3ng`, not on `main`):**
+**D-3 implemented (2026-11-22; correction 1 on the same PR #4; review branch `ccr-a5e61e13-8rm3ng`, not on `main`):**
+
+**Correction 1 (owner, 2026-11-22):**
+- **Bound to its database.** The Admin opens only when the connection's replica-set name equals `ADMIN_DATABASE_REPLICA_SET`, and the database is either:
+  - the intended live one: its `database_identity` anchor, written once at provisioning by `db:identity:init`, names exactly this cluster and database; or
+  - a restore whose **own** re-baseline marker is bound to its own authorisation, cluster and database.
+- **What stays closed:**
+  - a fresh unmarked restore, because the anchor it inherits names the live database;
+  - a restore carrying an **older** marker, because that marker is bound to another cluster or database;
+  - an unprovisioned database, a configuration mismatch, and any read error.
+- **Inherited authorisations.** `prepare-target` (an owner step before the gate) sets aside, unchanged, any authorisation inherited through the snapshot into `restore_authorization_inherited`, and only then writes this target's own. An authorisation bound to this target still refuses. This lets a second-generation restore complete its own recovery. **The applicant-deletion gate itself (`restoreTarget.js`) is byte-identical to `main`.**
+- **Private, recoverable delivery.**
+  - The link goes to the owner's file **before any Admin write**: exclusive create, mode 0600, no symlink, never overwritten, in an owner-only directory, fsync'd, hard-linked into place, directory fsync'd. Any failure changes nothing.
+  - The attempt is then claimed by insert, so exactly one of concurrent attempts wins; a loser removes its own file.
+  - The revoke and owner-arm steps are **fenced by the claim's epoch**, so a stale attempt cannot overwrite a newer link.
+  - The marker is published **last**, only by the attempt holding the claim.
+  - **Interrupted:** re-run with the same file and it resumes with the **same** link.
+  - **File lost:** `--restart-pending <attempt>` replaces the attempt after a 15-minute lease, under a higher epoch.
 
 - **The API refuses to start with `ADMIN_AUTH=enabled` on any restored database** (one that carries a `restore_authorization`) until a `REBASELINED` mark exists for that target. A read error also refuses (fail closed). The fixed message is `AdminRestoreClosedError`, with reason `ADMIN_RESTORE_NOT_REBASELINED`. Without `ADMIN_AUTH`, the applicant API runs and no Admin route exists. `backend/src/server.js`; `backend/src/modules/admin/restoreRebaseline.js`.
 - **`mongo-recovery.mjs restore-rebaseline`** (owner):
@@ -244,7 +261,10 @@ The owner re-enrols MFA and re-invites the other Admins.
 
 **Proven with synthetic data:**
 
-`backend/tests/db/d3-admin-restore-rebaseline.test.js` (4 tests: real server, real session store, real Argon2id):
+`backend/tests/db/d3-admin-restore-rebaseline.test.js` (6 tests: real server, real session store, real Argon2id).
+- **Identity:** the live database starts only with its anchor and the configured cluster (`NOT_PROVISIONED`, `NOT_CONFIGURED` and `MISMATCH` stay closed). A fresh unmarked restore is closed. A restore carrying an older marker is closed until its own re-baseline.
+- **Delivery:** a failed fsync, an existing file and a world-writable directory each change nothing. Of two concurrent attempts exactly one claims, and the loser leaves no file. The winner, interrupted after the claim, stays closed and resumes with the **same** link. A retry without that file, or a restart before the lease, is refused. After the lease, a restart (epoch 2) wins, and the stale attempt X ends `REBASELINE_SUPERSEDED` with the owner's token still R's.
+- **Access:**
 - **Restored and not re-baselined:** the Admin is closed. It refuses to start with `ADMIN_AUTH`, and without it the Admin routes are 404. The recruiter, revoked after the snapshot and ACTIVE again in the restored data, cannot get in.
 - **An interrupted re-baseline** keeps it closed.
 - **After the re-baseline**, with the **same** session secret (worst case):
@@ -253,7 +273,7 @@ The owner re-enrols MFA and re-invites the other Admins.
   - the old TOTP secret and an old recovery code are refused at the MFA step.
 - **Only the owner**, freshly activated with a new password and a new MFA secret, signs in.
 
-`backend/tests/recovery/admin-rebaseline.test.js` (5 tests, two replica sets):
+`backend/tests/recovery/admin-rebaseline.test.js` (7 tests, two replica sets). Added in correction 1: a fresh unmarked restore is closed on its own cluster; a second-generation restore that carries the older marker is prepared (the inherited authorisation is ignored), stays closed, and opens only through its own re-baseline. Unchanged:
 - missing inputs refuse with zero writes;
 - **deletion gate not passed** (live journal unavailable, export only): `RECOVERY FAILED`, Admin CLOSED, **zero writes** on both clusters, no link;
 - VERIFIED but the admin URI names the live cluster: Admin CLOSED, no Admin write anywhere;

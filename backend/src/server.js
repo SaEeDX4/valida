@@ -19,7 +19,7 @@ import { serveUnlessConnectionClosing } from './lib/http/stagedClose.js';
 import { applyServerTimeouts } from './lib/http/serverTimeouts.js';
 import { createNotificationService, notificationServiceOptions } from './integrations/notifications/notificationService.js';
 import { createNotificationTransport } from './integrations/notifications/transport.js';
-import { adminRestoreGate } from './modules/admin/restoreRebaseline.js';
+import { adminStartupGate } from './modules/admin/restoreRebaseline.js';
 
 /**
  * Backend process entry point — Doc 09 section 8, Doc 15 section 50.
@@ -268,22 +268,24 @@ export async function startServer({
   onShutdown('mongodb', () => database.disconnect({ logger, readiness }));
 
   /*
-   * D-3 — the Admin on a RESTORED database (modules/admin/restoreRebaseline.js).
-   * A restore target carries a `restore_authorization` document; its Admin
-   * stays closed until it has been re-baselined, because revocations made after
-   * the snapshot cannot be proven. With ADMIN_AUTH=enabled the backend refuses
-   * to start while that gate is closed (and when it cannot be read). The
+   * D-3 — the Admin is bound to its database (modules/admin/restoreRebaseline.js).
+   * It opens only on the configured cluster (ADMIN_DATABASE_REPLICA_SET) and
+   * only when that database is the intended live one (its provisioning anchor
+   * names exactly this identity) or a restore whose OWN recovery has completed
+   * (a re-baseline marker bound to its own authorisation and identity). Anything
+   * else — a fresh restore, one carrying an older marker, a mismatch, a read
+   * error — and the backend refuses to start with ADMIN_AUTH=enabled. The
    * applicant API is not affected: run without ADMIN_AUTH to serve it closed.
    */
   if (config.adminAuth?.enabled === true) {
-    const adminGate = await adminRestoreGate(mongoose.connection.db);
+    const adminGate = await adminStartupGate(mongoose.connection.db, { expectedReplicaSet: config.adminAuth.databaseReplicaSet });
     if (!adminGate.open) {
-      logger.error({ adminRestore: 'closed', reason: adminGate.reason }, 'the Admin surface is closed on this restored database until it is re-baselined (mongo-recovery.mjs restore-rebaseline); unset ADMIN_AUTH to start without it');
+      logger.error({ adminDatabase: 'closed', reason: adminGate.reason }, 'the Admin surface is closed: this is not the database it is bound to, or a restore whose own re-baseline has not completed; unset ADMIN_AUTH to start without it');
       readiness.beginShutdown();
       await runShutdownHooks(cleanupTimeoutMs);
       throw new AdminRestoreClosedError(adminGate.reason);
     }
-    logger.info({ adminRestore: adminGate.restored ? 'rebaselined' : 'not_a_restore' }, 'admin restore state');
+    logger.info({ adminDatabase: adminGate.basis === 'LIVE_ANCHOR' ? 'live' : 'rebaselined_restore' }, 'admin database identity');
   }
 
   /*
@@ -617,7 +619,7 @@ export function isMainModule(moduleUrl = import.meta.url, entryPath = process.ar
  *
  * Exported so its wording can be tested without spawning a process.
  */
-/** D-3: the Admin is closed on a restored database that has not been re-baselined. `reason` is a fixed code. */
+/** D-3: the Admin is closed on a database it is not bound to. `reason` is a fixed code. */
 export class AdminRestoreClosedError extends Error {
   constructor(reason) {
     super(`admin restore gate closed: ${reason}`);
@@ -629,9 +631,10 @@ export class AdminRestoreClosedError extends Error {
 export function formatStartupFailure(error) {
   if (error instanceof AdminRestoreClosedError) {
     return (
-      `[valida-backend] failed to start: the Admin surface is closed on this restored database (${error.reason}). ` +
-      'Admin revocations made after the snapshot cannot be proven. Re-baseline it with ' +
-      '`mongo-recovery.mjs restore-rebaseline` after RECOVERY VERIFIED, or unset ADMIN_AUTH to start without the Admin.'
+      `[valida-backend] failed to start: the Admin surface is closed (${error.reason}). ` +
+      'It opens only on the database it is bound to (ADMIN_DATABASE_REPLICA_SET and the provisioning anchor, ' +
+      '`npm run db:identity:init`) or on a restore re-baselined with `mongo-recovery.mjs restore-rebaseline` ' +
+      'after RECOVERY VERIFIED. Unset ADMIN_AUTH to start without the Admin.'
     );
   }
   if (error instanceof ConfigurationError) {

@@ -35,7 +35,9 @@ export function roleDefinitions(db) {
       on('admins', ['find', 'insert', 'update']),
       on('admin_sessions', ['find', 'insert', 'update', 'remove']),
       on('audit_events', ['find', 'insert']),
-      // D-3: read-only, for the start-up gate that keeps the Admin closed on an un-re-baselined restore.
+      // D-3: read-only, for the start-up gate that binds the Admin to its database (the live anchor) and keeps it
+      // closed on a restore until that restore's own re-baseline marker exists.
+      on('database_identity', ['find']),
       on('restore_authorization', ['find']),
       on('admin_restore_state', ['find']),
     ],

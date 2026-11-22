@@ -46,11 +46,14 @@
  *   restore-rebaseline --owner <email> --link-out <file> --snapshot-id <id> --anchor <count>:<sha256>
  *                                 (D-3) OWNER. Exactly restore-verify first (same variables, same freshness rule);
  *                                 ONLY on RECOVERY VERIFIED, with RECOVERY_TARGET_ADMIN_MONGODB_URI (an admin of the
- *                                 verified target cluster, never the live one) and ADMIN_APP_ORIGIN: every restored
- *                                 Admin revoked, every Admin session removed, ONE owner re-enabled with a fresh
- *                                 activation link written to --link-out (0600), then the REBASELINED mark that lets
- *                                 the API start its Admin there (modules/admin/restoreRebaseline.js). Any other
- *                                 verdict: admin CLOSED, no Admin write
+ *                                 verified target cluster, never the live one) and ADMIN_APP_ORIGIN: the activation
+ *                                 link is delivered FIRST, privately and durably, to --link-out (exclusive create,
+ *                                 0600, owner-only directory; never overwritten, never printed); then the attempt is
+ *                                 claimed (one winner), every restored Admin revoked and sessions removed, ONE owner
+ *                                 armed under the claim's fence, and the REBASELINED marker published LAST
+ *                                 (modules/admin/restoreRebaseline.js). Interrupted: run again with the same
+ *                                 --link-out to resume with the same link; if that file is lost, --restart-pending
+ *                                 <attempt> after the lease. Any other verdict: admin CLOSED, no Admin write
  *   backup-create                 (r3, D-MN-2) RECOVERY_BACKUP_READER_MONGODB_URI (role valida_backup_reader),
  *                                 BACKUP_RECIPIENT_PUBLIC_KEYS (>= 2 PEM public keys), BACKUP_DUMP_WRITER_* and
  *                                 BACKUP_COPY_BUCKET. One snapshot read, encrypted, written, read back. Prints the
@@ -105,6 +108,7 @@ const { values } = parseArgs({
     'private-key-file': { type: 'string' },
     owner: { type: 'string' },
     'link-out': { type: 'string' },
+    'restart-pending': { type: 'string' },
   },
 });
 const print = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -162,6 +166,8 @@ async function freshnessOf(fromExport) {
   }
 }
 const anchorOf = (checkpoint) => `${checkpoint.count}:${checkpoint.sha256}`;
+/** D-3: authorisations inherited through a snapshot, set aside by prepare-target (never read by the restore gate). */
+const INHERITED_AUTHORIZATION_COLLECTION = 'restore_authorization_inherited';
 
 try {
   if (command === 'journal-init') {
@@ -214,7 +220,18 @@ try {
       if (!hello.setName) refuse('the target is not a replica set');
       if (hello.setName === liveSet) refuse('RECOVERY_TARGET_ADMIN_MONGODB_URI is the LIVE replica set: nothing was written');
       const db = c.db(restoredUri);
-      if ((await db.collection(RESTORE_AUTHORIZATION_COLLECTION).countDocuments({})) > 0) refuse('the target already holds a restore authorisation: use a new restore target');
+      // D-3: only an authorisation bound to THIS cluster and database blocks a new one. One INHERITED through the snapshot
+      // (written for an earlier restore of another cluster or database) is moved, unchanged, to
+      // restore_authorization_inherited first, so the restore gate (restoreTarget.js, unchanged) sees exactly this
+      // target's own authorisation. Idempotent: a re-run after an interruption moves nothing twice.
+      if ((await db.collection(RESTORE_AUTHORIZATION_COLLECTION).countDocuments({ setName: hello.setName, database: restoredUri })) > 0) refuse('the target already holds a restore authorisation: use a new restore target');
+      const inherited = await db.collection(RESTORE_AUTHORIZATION_COLLECTION).find({ $nor: [{ setName: hello.setName, database: restoredUri }] }).toArray();
+      if (inherited.length > 0) {
+        await db.collection(INHERITED_AUTHORIZATION_COLLECTION).insertMany(inherited.map((doc) => ({ ...doc, movedAt: new Date(), movedFor: targetId })), { ordered: false, writeConcern: { w: 'majority', j: true } }).catch((error) => {
+          if (!(error?.writeErrors ?? []).every((e) => e.code === 11000)) throw error;
+        });
+        await db.collection(RESTORE_AUTHORIZATION_COLLECTION).deleteMany({ _id: { $in: inherited.map((doc) => doc._id) } }, { writeConcern: { w: 'majority', j: true } });
+      }
       if (mode === 'load') {
         for (const name of RECOVERY_COLLECTIONS) if ((await db.collection(name).countDocuments({}, { limit: 1 })) > 0) refuse('--mode load needs an EMPTY target database: nothing was written');
       }
@@ -333,13 +350,13 @@ try {
             print({ ...summary, admin: 'CLOSED', reasons: ['ADMIN_URI_NOT_THE_VERIFIED_TARGET'] });
             process.exitCode = 1;
           } else {
-            const done = await rebaselineAdmins({ targetId: report.target.targetId, ownerEmail: values.owner });
-            writeFileSync(values['link-out'], `${appOrigin}/admin/activate#token=${done.token}\n`, { mode: 0o600 });
-            print({ ...summary, admin: 'REBASELINED', ownerAdminId: done.ownerAdminId, adminsDisabled: done.adminsDisabled, sessionsRemoved: done.sessionsRemoved, activationExpiresAt: done.activationExpiresAt });
+            // The link is delivered privately and durably BEFORE any Admin write; the marker is published last.
+            const done = await rebaselineAdmins({ targetId: report.target.targetId, ownerEmail: values.owner, linkFile: values['link-out'], appOrigin, restartPending: values['restart-pending'] ?? null });
+            print({ ...summary, admin: 'REBASELINED', attempt: done.attempt, resumed: done.resumed, ownerAdminId: done.ownerAdminId, adminsDisabled: done.adminsDisabled, sessionsRemoved: done.sessionsRemoved, activationExpiresAt: done.activationExpiresAt });
           }
         } catch (error) {
           if (!(error instanceof AdminRestoreRefused)) throw error;
-          print({ ...summary, admin: 'CLOSED', reasons: [`ADMIN_${error.reason}`] });
+          print({ ...summary, admin: 'CLOSED', reasons: [`ADMIN_${error.reason}`], ...(error.detail?.pendingAttempt ? { pendingAttempt: error.detail.pendingAttempt } : {}) });
           process.exitCode = 1;
         } finally {
           await mongoose.disconnect();

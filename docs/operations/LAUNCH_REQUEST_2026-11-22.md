@@ -129,51 +129,119 @@ All run in **one** Production Flex→Flex rehearsal after the first +24 h snapsh
 
 **New operating rule (proposed):** after each Admin change (invite, disable, role change, MFA reset), the owner notes it offline, as is done for deletion anchors. This rule needs your approval.
 
+### 4.4 A restored environment stays closed unless post-snapshot Admin revocations are verified
+
+A **revocation** is any Admin change that removes access: disable, role removal, password reset or change, MFA reset, session revocation, an `authVersion` bump, or a withdrawn invitation. A snapshot is up to 24 h old, so a restore can undo any revocation made after it. The rule follows the deletion rule of CR-2026-11-18-AN: **what cannot be proven newest does not open anything.**
+
+**1. Closed state.** A restored environment always starts here, and this needs no code:
+- the API runs with `ADMIN_AUTH` **unset**, so the Admin surface is not mounted and `/api/v1/auth/*` and `/api/v1/admin/*` answer 404;
+- `RECRUITMENT_MODE=closed`, `SITE_ACCESS=private`, `APPLICATION_ACKNOWLEDGEMENT_ENABLED=false`;
+- `ADMIN_SESSION_SECRET` is replaced, with no `ADMIN_SESSION_PREVIOUS_SECRETS`, before `ADMIN_AUTH` is ever set again.
+
+The deletion gate is unchanged: freshness must come from `LIVE_JOURNAL`, or the target stays closed.
+
+**2. Verification.** Only one source **proves** the Admin state: the former live cluster, still readable (like `LIVE_JOURNAL`).
+- **Compare** each Admin's `status`, `roles`, `authentication.authVersion`, `passwordChangedAt`, `mfa.enabled` and `mfa.enrolledAt`, and the `audit_events` written after the snapshot time.
+- **Apply** the more restrictive value on the restored data: DISABLED wins, the fewer roles win, the higher `authVersion` wins.
+- **Record** the result in the owner record.
+- **Then** set `ADMIN_AUTH=enabled` and continue with R-A2 to R-A6.
+
+**3. If the live cluster cannot be read, the revocations are unverifiable.** The owner's offline Admin-change record is useful evidence, but **it cannot prove that no later revocation happened**. Like `--owner-attestation`, it **never reopens** the Admin.
+- `ADMIN_AUTH` stays unset and `RECRUITMENT_MODE` stays `closed`.
+- Applications cannot be reviewed, so none are accepted.
+
+**4. Reopening an unverifiable restore needs a re-baseline.** Every restored Admin is treated as revoked:
+- every Admin set to DISABLED;
+- `authVersion` +1;
+- activation and reset tokens cleared;
+- MFA secrets and recovery codes cleared;
+- then **one named owner** re-enabled with **no password**, and a fresh activation (≤ 8 h) issued to the owner's mailbox.
+
+The owner re-enrols MFA and re-invites the other Admins.
+
+**Today this needs a small new command** (proposed: `admin:provision restore-rebaseline --target-id <id> --owner <email>`, with tests). `reissue` refuses activated accounts, and hand-editing documents in Atlas is not an acceptable control. **Decision D-3** (§5) authorises building it at $0. It would also make the API **refuse to start with `ADMIN_AUTH=enabled` on a restored target** until a verification or re-baseline mark exists, which enforces step 1 instead of relying on configuration. Until it exists, an unverifiable restore keeps recruitment closed.
+
+### 4.5 Proposed spending ceiling (approval P)
+
+| | Expected | **Ceiling (stop and report)** |
+| --- | --- | --- |
+| Monthly, steady state, tax-inclusive | ≈ CAD 24.07 (5 % GST) to 26.77 (15 %, third domain) | **CAD 70 / month** (covers the worst case of the lowest plan at any Canadian rate: ≤ CAD 67.01) |
+| First month including one-time items (C7, one-day restore target) | ≈ CAD 26 | **CAD 75** (the ceiling of the 2026-11-19 Review) |
+| Atlas billing alert | — | **US$15** month-to-date (a Flex cluster at the base rate reaches about US$8) |
+
+Exceeding a ceiling means stopping and reporting before anything else is created. Upgrading the website to Starter (≈ CAD 34.58) or Atlas to M10 (≈ US$57) is **not** included and needs its own approval.
+
 ## 5. Approvals (each separate; none is given by this document)
 
 | # | Approval | Cost | Unblocks |
 | --- | --- | --- | --- |
 | **P** | **Private deployment:** spending (lowest plan, ≈ **CAD 24.07/month** at 5 % GST, plus ≈ CAD 1.50 one-time), Atlas Production project, Render services, the deployment of the SHA, and **DNS: the two new CNAMEs `app.` and `api.`** (§4.1) | §2 | §4.2 and §4.3: C7, E1–E5 VERIFIED, and Production recovery VERIFIED |
+| D-3 | **Restore re-baseline command** (§4.4) and the offline Admin-change record rule | $0 (code and CI) | Reopening after a restore whose Admin revocations cannot be verified |
 | A-4 | **DNS, public:** apex and `www` to the website, TLS, `www` → apex redirect; DMARC `rua=` record; remove `app.`. Admin moves to `https://cybervalida.com`, then a short re-check of H-5 to H-7 | $0 (or + CAD 0.38/month for a third domain) | Public hostnames |
-| A-5 | **Candidate acknowledgement:** (1) accept the G-SUP evidence and authorise replacing the unconditional refusal with the design's suppression start-up check (code + CI at $0); (2) decide G-COPY: approve it and its evidence, or record an exception; (3) suppression secrets: `SUPPRESSION_HMAC_KEY`/`_KEY_ID`, the operator ids, and the location of the protected second key copy; (4) the acknowledgement budget (D2b) and the known Outlook.com Junk observation | $0 | Hosted check **H-18:** a QA candidate receives the acknowledgement, and a suppressed QA address receives none |
+| A-5 | **Candidate acknowledgement:** the decision sheet in §5.1 | $0 | Hosted check **H-18:** a QA candidate receives the acknowledgement, and a suppressed QA address receives none |
 | A-6 | **Public recruitment:** `SITE_ACCESS=public`, indexing on (R3, R12, HSTS), the real vacancy published, `RECRUITMENT_MODE=open` (E6), JobPosting validated (G7), then **E7** end-to-end with acknowledgement and HR download | — | **Launch.** Needs §6 first |
 
 **Smallest next step:** send the billing tax location, then approve **P**. Everything in §4 then runs in one hosted window, plus the +24 h rehearsal. A-5 can be decided in parallel, at $0.
 
-## 6. Missing inputs (owner)
+### 5.1 Decision sheet: candidate acknowledgement (A-5)
 
-**Vacancy (P-6):** the Cybersecurity Specialist Draft is refused publication (`AWAITING_INPUT`) until these exist:
-- eligible work countries
-- physical work location
-- employment type
-- schedule wording
-- description, responsibilities and requirements
-- preferred qualifications, screening questions and closing date (each may be "none")
-- confirmation of the planning data (title, fully remote, 30 h/week, CAD 35.00/h gross)
-- whether to collect phone and message
+**Already approved or done:**
+- the acknowledgement's subject, preheader and wording (OD-2026-10-26-02, D4) and the Concept A presentation;
+- the suppression design (D2a) and its implementation (B7, OD-2026-11-04-02), including the r6 stale-primary fix;
+- the daily bounce-observation procedure (OD-2026-11-03-01).
 
-**Privacy:**
-- **P-1:** the privacy contact (`careers@` only if you designate it).
-- **P-2:** confirm the provider inventory:
-  - Render, Frankfurt: hosting, logs, scanning
-  - MongoDB Atlas, Frankfurt: applications, résumés, Admin accounts, sessions, audit, deletion journal, snapshots
-  - Bluehost/Titan: email (its data location is to be confirmed)
-  - GitHub: code and CI only, synthetic data
+**Blocked by:** the unconditional Production refusal `ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`. OD-2026-11-04-02 keeps it until the G-SUP evidence is accepted.
 
-  Also confirm each provider's data processing terms and the transfer basis for these US companies.
-- **P-3:** the recruitment retention period.
-- **P-4:** logs: Render, 7 days on Hobby; no IP, user agent, body or cookie in the access log.
-- **P-5:** the legal and privacy review of `/privacy` and `/legal` (Lithuanian entity, GDPR).
-- **Admin data (proposed inventory entry):**
-  - Admin name, email, roles, status and timestamps
-  - Argon2id hash
-  - encrypted TOTP secret and hashed recovery codes
-  - sessions with a coarse device label (browser and OS only), expiring by TTL
-  - append-only audit events with no candidate PII
+| # | Decision | Options | Recommendation |
+| --- | --- | --- | --- |
+| AK-1 | Accept the G-SUP evidence. Authorise replacing the unconditional refusal with the design's start-up requirement: in Production, acknowledgements start only when the suppression key (`SUPPRESSION_HMAC_KEY`, `SUPPRESSION_HMAC_KEY_ID`) and `SUPPRESSION_OPERATOR_IDS` are configured and pass the key check; the send path keeps the design §3.2 coverage check and fails closed | Accept and authorise the change (code and CI at $0, then H-18), or keep the refusal | **Accept**: required for the finish line |
+| AK-2 | G-COPY (proposed; it would block **every** Production automated email, the C7 internal notification included, until a copy-to-Sent mechanism is built and tested) | (a) leave it unapproved for launch; (b) approve it: build it first, and C7 waits; (c) approve it with a recorded, time-limited exception | **(a)** for launch. Titan keeps no Sent copy; each attempt's outcome is recorded durably in the database. Revisit at volume |
+| AK-3 | Suppression secrets and operators | The key and key id, typed into Render by you; your operator token; **where the protected second copy of the key is kept** (design §4.2) | Your password manager, with MFA |
+| AK-4 | Acknowledgement budget (D2b, optional, no number proposed) | Adopt (a separate change) or not now | **Not now** |
+| AK-5 | Sender and reply address | From: the Titan mailbox used in H2 (`notifications@`); Reply-To: `careers@` (Doc 14 §203) | As stated |
+| AK-6 | Known risks | Outlook.com Junk placement seen in B6 (P1, cause unknown); confirm the OneDrive bounce-log conditions before the first entry | Accept P1 as an observed risk; confirm OneDrive |
 
-  Retention is part of P-3.
+**After AK-1 to AK-6:** H-18 in private Production. A QA candidate receives the acknowledgement; a QA address entered in the suppression register receives none (`RECIPIENT_SUPPRESSED`, zero SMTP). E7 then repeats it publicly.
 
-**Also needed:** the billing tax location or entity, and any GST/HST or EU VAT number; the DMARC report mailbox; MFA confirmed on `shervin@`, `careers@` and `info@`.
+## 6. Prefilled launch-input checklist (from approved records)
+
+### 6.1 Vacancy: the Cybersecurity Specialist (`backend/provisioning/jobs/cybersecurity-specialist.json`, DRAFT)
+
+| Field | Approved value and source | Status |
+| --- | --- | --- |
+| Title | Cybersecurity Specialist (OD-2026-11-09-01 R1) | **Approved** |
+| Work arrangement and audience | Fully remote; international recruitment audience (R1) | **Approved** |
+| Canonical Job URL | `/careers/cybersecurity-specialist` (Doc 12 §6) on `https://cybervalida.com` (R3) | **Approved** |
+| Internal occupational reference | NOC 21220, internal only; never public and never a restriction (R1; Doc 10 §23) | **Approved** |
+| Eligibility field and label | `eligibleWorkCountries`, shown as "Eligible Remote-Work Countries" (OD-2026-11-09-02 and -03) | **Approved** (implemented) |
+| Publication timing | Only after the Release E gates, including E6 (OD-2026-11-09-03 §4) | **Approved** |
+| Application form | Résumé required (Doc 10 defaults) | **Approved** |
+| Weekly hours | 30 (Doc 10 §70: "editable planning data") | **Confirm** |
+| Compensation | CAD 35.00 gross per hour (same) | **Confirm** |
+| Physical work location | "British Columbia, Canada" is the historical planning value only (R2) | **Needed** |
+| Eligible work countries | OPEN pending company and employment arrangements (R2) | **Needed** (ISO list) |
+| Employment type; schedule wording | — | **Needed** |
+| Description; responsibilities; requirements | Must reflect Valida's actual role; nothing may be invented (R1; Doc 12 §45) | **Needed** |
+| Preferred qualifications; screening questions; closing date | — | **Needed** ("none" is an answer) |
+| Collect phone? Collect a message? | Off by default (Doc 10) | **Needed** |
+
+### 6.2 Privacy
+
+| ID | Approved so far, and source | Still needed |
+| --- | --- | --- |
+| P-1 Privacy contact | `careers@cybervalida.com` is the recruitment mailbox and the Reply-To of automated mail (Doc 14 §203). No approved source names it as the privacy contact (C4 check) | **Designate** a contact (`careers@` or another) |
+| P-2 Providers | **Render** (hosting, logs, scanning) and **MongoDB Atlas** (applications, résumés, Admin data, deletion journal, snapshots), **Frankfurt** (CR-2026-11-18-AN; D-1). **Titan / Bluehost** Professional Email for corporate and transactional mail (OD-2026-10-26-02). Native Render/Atlas alerting (H2 choice, in the **draft** owner record 2026-11-20-01). Bounce log on OneDrive Personal, **conditional** on its access, MFA and ownership conditions (OD-2026-11-03-01, item 4). GitHub: code and CI, synthetic data only | **Confirm** each provider's role and data processing terms, the transfer basis for these US providers, Titan's data location, and whether the notice names providers (Doc 13 §181) |
+| P-3 Retention | None decided; no automatic deletion (C4 check; data inventory) | **Determine** the recruitment retention period. Admin data and audit retention are part of it |
+| P-4 Logs | Destination: Render logs (approved stack). Content: request id, method, route shape, status and duration only; no IP, user agent, body or cookie (C3 r3, implemented) | **Accept** the 7-day retention (Render Hobby) |
+| P-5 Legal review | Required before public deployment (Doc 06 §§169, 178); not started | **Commission** the review of `/privacy` and `/legal` (Lithuanian entity, GDPR) |
+| Admin data (new) | E1–E5 store: Admin name, email, roles, status and times; an Argon2id hash; an encrypted TOTP secret; hashed recovery codes; sessions with a browser and OS label, expiring by TTL; append-only audit events with no candidate PII | **Approve** this inventory entry |
+
+### 6.3 Other inputs
+
+- **Billing:** the billing tax location or entity, and any GST/HST or EU VAT number.
+- **DMARC:** the mailbox for `rua=` reports.
+- **Mailboxes:** confirm MFA on `shervin@`, `careers@`, `info@` and `notifications@`.
+- **H2 leftovers:** the iOS Safari evidence and one message's headers.
 
 ## 7. Sources (read 2026-11-22)
 

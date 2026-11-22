@@ -4,6 +4,7 @@
 | --- | --- |
 | Goal (owner, 2026-11-21) | One public launch with recruitment fully operational: secure HR access, résumé scanning, tested recovery, working email |
 | Base | `main` = `2b39e8e` (RG accepted, act I done). C6 Review and H2 all PASS (owner record §§1–5) |
+| Superseded | §§3–5 by `LAUNCH_REQUEST_2026-11-22.md` (2026-11-22). PR #2 merged: `main` = `60bb58a` |
 | Status | Prepared by Claude. **No spending, DNS change or public activation is authorised by this document.** The US$7/month proposal is on hold |
 
 ## 1. What blocks the goal

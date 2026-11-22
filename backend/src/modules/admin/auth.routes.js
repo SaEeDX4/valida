@@ -158,6 +158,28 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
     return admin;
   }
 
+  /**
+   * Explains a refused enrolment write. The conditional write is the decision; this read only picks the answer.
+   * An expired setup keeps the pre-auth session so the Admin can start again. Every other refusal ends that
+   * session: the account changed underneath it (disabled, revoked, enrolled or restarted elsewhere).
+   */
+  async function refusedEnrollment(req, adminId, expectedAuthVersion) {
+    const current = await model.findById(adminId).lean();
+    const revoked = !current || current.status !== 'ACTIVE' || current.authentication.authVersion !== expectedAuthVersion;
+    const expired = !revoked && !current.mfa.enabled && current.mfa.pendingExpiresAt && current.mfa.pendingExpiresAt.getTime() <= now();
+    if (expired) return fail(400, 'MFA_ENROLLMENT_EXPIRED', 'The setup expired. Start again.');
+    await destroySession(req);
+    if (revoked) return authError('SESSION_REVOKED');
+    return fail(409, 'MFA_ENROLLMENT_CONFLICT', 'Two-step verification was set up or restarted elsewhere. Sign in again.');
+  }
+
+  /** Explains a refused activation or reset write (expired versus otherwise invalid); never changes anything. */
+  async function refusedToken(adminId, expiryField, { invalid, expired }) {
+    const current = await model.findById(adminId).lean();
+    const expiresAt = current?.authentication?.[expiryField];
+    return current && current.status === 'ACTIVE' && expiresAt && expiresAt.getTime() <= now() ? expired() : invalid();
+  }
+
   // ------------------------------------------------------------ s51-52 CSRF --
   router.get('/csrf', (req, res) => {
     const csrfToken = req.session.csrfToken ?? issueCsrfToken(req);
@@ -284,10 +306,12 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
       const admin = await loadPreAuth(req, AUTH_LEVEL.MFA_ENROLLMENT_REQUIRED);
       const secret = generateTotpSecret();
       const sealed = secretBox.seal(secret);
-      await model.updateOne(
-        { _id: admin._id },
+      // Write-time conditions: still active, same auth version, MFA still not enabled.
+      const started = await model.updateOne(
+        { _id: admin._id, status: 'ACTIVE', 'authentication.authVersion': { $eq: req.session.authVersion }, 'mfa.enabled': false },
         { $set: { 'mfa.pendingSecretCiphertext': sealed.ciphertext, 'mfa.pendingEncryptionKeyId': sealed.keyId, 'mfa.pendingExpiresAt': new Date(now() + policy.enrollmentLifetimeMs) } },
       );
+      if (started.matchedCount !== 1) throw await refusedEnrollment(req, admin._id, req.session.authVersion);
       // s70: sensitive — returned once, never logged.
       res.json(successEnvelope({ secret, otpauthUri: otpauthUri({ secretBase32: secret, accountName: admin.email }), expiresInSeconds: policy.enrollmentLifetimeMs / 1000 }, req.id));
     } catch (error) {
@@ -299,7 +323,9 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
     try {
       const { code } = parseBody(z.object({ code: z.string().max(20) }).strict(), req.body);
       const admin = await loadPreAuth(req, AUTH_LEVEL.MFA_ENROLLMENT_REQUIRED);
+      const expectedAuthVersion = req.session.authVersion;
       const pending = admin.mfa.pendingSecretCiphertext;
+      if (admin.mfa.enabled) throw await refusedEnrollment(req, admin._id, expectedAuthVersion);
       if (!pending || !admin.mfa.pendingExpiresAt || admin.mfa.pendingExpiresAt.getTime() <= now()) {
         throw fail(400, 'MFA_ENROLLMENT_EXPIRED', 'The setup expired. Start again.');
       }
@@ -315,8 +341,19 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
       }
       const codes = Array.from({ length: policy.recoveryCodeCount }, generateRecoveryCode);
       const firstActivation = !admin.mfa.enrolledAt && !admin.lastLoginAt;
-      const fresh = await model.findByIdAndUpdate(
-        admin._id,
+      // Completion is one conditional write (E1 correction). At write time the account must still be ACTIVE,
+      // at the session's auth version, with MFA disabled and the SAME unexpired pending enrolment that was
+      // verified. Of concurrent or stale completions at most one matches; only that one gets a session and codes.
+      const fresh = await model.findOneAndUpdate(
+        {
+          _id: admin._id,
+          status: 'ACTIVE',
+          'authentication.authVersion': { $eq: expectedAuthVersion },
+          'mfa.enabled': false,
+          'mfa.pendingSecretCiphertext': { $eq: pending },
+          'mfa.pendingEncryptionKeyId': { $eq: admin.mfa.pendingEncryptionKeyId },
+          'mfa.pendingExpiresAt': { $eq: admin.mfa.pendingExpiresAt, $gt: new Date(now()) },
+        },
         {
           $set: {
             'mfa.enabled': true,
@@ -334,6 +371,7 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
         },
         { returnDocument: 'after' },
       );
+      if (!fresh) throw await refusedEnrollment(req, admin._id, expectedAuthVersion);
       const data = await establishSession(req, fresh);
       await record(req, 'MFA_ENROLLED', admin._id, { method: 'TOTP' });
       if (firstActivation) await record(req, 'AUTH_LOGIN_SUCCESS', admin._id, { method: 'TOTP' });
@@ -357,12 +395,20 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
       }
       const problem = passwordPolicyProblem(password, { email: admin.email });
       if (problem) throw new AppError({ status: 400, code: ERROR_CODES.VALIDATION_FAILED, message: problem.message, fieldErrors: [{ field: 'password', code: problem.code, message: problem.message }] });
-      // Single use: the token is cleared in the same conditional write that sets the password.
+      const passwordHash = await hashPassword(password, adminAuth.argon2);
+      // Single use: the token is cleared in the same conditional write that sets the password. The status,
+      // auth-version and expiry checks are repeated at write time, after the slow hash (E1 correction).
       const updated = await model.findOneAndUpdate(
-        { _id: admin._id, 'authentication.activationTokenHash': sha256Hex(token) },
+        {
+          _id: admin._id,
+          status: 'ACTIVE',
+          'authentication.authVersion': { $eq: admin.authentication.authVersion },
+          'authentication.activationTokenHash': { $eq: sha256Hex(token) },
+          'authentication.activationExpiresAt': { $gt: new Date(now()) },
+        },
         {
           $set: {
-            'authentication.passwordHash': await hashPassword(password, adminAuth.argon2),
+            'authentication.passwordHash': passwordHash,
             'authentication.passwordChangedAt': clock(),
             'authentication.emailVerifiedAt': clock(),
             'authentication.activationTokenHash': null,
@@ -372,7 +418,12 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
         },
         { returnDocument: 'after' },
       );
-      if (!updated) throw fail(400, 'ACTIVATION_INVALID', 'This activation link is not valid. Ask the owner for a new one.');
+      if (!updated) {
+        throw await refusedToken(admin._id, 'activationExpiresAt', {
+          invalid: () => fail(400, 'ACTIVATION_INVALID', 'This activation link is not valid. Ask the owner for a new one.'),
+          expired: () => fail(400, 'ACTIVATION_EXPIRED', 'This activation link has expired. Ask the owner for a new one.'),
+        });
+      }
       await ops.revokeSessions(updated._id);
       const csrfToken = await establishPreAuth(req, updated, AUTH_LEVEL.MFA_ENROLLMENT_REQUIRED);
       await record(req, 'ADMIN_ACTIVATED', updated._id, {});
@@ -423,11 +474,19 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
       }
       const problem = passwordPolicyProblem(password, { email: admin.email });
       if (problem) throw new AppError({ status: 400, code: ERROR_CODES.VALIDATION_FAILED, message: problem.message, fieldErrors: [{ field: 'password', code: problem.code, message: problem.message }] });
+      const passwordHash = await hashPassword(password, adminAuth.argon2);
+      // The status, auth-version and expiry checks are repeated at write time, after the slow hash (E1 correction).
       const updated = await model.findOneAndUpdate(
-        { _id: admin._id, 'authentication.resetTokenHash': hash },
+        {
+          _id: admin._id,
+          status: 'ACTIVE',
+          'authentication.authVersion': { $eq: admin.authentication.authVersion },
+          'authentication.resetTokenHash': { $eq: hash },
+          'authentication.resetTokenExpiresAt': { $gt: new Date(now()) },
+        },
         {
           $set: {
-            'authentication.passwordHash': await hashPassword(password, adminAuth.argon2),
+            'authentication.passwordHash': passwordHash,
             'authentication.passwordChangedAt': clock(),
             'authentication.resetTokenHash': null,
             'authentication.resetTokenExpiresAt': null,
@@ -438,7 +497,12 @@ export function authRouter({ adminAuth, secretBox, clock = () => new Date(), aud
         },
         { returnDocument: 'after' },
       );
-      if (!updated) throw fail(400, 'PASSWORD_RESET_INVALID', 'This reset link is not valid. Request a new one.');
+      if (!updated) {
+        throw await refusedToken(admin._id, 'resetTokenExpiresAt', {
+          invalid: () => fail(400, 'PASSWORD_RESET_INVALID', 'This reset link is not valid. Request a new one.'),
+          expired: () => fail(400, 'PASSWORD_RESET_EXPIRED', 'This reset link has expired. Request a new one.'),
+        });
+      }
       await ops.revokeSessions(updated._id);
       await destroySession(req); // s131: no automatic sign-in
       await record(req, 'PASSWORD_RESET_COMPLETED', updated._id, {});

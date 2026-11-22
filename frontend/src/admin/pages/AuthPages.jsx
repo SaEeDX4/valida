@@ -272,7 +272,7 @@ export function MfaSetup() {
   return (
     <AuthCard wide title="Set up two-step verification" lead="Scan the code with an authenticator app (for example Microsoft Authenticator, Google Authenticator or 1Password), then enter the 6-digit code it shows.">
       <ErrorAlert error={error} title="Not set up yet" />
-      {error?.code === 'AUTHENTICATION_REQUIRED' || error?.code === 'SESSION_EXPIRED' ? (
+      {['AUTHENTICATION_REQUIRED', 'SESSION_EXPIRED', 'SESSION_REVOKED', 'MFA_ENROLLMENT_CONFLICT', 'MFA_CHALLENGE_ENDED'].includes(error?.code) ? (
         <Link to="/admin/login" className={styles.rowLink}>
           Sign in again
         </Link>

@@ -19,11 +19,22 @@ export function roleDefinitions(db) {
   return {
     // The API's database user (MONGODB_URI): the application collections, no résumé bytes.
     // listIndexes: the Apply path refuses to write unless the unique indexes exist (assertUniqueIndexes).
+    // E1-E5 (OD-2026-11-21-01): the Admin surface runs under the same user.
+    //   - jobs: written by Admin Job management (E3), which like Apply refuses to write unless its
+    //     unique indexes exist (listIndexes);
+    //   - admins: accounts (no remove: Admins are disabled, never deleted);
+    //   - admin_sessions: the connect-mongo store; expiry is the TTL index of db/indexes.js, so no
+    //     index privilege;
+    //   - audit_events: append-only (insert and find, never update or remove).
+    // Proven by tests/mongo-roles/mongo-admin-roles-server.test.js.
     valida_api_runtime: [
       on('applications', ['find', 'insert', 'update', 'listIndexes']),
-      on('jobs', ['find']),
+      on('jobs', ['find', 'insert', 'update', 'listIndexes']),
       on('recipient_suppressions', ['find']),
       on('recipient_suppression_keys', ['find']),
+      on('admins', ['find', 'insert', 'update']),
+      on('admin_sessions', ['find', 'insert', 'update', 'remove']),
+      on('audit_events', ['find', 'insert']),
     ],
     // The API's storage user (RESUME_STORAGE_MONGODB_URI): résumé documents only; never update.
     valida_resume_storage: [on('resume_files', ['find', 'insert', 'remove'])],

@@ -291,7 +291,9 @@ describe('describeHead — one head for browser and server', () => {
 
   it('the factual Lithuanian references are untouched: About, Privacy and Legal (Valida MB, its registration)', () => {
     expect(ABOUT_SECTIONS[0].paragraphs[0]).toBe('Valida MB is a Lithuanian technology company whose registered activity context includes computer programming, computer consultancy, and other IT services.');
-    expect(PRIVACY_SECTIONS[0].paragraphs).toEqual(['Valida MB is a Lithuanian technology company.']);
+    expect(PRIVACY_SECTIONS[0].paragraphs).toHaveLength(2);
+    expect(PRIVACY_SECTIONS[0].paragraphs[0]).toBe('Valida MB is a Lithuanian technology company.');
+    expect(PRIVACY_SECTIONS[0].paragraphs[1]).toContain('Valida MB (company code 308123132) is responsible for the personal information');
     expect(COMPANY_FACTS).toContainEqual({ term: 'Company type', value: 'Lithuanian Mažoji bendrija (MB)' });
   });
 

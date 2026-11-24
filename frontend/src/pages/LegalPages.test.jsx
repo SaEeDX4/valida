@@ -48,7 +48,7 @@ describe('Privacy Notice', () => {
     ].forEach((required) => expect(headings).toContain(required));
   });
 
-  it('points privacy questions at the published contact method, with no email of its own (Doc 06 section 167)', () => {
+  it('points privacy questions at the published contact method (Doc 06 section 167)', () => {
     const { container } = renderAt('/privacy');
     expect(screen.getByRole('heading', { level: 2, name: 'Questions or Requests' })).toBeTruthy();
     expect(container.querySelector('main').textContent).toMatch(/use the current official contact method published on the Valida website/);
@@ -65,16 +65,18 @@ describe('Privacy Notice', () => {
     ].forEach((pattern) => expect(text).not.toMatch(pattern));
   });
 
-  it('invents no provider, retention period, compliance claim or privacy contact', () => {
+  it('names only the recorded providers, contact and address; no retention duration or compliance claim', () => {
     const { container } = renderAt('/privacy');
     const text = container.querySelector('main').textContent;
     [
-      /\bGDPR\b/, /\bPIPEDA\b/, /\bcompliant\b/i, /\bcompliance with\b/i,
-      /\bAWS\b/, /\bGoogle Analytics\b/, /\bCloudflare\b/, /\bMongoDB Atlas\b/,
+      /\bPIPEDA\b/, /\bcompliant\b/i, /\bcompliance with\b/i,
+      /\bAWS\b/, /\bGoogle Analytics\b/, /\bCloudflare\b/, /\bapartment\b/i,
       /\bdata protection officer\b/i, /\bDPO\b/, /\bcookie/i, /\blawful basis\b/i,
       /\b\d+\s*(days|months|years)\b/i, /\bdata residency\b/i, /\bsubprocessor/i,
-      /[\w.+-]+@[\w-]+\.[\w.]+/,
     ].forEach((pattern) => expect(text).not.toMatch(pattern));
+    expect([...new Set(text.match(/[\w.+-]+@[\w-]+\.com/g))]).toEqual(['careers@cybervalida.com']);
+    for (const wanted of ['Render', 'MongoDB Atlas', 'Titan', 'Article 6(1)(b)', 'VDAI', 'deleted manually', 'the contracting company and the mailbox storage location are not yet confirmed']) expect(text).toContain(wanted);
+    expect(text).not.toContain('Newfold');
   });
 
   it('uses a constrained reading measure, not full-width legal text', () => {

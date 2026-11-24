@@ -1,11 +1,11 @@
 /**
- * Canonical Privacy copy — 06_CONTENT_COPY_DECK.md sections 155-168. Verbatim.
+ * Canonical Privacy copy — 06_CONTENT_COPY_DECK.md sections 155-168, plus the
+ * recruitment wording approved by the owner on 2026-11-24.
  *
- * Nothing here names a provider, a retention duration, a lawful basis, a DPO,
- * a privacy mailbox, a cookie or analytics behaviour, a data-residency
- * statement, a subprocessor, a certification, or a GDPR/PIPEDA compliance
- * claim — the canonical deck asserts none of those, and Doc 06 section 169
- * forbids adding a compliance claim to make the notice look stronger.
+ * The contact, retention, legal-basis and provider texts are owner-approved.
+ * Providers and transfers come from their published terms. No retention
+ * duration, DPO, certification or compliance claim is made, and Doc 06 section
+ * 169 forbids adding one to make the notice look stronger.
  */
 
 export const PRIVACY_META = {
@@ -23,13 +23,17 @@ export const PRIVACY_INTRO =
 export const PRIVACY_SECTIONS = [
   {
     title: 'Who We Are',
-    paragraphs: ['Valida MB is a Lithuanian technology company.'],
+    paragraphs: [
+      'Valida MB is a Lithuanian technology company.',
+      'Valida MB (company code 308123132) is responsible for the personal information described in this notice. Address: Arkos g. 1, Avižienių sen., LT-14180 Klevinės k., Lithuania. Email: careers@cybervalida.com.',
+    ],
   },
   {
     title: 'Information We Collect',
     paragraphs: [
       'The information we process depends on how you interact with Valida.',
       'When you apply for a position, this may include information you provide such as your name, contact details, resume, application responses, message or cover letter, and information associated with the position you selected.',
+      'When you apply, your name, email address and resume are required. Your phone number and message are optional.',
       'The website and supporting systems may also process technical information necessary to operate, secure, diagnose, and protect the service.',
     ],
   },
@@ -37,6 +41,7 @@ export const PRIVACY_SECTIONS = [
     title: 'Why We Use Applicant Information',
     paragraphs: [
       'Recruitment information is used to receive and evaluate applications, communicate with candidates, administer the recruitment process, maintain appropriate records, protect the application service, and support legitimate company operations related to recruitment.',
+      'We use your application details and resume to consider you for the position you selected and to contact you about it; we do this to take steps at your request before a possible employment contract (GDPR Article 6(1)(b)). We keep security logs, protect the application service, record who accessed applications and keep records for possible disputes on the basis of our legitimate interests (Article 6(1)(f)). Where a law requires us to keep a record, we do so to meet that obligation (Article 6(1)(c)).',
     ],
   },
   {
@@ -49,7 +54,8 @@ export const PRIVACY_SECTIONS = [
   {
     title: 'Service Providers',
     paragraphs: [
-      'Valida may use technology service providers to operate parts of its website, hosting, storage, database, security, email, or other supporting infrastructure.',
+      'We use Render (website and application hosting), MongoDB Atlas (application records and resumes, stored in Frankfurt, Germany) and Titan email bought through Bluehost. Render and MongoDB may process information in the United States; their published terms rely on the EU-U.S. Data Privacy Framework and on EU standard contractual clauses.',
+      'For Titan email, the contracting company and the mailbox storage location are not yet confirmed. Titan’s published list of the companies it uses includes companies in the United States.',
       'Information may be processed by those providers where necessary to provide the relevant service, subject to the configurations and arrangements established for the Valida platform.',
     ],
   },
@@ -62,8 +68,7 @@ export const PRIVACY_SECTIONS = [
   {
     title: 'Retention',
     paragraphs: [
-      'Personal information should be retained only for as long as reasonably required for the purpose for which it was collected and for applicable operational, record-keeping, legal, security, or dispute-related needs.',
-      'Specific retention rules must remain aligned with Valida’s implemented processes and applicable requirements.',
+      'Applications and resumes are deleted manually. We keep them while the position is open and afterwards only as long as needed for the recruitment decision, possible disputes and record-keeping required by law. Email correspondence is kept in Valida’s company email archive.',
     ],
   },
   {
@@ -71,6 +76,16 @@ export const PRIVACY_SECTIONS = [
     paragraphs: [
       'Valida aims to request and retain information that is relevant to the purpose of the interaction rather than collecting personal information without a defined need.',
     ],
+  },
+  {
+    title: 'Your Rights',
+    paragraphs: [
+      'You may ask for access to, correction, deletion or restriction of your information, ask for a copy in a portable form, or object to its use. Write to careers@cybervalida.com. You may also complain to the Lithuanian State Data Protection Inspectorate (VDAI) or your local data protection authority.',
+    ],
+  },
+  {
+    title: 'Automated Decisions',
+    paragraphs: ['Valida makes no automated hiring decisions.'],
   },
   /*
    * Doc 06 section 167. The contact method is the Contact page (owner approval

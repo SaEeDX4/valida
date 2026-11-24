@@ -181,6 +181,7 @@ describe('page titles are Document 06 (OD-2026-11-09-01 resolves the Doc 16 §§
     [STATIC_HEADS.CAREERS.title, 'Careers at Valida | Open Technology & Cybersecurity Roles'],
     [STATIC_HEADS.PRIVACY.title, 'Privacy Notice | Valida'],
     [STATIC_HEADS.LEGAL.title, 'Legal Information | Valida'],
+    [STATIC_HEADS.CONTACT.title, 'Contact | Valida'],
     [jobDetailHead(qaJob()).title, 'QA Synthetic Security Analyst (C4) | Careers at Valida'],
     [applyHead(qaJob()).title, 'Apply for QA Synthetic Security Analyst (C4) | Valida'],
     [NOT_FOUND_HEAD.title, 'Page Not Found | Valida'],
@@ -276,7 +277,7 @@ describe('describeHead — one head for browser and server', () => {
 
   it('the amendment is limited to social sharing: one phrase on Home, every other route shares its own search description', () => {
     expect(APPROVED_HOME_SHARING_DESCRIPTION).toBe(DOC06_HOME_DESCRIPTION.replace('a Lithuanian technology company', 'a technology company'));
-    const others = [STATIC_HEADS.ABOUT, STATIC_HEADS.CAREERS, STATIC_HEADS.PRIVACY, STATIC_HEADS.LEGAL, jobDetailHead(qaJob())];
+    const others = [STATIC_HEADS.ABOUT, STATIC_HEADS.CAREERS, STATIC_HEADS.PRIVACY, STATIC_HEADS.LEGAL, STATIC_HEADS.CONTACT, jobDetailHead(qaJob())];
     for (const input of others) {
       expect(input.socialDescription, input.title).toBeUndefined();
       expect(Object.fromEntries(describeHead(input, INDEXED).openGraph)['og:description'], input.title).toBe(input.description);
@@ -586,11 +587,11 @@ describe('JSON-LD in HTML (Doc 16 section 255)', () => {
 });
 
 describe('sitemap and robots (Doc 16 sections 103-113)', () => {
-  it('lists the five static routes and each open Job once — no Apply, no lastmod', () => {
+  it('lists the six static routes and each open Job once — no Apply, no lastmod', () => {
     const { xml, urls, skipped } = buildSitemapXml({ siteOrigin: SITE, openJobSlugs: ['qa-open-one', 'qa-open-two', 'qa-open-one', 'Not A Slug', '../x'] });
-    expect(SITEMAP_STATIC_PATHS).toEqual(['/', '/about', '/careers', '/privacy', '/legal']);
+    expect(SITEMAP_STATIC_PATHS).toEqual(['/', '/about', '/careers', '/privacy', '/legal', '/contact']);
     expect(urls).toEqual([
-      `${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`,
+      `${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`, `${SITE}/contact`,
       `${SITE}/careers/qa-open-one`, `${SITE}/careers/qa-open-two`,
     ]);
     expect(skipped).toBe(2);

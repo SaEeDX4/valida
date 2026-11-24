@@ -126,7 +126,8 @@ describe('Home — claim control (Doc 02)', () => {
     const text = container.textContent;
     expect(text).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
     expect(text).not.toMatch(/published company contact channel/i);
-    expect(screen.queryByRole('link', { name: /contact/i })).toBeNull();
+    // The details are on the Contact page only; the footer links to it.
+    expect(screen.getAllByRole('link', { name: /contact/i }).map((link) => link.getAttribute('href'))).toEqual(['/contact']);
   });
 
   it('renders the final CTA body without the contact clause', () => {

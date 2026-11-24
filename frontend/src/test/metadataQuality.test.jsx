@@ -67,6 +67,7 @@ const INDEXABLE = [
   ["/careers", "Careers at Valida | Open Technology & Cybersecurity Roles"],
   ["/privacy", "Privacy Notice | Valida"],
   ["/legal", "Legal Information | Valida"],
+  ["/contact", "Contact | Valida"],
 ];
 
 describe("A6 — titles and descriptions", () => {

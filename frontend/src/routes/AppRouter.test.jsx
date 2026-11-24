@@ -66,7 +66,7 @@ describe('application shell', () => {
   });
 
   it('gives every route exactly one H1', () => {
-    ['/', '/about', '/careers', '/privacy', '/legal', '/nope'].forEach((path) => {
+    ['/', '/about', '/careers', '/privacy', '/legal', '/contact', '/nope'].forEach((path) => {
       const view = renderAt(path);
       expect(view.container.querySelectorAll('h1')).toHaveLength(1);
       view.unmount();
@@ -83,6 +83,7 @@ describe('routing', () => {
     ['/careers', /Work on technology that is built to be trusted\./],
     ['/privacy', /Privacy Notice/],
     ['/legal', /Legal Information/],
+    ['/contact', /^Contact$/],
   ])('renders %s directly (Doc 04 section 44)', (path, heading) => {
     renderAt(path);
     expect(screen.getByRole('heading', { level: 1, name: heading })).toBeTruthy();

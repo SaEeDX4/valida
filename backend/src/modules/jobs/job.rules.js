@@ -45,7 +45,8 @@ export function checkPublishReadiness(job) {
     Boolean(job.compensation?.currency) &&
       Number.isInteger(job.compensation?.amountMinor) &&
       Boolean(job.compensation?.unit) &&
-      typeof job.compensation?.gross === 'boolean',
+      // Owner decision 2026-11-24: gross or net may be left unstated (null).
+      [true, false, null, undefined].includes(job.compensation?.gross),
     'compensation',
   );
   require(typeof job.description === 'string' && job.description.trim().length > 0, 'description');

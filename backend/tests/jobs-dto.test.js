@@ -9,6 +9,7 @@ import {
   PublicJobMappingError,
   toPublicApplicationForm,
   toPublicCompensation,
+  toPublicWorkplace,
   toPublicJobDetail,
   toPublicJobListItem,
 } from '../src/modules/jobs/job.mapper.js';
@@ -44,7 +45,7 @@ const LIST_KEYS = [
 ];
 const DETAIL_KEYS = [
   'title', 'slug', 'location', 'workArrangement', 'employmentType', 'schedule', 'weeklyHours',
-  'compensation', 'eligibleWorkCountries', 'description', 'responsibilities', 'requirements', 'preferredQualifications',
+  'compensation', 'eligibleWorkCountries', 'workplace', 'description', 'responsibilities', 'requirements', 'preferredQualifications',
   'publishedAt', 'closesAt', 'applicationStatus', 'applicationForm',
 ];
 
@@ -102,7 +103,10 @@ describe('public compensation DTO', () => {
     expect(toPublicCompensation(undefined)).toBeNull();
     expect(toPublicCompensation({ currency: 'CAD', amountMinor: null, unit: 'HOUR', gross: true })).toBeNull();
     expect(toPublicCompensation({ currency: 'CAD', amountMinor: 3500, unit: null, gross: true })).toBeNull();
-    expect(toPublicCompensation({ currency: 'CAD', amountMinor: 3500, unit: 'HOUR', gross: null })).toBeNull();
+  });
+
+  it('gross is null when the Job does not state it (owner decision 2026-11-24)', () => {
+    expect(toPublicCompensation({ currency: 'EUR', amountMinor: 3000, unit: 'HOUR', gross: null })).toEqual({ currency: 'EUR', amount: 30, unit: 'HOUR', gross: null });
   });
 
   it('converts EUR minor units exactly (3000 -> 30)', () => {
@@ -319,5 +323,19 @@ describe('public visibility (Doc 09 sections 44-46, 62; Doc 10 section 63)', () 
       ['createdAt', -1],
       ['_id', -1],
     ]);
+  });
+});
+
+describe('worksite of an on-site Job (owner decision 2026-11-24)', () => {
+  const location = { displayName: 'QA Street 1, LT-00000 QA Town, Lithuania', countryCode: 'LT', locality: 'QA Town', streetAddress: 'QA Street 1', postalCode: 'LT-00000' };
+
+  it('is published whole, for ON_SITE only', () => {
+    expect(toPublicWorkplace({ workArrangement: 'ON_SITE', location })).toEqual({ street: 'QA Street 1', city: 'QA Town', postalCode: 'LT-00000', country: 'LT' });
+    expect(toPublicWorkplace({ workArrangement: 'FULLY_REMOTE', location })).toBeNull();
+    expect(toPublicWorkplace({ workArrangement: 'HYBRID', location })).toBeNull();
+  });
+
+  it.each(['countryCode', 'locality', 'streetAddress', 'postalCode'])('is null while %s is missing', (part) => {
+    expect(toPublicWorkplace({ workArrangement: 'ON_SITE', location: { ...location, [part]: null } })).toBeNull();
   });
 });

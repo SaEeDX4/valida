@@ -289,6 +289,7 @@ describe('GET /api/v1/jobs/:jobSlug over MongoDB', () => {
       compensation: { currency: 'CAD', amount: 35, unit: 'HOUR', gross: true },
       // OD-2026-11-09-02: none approved for this synthetic Job -> an explicit empty list, never an inferred one.
       eligibleWorkCountries: [],
+      workplace: null,
       description: 'QA TEST DATA description.',
       responsibilities: ['QA TEST DATA responsibility.'],
       requirements: ['QA TEST DATA requirement.'],

@@ -101,6 +101,9 @@ const locationSchema = new mongoose.Schema(
     },
     regionCode: { type: String, trim: true, maxlength: 20, default: null },
     locality: { type: String, trim: true, maxlength: 120, default: null },
+    // Owner decision 2026-11-24: the confirmed worksite of an on-site role.
+    streetAddress: { type: String, trim: true, maxlength: 160, default: null },
+    postalCode: { type: String, trim: true, maxlength: 20, default: null },
   },
   { _id: false },
 );

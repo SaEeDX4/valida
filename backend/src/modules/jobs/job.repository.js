@@ -60,6 +60,11 @@ export const DETAIL_PROJECTION = Object.freeze({
   ...LIST_PROJECTION,
   // OD-2026-11-09-02 — the explicit eligible remote-work countries (Job Detail only).
   eligibleWorkCountries: 1,
+  // Owner decision 2026-11-24 — an ON_SITE Job's worksite (Job Detail only).
+  'location.countryCode': 1,
+  'location.locality': 1,
+  'location.streetAddress': 1,
+  'location.postalCode': 1,
   description: 1,
   responsibilities: 1,
   requirements: 1,

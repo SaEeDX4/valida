@@ -473,6 +473,22 @@ describe('JobPosting: the other properties (kept for when the location input is 
     }
   });
 
+  it('on-site: jobLocation only from a complete worksite whose parts the page shows; no TELECOMMUTE', () => {
+    const workplace = { street: 'QA Street 1', city: 'QA Town', postalCode: 'LT-00000', country: 'LT' };
+    const onSite = (over) => qaJob({ workArrangement: 'ON_SITE', eligibleWorkCountries: [], location: 'QA Street 1, LT-00000 QA Town, Lithuania', workplace, ...over });
+    const { jsonLd, withheld } = buildJobPosting(onSite(), { siteOrigin: SITE });
+    expect(withheld).toBeNull();
+    expect(jsonLd.jobLocation).toEqual({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', streetAddress: 'QA Street 1', addressLocality: 'QA Town', postalCode: 'LT-00000', addressCountry: 'LT' },
+    });
+    expect(jsonLd).not.toHaveProperty('jobLocationType');
+    expect(jsonLd).not.toHaveProperty('applicantLocationRequirements');
+    for (const over of [{ workplace: null }, { workplace: { ...workplace, postalCode: null } }, { location: 'QA Town, Lithuania' }, { workArrangement: 'HYBRID' }]) {
+      expect(buildJobPosting(onSite(over), { siteOrigin: SITE }).withheld, JSON.stringify(over)).toBe(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
+    }
+  });
+
   it('a posting offering both arrangements: both Google types, no workHours, the EUR rate as stated', () => {
     const job = qaJob({
       employmentType: 'FULL_TIME_OR_PART_TIME',

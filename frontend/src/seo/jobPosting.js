@@ -37,9 +37,10 @@ import { SITE_NAME, absoluteUrl } from './siteConfig.js';
  *     (NO_APPLICANT_ELIGIBILITY). `location` (the physical job location), the
  *     visitor's regional view, a hiring market, a publication country and the
  *     occupational reference are never used to infer one.
- *   - Hybrid / on-site: the public DTO carries the workplace as display text
- *     only, not an address, so the JobPosting stays withheld
- *     (NO_STRUCTURED_WORKPLACE).
+ *   - On-site: the complete structured worksite the public DTO carries
+ *     (`workplace`, owner decision 2026-11-24), only when every written part is
+ *     also in the visible location. Otherwise, and for hybrid, the JobPosting
+ *     stays withheld (NO_STRUCTURED_WORKPLACE).
  */
 
 /**
@@ -155,6 +156,17 @@ function remoteDescription(job, names) {
     .join('')}</ul>`;
 }
 
+/** The worksite, or null unless it is complete and the page shows every written part of it. */
+function workplaceLocation(job) {
+  const { street, city, postalCode, country } = job.workplace ?? {};
+  if (![street, city, postalCode, country].every(isNonEmptyString)) return null;
+  if (!isNonEmptyString(job.location) || ![street, city, postalCode].every((part) => job.location.includes(part))) return null;
+  return {
+    '@type': 'Place',
+    address: { '@type': 'PostalAddress', streetAddress: street, addressLocality: city, postalCode, addressCountry: country },
+  };
+}
+
 /** baseSalary only when the page shows the Job's own compensation (same helper, same rule). */
 function baseSalary(compensation) {
   if (!formatCompensation(compensation)) return null;
@@ -234,6 +246,12 @@ export function buildJobPosting(job, { siteOrigin } = {}) {
   }
   const mapped = jobPostingProperties(job, { siteOrigin });
   if (mapped.withheld) return withheld(mapped.withheld);
+  if (job.workArrangement === 'ON_SITE') {
+    const jobLocation = workplaceLocation(job);
+    if (!jobLocation) return withheld(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
+    const { url: pageUrl, ...properties } = mapped.properties;
+    return { jsonLd: { ...properties, jobLocation, url: pageUrl }, withheld: null };
+  }
   if (job.workArrangement !== 'FULLY_REMOTE') return withheld(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
 
   const names = eligibleWorkCountryNames(job);

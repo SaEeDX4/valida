@@ -73,22 +73,16 @@ export const PRIVACY_SECTIONS = [
     ],
   },
   /*
-   * 'Questions or Requests' (Doc 06 section 167) IS DELIBERATELY NOT RENDERED.
-   *
-   * The canonical section directs readers to "the current official contact
-   * method published on the Valida website". No such method is published — it
-   * is a Phase 2 dependency (Document 14), tracked as AWAITING INPUT.
-   *
-   * Its second canonical sentence ("A specific privacy mailbox may replace
-   * this wording after Phase 2...") is internal roadmap language: it names an
-   * implementation phase and refers to wording the visitor never sees. Public
-   * privacy copy must not expose milestone vocabulary, and truth control
-   * forbids inventing a replacement contact method.
-   *
-   * So the whole section is omitted rather than partially shown. It returns
-   * verbatim once an approved, functional contact mechanism exists. The
-   * dependency lives here in code, never in rendered production copy.
+   * Doc 06 section 167. The contact method is the Contact page (owner approval
+   * A-4, 2026-11-24). The section's second canonical sentence is internal
+   * roadmap language and is never rendered.
    */
+  {
+    title: 'Questions or Requests',
+    paragraphs: [
+      'If you have a question about personal information provided to Valida, use the current official contact method published on the Valida website.',
+    ],
+  },
   {
     title: 'Changes to This Notice',
     paragraphs: [

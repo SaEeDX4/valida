@@ -12,17 +12,14 @@ const MARK_TRANSPARENT = '/brand/valida-mark-transparent-512.png';
  *
  * Groups follow the canonical Phase 1 footer IA: Brand, Company, Legal.
  *
- * The Contact group defined by Doc 04 section 58 and Doc 06 section 193 is
- * deliberately ABSENT. Document 06 permits a contact entry only once a
- * functioning approved contact mechanism exists, explicitly forbids publishing
- * a literal info@<domain>, and Doc 04 section 58 forbids building empty footer
- * categories. The corporate contact identity arrives in Phase 2, so inventing
- * one here would be a fabricated capability. This is tracked as AWAITING INPUT.
+ * The Contact entry (Doc 06 sections 193 and 197) is one link to the Contact
+ * page, whose email and address the owner approved for publication (A-4,
+ * 2026-11-24). Contact details are written on that page only.
  *
  * Every string below is canonical: the brand description is Document 06
- * section 190, the group headings and links are sections 191-192, and the
- * copyright is section 194. No address, phone, certification, client,
- * regulatory status or capability claim appears anywhere.
+ * section 190, the group headings and links are sections 191-192 and 197, and
+ * the copyright is section 194. No address, phone, certification, client,
+ * regulatory status or capability claim appears here.
  */
 export default function Footer() {
   // Doc 06 section 194: the year is dynamic, not hard-coded.
@@ -59,6 +56,11 @@ export default function Footer() {
               <li>
                 <TextLink as={Link} to={ROUTES.CAREERS} variant="quiet" className="t-body-sm">
                   Careers
+                </TextLink>
+              </li>
+              <li>
+                <TextLink as={Link} to={ROUTES.CONTACT} variant="quiet" className="t-body-sm">
+                  Contact
                 </TextLink>
               </li>
             </ul>

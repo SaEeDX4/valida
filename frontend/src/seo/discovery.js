@@ -10,8 +10,8 @@ import { absoluteUrl } from './siteConfig.js';
  * (section 108, SEO-012) with no rebuild.
  */
 
-/** Doc 16 section 105: the five indexable static routes. */
-export const SITEMAP_STATIC_PATHS = Object.freeze([ROUTES.HOME, ROUTES.ABOUT, ROUTES.CAREERS, ROUTES.PRIVACY, ROUTES.LEGAL]);
+/** Doc 16 section 105: the six indexable static routes. */
+export const SITEMAP_STATIC_PATHS = Object.freeze([ROUTES.HOME, ROUTES.ABOUT, ROUTES.CAREERS, ROUTES.PRIVACY, ROUTES.LEGAL, ROUTES.CONTACT]);
 
 const xmlEscape = (value) =>
   String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');

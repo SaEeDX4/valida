@@ -16,6 +16,7 @@ export const ROUTES = {
   APPLY: '/careers/:jobSlug/apply',
   PRIVACY: '/privacy',
   LEGAL: '/legal',
+  CONTACT: '/contact',
   NOT_FOUND: '*',
 };
 

@@ -24,7 +24,8 @@ export const PRIVACY_SECTIONS = [
   {
     title: 'Who We Are',
     paragraphs: [
-      'Valida MB (company code 308123132) is a Lithuanian technology company and is responsible for the personal information described in this notice. Address: Arkos g. 1, Avižienių sen., LT-14180 Klevinės k., Lithuania. Email: careers@cybervalida.com.',
+      'Valida MB is a Lithuanian technology company.',
+      'Valida MB (company code 308123132) is responsible for the personal information described in this notice. Address: Arkos g. 1, Avižienių sen., LT-14180 Klevinės k., Lithuania. Email: careers@cybervalida.com.',
     ],
   },
   {

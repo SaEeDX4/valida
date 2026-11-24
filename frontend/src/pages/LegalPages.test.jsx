@@ -75,7 +75,8 @@ describe('Privacy Notice', () => {
       /\b\d+\s*(days|months|years)\b/i, /\bdata residency\b/i, /\bsubprocessor/i,
     ].forEach((pattern) => expect(text).not.toMatch(pattern));
     expect([...new Set(text.match(/[\w.+-]+@[\w-]+\.com/g))]).toEqual(['careers@cybervalida.com']);
-    for (const wanted of ['Render', 'MongoDB Atlas', 'Titan', 'Article 6(1)(b)', 'VDAI', 'deleted manually']) expect(text).toContain(wanted);
+    for (const wanted of ['Render', 'MongoDB Atlas', 'Titan', 'Article 6(1)(b)', 'VDAI', 'deleted manually', 'the contracting company and the mailbox storage location are not yet confirmed']) expect(text).toContain(wanted);
+    expect(text).not.toContain('Newfold');
   });
 
   it('uses a constrained reading measure, not full-width legal text', () => {

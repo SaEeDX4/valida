@@ -54,7 +54,8 @@ export const PRIVACY_SECTIONS = [
   {
     title: 'Service Providers',
     paragraphs: [
-      'We use Render (website and application hosting), MongoDB Atlas (application records and resumes, stored in Frankfurt, Germany) and Titan email supplied through Bluehost (Newfold Digital). These providers, or companies they use, may process information in the United States. Their published terms rely on the EU-U.S. Data Privacy Framework (Render and MongoDB) and on EU standard contractual clauses.',
+      'We use Render (website and application hosting), MongoDB Atlas (application records and resumes, stored in Frankfurt, Germany) and Titan email bought through Bluehost. Render and MongoDB may process information in the United States; their published terms rely on the EU-U.S. Data Privacy Framework and on EU standard contractual clauses.',
+      'For Titan email, the contracting company and the mailbox storage location are not yet confirmed. Titan’s published list of the companies it uses includes companies in the United States.',
       'Information may be processed by those providers where necessary to provide the relevant service, subject to the configurations and arrangements established for the Valida platform.',
     ],
   },

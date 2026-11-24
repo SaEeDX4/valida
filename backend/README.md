@@ -2445,10 +2445,9 @@ during a rotation — any number, at most 32,767 characters in all),
 `SUPPRESSION_OPERATOR_IDS`, `SUPPRESSION_LOOKUP_TIMEOUT_MS`.
 Values are never echoed. **Outside production acknowledgements now need a
 configured and registered key**, or they fail closed. **In production
-`APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` is still refused outright**
-(`ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP`) until G-SUP is accepted; the production
-key, its protected copy (location AWAITING INPUT) and the operator tokens are
-C6 prerequisites.
+`APPLICATION_ACKNOWLEDGEMENT_ENABLED=true` refuses to start** without
+`SUPPRESSION_HMAC_KEY`, its key id and `SUPPRESSION_OPERATOR_IDS`; before it is
+switched on, `coverage` must report `COVERAGE_COMPLETE` (design §4.4).
 
 **Operator command** — dry run by default; `--apply` needs `--operator <token>`
 listed in `SUPPRESSION_OPERATOR_IDS`. Exit codes: 0 done, 1 failure (a write may

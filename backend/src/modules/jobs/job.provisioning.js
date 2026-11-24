@@ -241,6 +241,9 @@ export const jobDefinitionSchema = z
         countryCode: z.string().regex(/^[A-Z]{2}$/, 'must be two uppercase letters').nullable(),
         regionCode: optionalText(20),
         locality: optionalText(120),
+        // Optional keys: a definition written before they existed stays valid.
+        streetAddress: optionalText(160).default(null),
+        postalCode: optionalText(20).default(null),
       })
       .strict(),
     workArrangement: z.enum(WORK_ARRANGEMENTS).nullable(),
@@ -317,6 +320,8 @@ export function canonicalJobContent(job) {
       countryCode: nullIfEmpty(source.location?.countryCode),
       regionCode: nullIfEmpty(source.location?.regionCode),
       locality: nullIfEmpty(source.location?.locality),
+      streetAddress: nullIfEmpty(source.location?.streetAddress),
+      postalCode: nullIfEmpty(source.location?.postalCode),
     },
     workArrangement: nullIfEmpty(source.workArrangement),
     // A Job stored before the field existed has none: the same as [].

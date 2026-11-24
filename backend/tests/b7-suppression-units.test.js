@@ -136,11 +136,12 @@ describe('configuration — suppression variables (§4.2, §5)', () => {
     expect(message).not.toContain(KEY);
   });
 
-  it('production still refuses candidate acknowledgements outright, with or without a suppression key (G-SUP; OD-2026-11-04-02 item 5)', () => {
+  it('production refuses candidate acknowledgements until the key and the operator tokens are both configured (G-SUP)', () => {
     const production = {
       ...base,
       APP_ENV: 'production',
       NODE_ENV: 'production',
+      SITE_ACCESS: 'public',
       CORS_ALLOWED_ORIGINS: 'https://valida.example.test',
       TRANSACTIONAL_EMAIL_PROVIDER: 'smtp',
       SMTP_HOST: 'smtp.qa.example.test',
@@ -152,7 +153,10 @@ describe('configuration — suppression variables (§4.2, §5)', () => {
       APPLICATION_ACKNOWLEDGEMENT_ENABLED: 'true',
     };
     expect(failure(production)).toMatch(/gate G-SUP/);
-    expect(failure({ ...production, SUPPRESSION_HMAC_KEY: KEY, SUPPRESSION_HMAC_KEY_ID: 'k1', SUPPRESSION_OPERATOR_IDS: 'op-one' })).toMatch(/gate G-SUP/);
+    expect(failure({ ...production, SUPPRESSION_HMAC_KEY: KEY, SUPPRESSION_HMAC_KEY_ID: 'k1' })).toMatch(/gate G-SUP/);
+    expect(failure({ ...production, SUPPRESSION_OPERATOR_IDS: 'op-one' })).toMatch(/gate G-SUP/);
+    const config = loadConfig({ ...production, SUPPRESSION_HMAC_KEY: KEY, SUPPRESSION_HMAC_KEY_ID: 'k1', SUPPRESSION_OPERATOR_IDS: 'op-one' });
+    expect(config.notifications.acknowledgementEnabled).toBe(true);
   });
 });
 

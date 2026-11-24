@@ -13,7 +13,8 @@ import { eligibleWorkCountriesProblem } from './eligibleWorkCountries.js';
  *   never exposed: _id and every embedded _id, internalOccupationalReference
  *   (Doc 10 section 23), status, closedAt, archivedAt, createdAt, updatedAt,
  *   __v, applicationConfig.resumeRequired as stored, location.countryCode /
- *   regionCode / locality, compensation.amountMinor.
+ *   regionCode / locality (except the complete worksite of an ON_SITE Job,
+ *   toPublicWorkplace), compensation.amountMinor.
  *
  * Shapes are predictable (Doc 09 section 186): absent values become null or
  * an empty array, never a missing key. Dates are ISO 8601 UTC (section 184).
@@ -39,7 +40,7 @@ export class PublicJobMappingError extends Error {
 /**
  * Doc 10 section 15 mapping: { currency, amountMinor, unit, gross } ->
  * { currency, amount, unit, gross }. Null when the stored compensation is
- * incomplete (only possible for a retained CLOSED Job edited after closing;
+ * incomplete. `gross` is null when the Job does not state it (only possible for a retained CLOSED Job edited after closing;
  * a PUBLISHED Job is always publish-ready).
  */
 export function toPublicCompensation(compensation) {
@@ -47,13 +48,12 @@ export function toPublicCompensation(compensation) {
   if (
     typeof currency !== 'string' ||
     typeof amountMinor !== 'number' ||
-    typeof unit !== 'string' ||
-    typeof gross !== 'boolean'
+    typeof unit !== 'string'
   ) {
     return null;
   }
   try {
-    return { currency, amount: minorToMajor(amountMinor, currency), unit, gross };
+    return { currency, amount: minorToMajor(amountMinor, currency), unit, gross: typeof gross === 'boolean' ? gross : null };
   } catch (error) {
     throw new PublicJobMappingError(error.reason ?? 'money');
   }
@@ -153,6 +153,22 @@ export function toPublicEligibleWorkCountries(value) {
 }
 
 /**
+ * Owner decision 2026-11-24 — the worksite of an ON_SITE Job, as structured
+ * parts. Null for every other arrangement and while any part is missing: a
+ * partial address is never published as the workplace.
+ */
+export function toPublicWorkplace(job) {
+  if (job.workArrangement !== 'ON_SITE') return null;
+  const workplace = {
+    street: stringOrNull(job.location?.streetAddress),
+    city: stringOrNull(job.location?.locality),
+    postalCode: stringOrNull(job.location?.postalCode),
+    country: stringOrNull(job.location?.countryCode),
+  };
+  return Object.values(workplace).includes(null) ? null : workplace;
+}
+
+/**
  * Doc 09 sections 63-65 — GET /api/v1/jobs/:jobSlug.
  *
  * An OPEN Job carries its application form. A CLOSED Job carries
@@ -166,6 +182,7 @@ export function toPublicJobDetail(job, applicationStatus) {
     ...publicSummary(job),
     // OD-2026-11-09-02 — Job Detail only; the Careers list is unchanged.
     eligibleWorkCountries: toPublicEligibleWorkCountries(job.eligibleWorkCountries),
+    workplace: toPublicWorkplace(job),
     description: typeof job.description === 'string' ? job.description : '',
     responsibilities: stringList(job.responsibilities),
     requirements: stringList(job.requirements),

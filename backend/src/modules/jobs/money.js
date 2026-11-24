@@ -9,8 +9,9 @@
  * (exponent 0) and 10 times too large in KWD (exponent 3).
  *
  * The exponent therefore comes from this EXPLICIT table, never from a guess.
- * It lists only the currency the canonical documents establish for Valida's
- * planned role (CAD — Doc 10 section 70, Doc 12 section 44). A wage is a
+ * It lists only the currencies established for Valida's roles: CAD (planning
+ * data — Doc 10 section 70, Doc 12 section 44) and EUR (the first vacancy's
+ * pay, owner decision 2026-11-23). A wage is a
  * recruitment-truth field (Doc 02), so an unlisted currency is not converted
  * with an assumed exponent: provisioning refuses it and the public mapper
  * fails closed. Supporting another currency is a one-line, reviewed addition
@@ -23,6 +24,7 @@
 /** ISO 4217 minor-unit exponent for each supported currency. */
 export const CURRENCY_MINOR_UNIT_EXPONENTS = Object.freeze({
   CAD: 2,
+  EUR: 2,
 });
 
 export const SUPPORTED_CURRENCIES = Object.freeze(Object.keys(CURRENCY_MINOR_UNIT_EXPONENTS));

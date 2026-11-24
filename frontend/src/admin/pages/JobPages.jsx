@@ -17,7 +17,9 @@ import styles from '../admin.module.css';
  */
 
 const ARRANGEMENTS = { FULLY_REMOTE: 'Fully remote', HYBRID: 'Hybrid', ON_SITE: 'On site' };
-const EMPLOYMENT = { FULL_TIME: 'Full time', PART_TIME: 'Part time', FIXED_TERM: 'Fixed term', CONTRACT: 'Contract', TEMPORARY: 'Temporary', INTERNSHIP: 'Internship', OTHER: 'Other' };
+const EMPLOYMENT = { FULL_TIME: 'Full time', PART_TIME: 'Part time', FULL_TIME_OR_PART_TIME: 'Full time or part time', FIXED_TERM: 'Fixed term', CONTRACT: 'Contract', TEMPORARY: 'Temporary', INTERNSHIP: 'Internship', OTHER: 'Other' };
+/** The currencies the API accepts (backend/src/modules/jobs/money.js). */
+const CURRENCIES = ['CAD', 'EUR'];
 const UNITS = { HOUR: 'per hour', MONTH: 'per month', YEAR: 'per year' };
 const QUESTION_TYPES = { YES_NO: 'Yes / no', SHORT_TEXT: 'Short text', LONG_TEXT: 'Long text', SINGLE_SELECT: 'Single choice' };
 
@@ -98,7 +100,7 @@ export function JobsPage() {
 function money(content) {
   const c = content.compensation;
   if (!c?.currency || c.amountMinor === null) return '—';
-  return `${c.currency} ${(c.amountMinor / 100).toFixed(2)} ${UNITS[c.unit] ?? ''}${c.gross ? ' (gross)' : ''}`;
+  return `${c.currency} ${(c.amountMinor / 100).toFixed(2)} ${UNITS[c.unit] ?? ''}${c.gross === true ? ' (gross)' : c.gross === false ? ' (net)' : ''}`;
 }
 
 export function JobViewPage() {
@@ -272,13 +274,13 @@ const EMPTY = {
   slug: '',
   title: '',
   internalOccupationalReference: '',
-  location: { displayName: '', countryCode: 'CA', regionCode: '', locality: '' },
+  location: { displayName: '', countryCode: 'CA', regionCode: '', locality: '', streetAddress: '', postalCode: '' },
   workArrangement: 'FULLY_REMOTE',
   eligibleWorkCountries: '',
   employmentType: 'PART_TIME',
   schedule: '',
   weeklyHours: '',
-  compensation: { currency: 'CAD', amount: '', unit: 'HOUR', gross: true },
+  compensation: { currency: 'EUR', amount: '', unit: 'HOUR', gross: null },
   description: '',
   responsibilities: [''],
   requirements: [''],
@@ -293,13 +295,13 @@ function fromContent(content, slug) {
     slug,
     title: content.title ?? '',
     internalOccupationalReference: content.internalOccupationalReference ?? '',
-    location: { displayName: content.location.displayName ?? '', countryCode: content.location.countryCode ?? '', regionCode: content.location.regionCode ?? '', locality: content.location.locality ?? '' },
+    location: { displayName: content.location.displayName ?? '', countryCode: content.location.countryCode ?? '', regionCode: content.location.regionCode ?? '', locality: content.location.locality ?? '', streetAddress: content.location.streetAddress ?? '', postalCode: content.location.postalCode ?? '' },
     workArrangement: content.workArrangement ?? '',
     eligibleWorkCountries: (content.eligibleWorkCountries ?? []).join(', '),
     employmentType: content.employmentType ?? '',
     schedule: content.schedule ?? '',
     weeklyHours: content.weeklyHours ?? '',
-    compensation: { currency: content.compensation.currency ?? 'CAD', amount: content.compensation.amountMinor === null ? '' : (content.compensation.amountMinor / 100).toFixed(2), unit: content.compensation.unit ?? 'HOUR', gross: content.compensation.gross ?? true },
+    compensation: { currency: content.compensation.currency ?? 'EUR', amount: content.compensation.amountMinor === null ? '' : (content.compensation.amountMinor / 100).toFixed(2), unit: content.compensation.unit ?? 'HOUR', gross: content.compensation.gross ?? null },
     description: content.description ?? '',
     responsibilities: content.responsibilities.length ? content.responsibilities : [''],
     requirements: content.requirements.length ? content.requirements : [''],
@@ -318,7 +320,7 @@ function toDefinition(form) {
     slug: form.slug.trim(),
     title: form.title.trim(),
     internalOccupationalReference: orNull(form.internalOccupationalReference),
-    location: { displayName: orNull(form.location.displayName), countryCode: orNull(form.location.countryCode?.toUpperCase()), regionCode: orNull(form.location.regionCode), locality: orNull(form.location.locality) },
+    location: { displayName: orNull(form.location.displayName), countryCode: orNull(form.location.countryCode?.toUpperCase()), regionCode: orNull(form.location.regionCode), locality: orNull(form.location.locality), streetAddress: orNull(form.location.streetAddress), postalCode: orNull(form.location.postalCode) },
     workArrangement: form.workArrangement || null,
     eligibleWorkCountries: countries,
     employmentType: form.employmentType || null,
@@ -443,6 +445,17 @@ export function JobEditorPage() {
             </Field>
           </div>
           <div className={styles.formRow}>
+            <Field label="Worksite street" optionalText="On-site only" description="Every part must also appear in the location shown to candidates.">
+              {(props) => <TextInput {...props} value={value.location.streetAddress} onChange={(e) => set({ location: { ...value.location, streetAddress: e.target.value } })} />}
+            </Field>
+            <Field label="Worksite locality" optionalText="On-site only">
+              {(props) => <TextInput {...props} value={value.location.locality} onChange={(e) => set({ location: { ...value.location, locality: e.target.value } })} />}
+            </Field>
+            <Field label="Worksite postal code" optionalText="On-site only">
+              {(props) => <TextInput {...props} value={value.location.postalCode} onChange={(e) => set({ location: { ...value.location, postalCode: e.target.value } })} />}
+            </Field>
+          </div>
+          <div className={styles.formRow}>
             <Field label="Work arrangement" error={fieldError('workArrangement')}>
               {(props) => (
                 <select {...props} className={styles.select} value={value.workArrangement} onChange={(e) => set({ workArrangement: e.target.value })}>
@@ -483,7 +496,18 @@ export function JobEditorPage() {
         <fieldset className={styles.fieldset}>
           <legend className={styles.legend}>Compensation</legend>
           <div className={styles.formRow}>
-            <Field label="Amount (CAD)" error={fieldError('compensation')}>
+            <Field label="Currency">
+              {(props) => (
+                <select {...props} className={styles.select} value={value.compensation.currency} onChange={(e) => set({ compensation: { ...value.compensation, currency: e.target.value } })}>
+                  {CURRENCIES.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <Field label={`Amount (${value.compensation.currency})`} error={fieldError('compensation')}>
               {(props) => <TextInput {...props} type="number" min="0" step="0.01" value={value.compensation.amount} onChange={(e) => set({ compensation: { ...value.compensation, amount: e.target.value } })} />}
             </Field>
             <Field label="Per">
@@ -498,9 +522,15 @@ export function JobEditorPage() {
               )}
             </Field>
           </div>
-          <label className={styles.checkbox}>
-            <input type="checkbox" checked={value.compensation.gross} onChange={(e) => set({ compensation: { ...value.compensation, gross: e.target.checked } })} /> Gross (before deductions)
-          </label>
+          <Field label="Gross or net" description="Leave “Not stated” unless it has been confirmed.">
+            {(props) => (
+              <select {...props} className={styles.select} value={value.compensation.gross === null ? '' : String(value.compensation.gross)} onChange={(e) => set({ compensation: { ...value.compensation, gross: e.target.value === '' ? null : e.target.value === 'true' } })}>
+                <option value="">Not stated</option>
+                <option value="true">Gross (before deductions)</option>
+                <option value="false">Net (after deductions)</option>
+              </select>
+            )}
+          </Field>
         </fieldset>
         <fieldset className={styles.fieldset}>
           <legend className={styles.legend}>Role description</legend>

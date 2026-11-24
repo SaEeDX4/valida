@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildJobDateFacts, formatCompensation, formatJobDate, formatJobDeadline, formatWeeklyHours, parseJobInstant } from '../features/jobs/utils/formatJob.js';
+import { buildJobDateFacts, formatCompensation, formatEnumLabel, formatJobDate, formatJobDeadline, formatWeeklyHours, parseJobInstant } from '../features/jobs/utils/formatJob.js';
 import { JOB_DETAIL } from '../pages/JobDetailPage.content.js';
 import { buildRobotsTxt, buildSitemapXml, SITEMAP_STATIC_PATHS } from './discovery.js';
 import { ROBOTS, describeHead, renderHeadTags, serializeJsonLd } from './head.js';
@@ -468,10 +468,40 @@ describe('JobPosting: the other properties (kept for when the location input is 
   });
 
   it('employmentType only where Google has an unambiguous value; FIXED_TERM and CONTRACT are left out (SEO-032)', () => {
-    expect(EMPLOYMENT_TYPE_MAP).toEqual({ FULL_TIME: 'FULL_TIME', PART_TIME: 'PART_TIME', TEMPORARY: 'TEMPORARY', INTERNSHIP: 'INTERN', OTHER: 'OTHER' });
+    expect(EMPLOYMENT_TYPE_MAP).toEqual({ FULL_TIME: 'FULL_TIME', PART_TIME: 'PART_TIME', FULL_TIME_OR_PART_TIME: ['FULL_TIME', 'PART_TIME'], TEMPORARY: 'TEMPORARY', INTERNSHIP: 'INTERN', OTHER: 'OTHER' });
     for (const type of ['FIXED_TERM', 'CONTRACT', null]) {
       expect(jobPostingProperties(qaJob({ employmentType: type }), { siteOrigin: SITE }).properties).not.toHaveProperty('employmentType');
     }
+  });
+
+  it('on-site: jobLocation only from a complete worksite whose parts the page shows; no TELECOMMUTE', () => {
+    const workplace = { street: 'QA Street 1', city: 'QA Town', postalCode: 'LT-00000', country: 'LT' };
+    const onSite = (over) => qaJob({ workArrangement: 'ON_SITE', eligibleWorkCountries: [], location: 'QA Street 1, LT-00000 QA Town, Lithuania', workplace, ...over });
+    const { jsonLd, withheld } = buildJobPosting(onSite(), { siteOrigin: SITE });
+    expect(withheld).toBeNull();
+    expect(jsonLd.jobLocation).toEqual({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', streetAddress: 'QA Street 1', addressLocality: 'QA Town', postalCode: 'LT-00000', addressCountry: 'LT' },
+    });
+    expect(jsonLd).not.toHaveProperty('jobLocationType');
+    expect(jsonLd).not.toHaveProperty('applicantLocationRequirements');
+    for (const over of [{ workplace: null }, { workplace: { ...workplace, postalCode: null } }, { location: 'QA Town, Lithuania' }, { workArrangement: 'HYBRID' }]) {
+      expect(buildJobPosting(onSite(over), { siteOrigin: SITE }).withheld, JSON.stringify(over)).toBe(JOB_POSTING_WITHHELD.NO_STRUCTURED_WORKPLACE);
+    }
+  });
+
+  it('a posting offering both arrangements: both Google types, no workHours, the EUR rate as stated', () => {
+    const job = qaJob({
+      employmentType: 'FULL_TIME_OR_PART_TIME',
+      weeklyHours: null,
+      compensation: { currency: 'EUR', amount: 30, unit: 'HOUR', gross: true },
+    });
+    const { properties } = jobPostingProperties(job, { siteOrigin: SITE });
+    expect(properties.employmentType).toEqual(['FULL_TIME', 'PART_TIME']);
+    expect(properties).not.toHaveProperty('workHours');
+    expect(properties.baseSalary).toEqual({ '@type': 'MonetaryAmount', currency: 'EUR', value: { '@type': 'QuantitativeValue', value: 30, unitText: 'HOUR' } });
+    expect(formatCompensation(job.compensation)).toBe('EUR 30.00 gross per hour');
+    expect(formatEnumLabel(job.employmentType)).toBe('Full time or part time');
   });
 
   it('no baseSalary when the page shows no compensation; MONTH and YEAR map to Google units', () => {

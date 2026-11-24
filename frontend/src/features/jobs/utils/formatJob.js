@@ -25,7 +25,8 @@ export function formatWeeklyHours(weeklyHours) {
 }
 
 /**
- * "CAD 35.00 gross per hour" (Doc 06 section 98).
+ * "CAD 35.00 gross per hour" (Doc 06 section 98). No designation when the Job
+ * states neither gross nor net.
  * Returns null unless currency and a finite amount are both present.
  */
 export function formatCompensation(compensation) {
@@ -36,7 +37,7 @@ export function formatCompensation(compensation) {
   }
   const money = `${currency} ${amount.toFixed(2)}`;
   const period = unit === 'HOUR' ? 'per hour' : unit ? `per ${String(unit).toLowerCase()}` : null;
-  return [money, gross ? 'gross' : null, period].filter(Boolean).join(' ');
+  return [money, gross === true ? 'gross' : gross === false ? 'net' : null, period].filter(Boolean).join(' ');
 }
 
 /**

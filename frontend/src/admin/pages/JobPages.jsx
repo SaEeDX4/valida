@@ -17,7 +17,9 @@ import styles from '../admin.module.css';
  */
 
 const ARRANGEMENTS = { FULLY_REMOTE: 'Fully remote', HYBRID: 'Hybrid', ON_SITE: 'On site' };
-const EMPLOYMENT = { FULL_TIME: 'Full time', PART_TIME: 'Part time', FIXED_TERM: 'Fixed term', CONTRACT: 'Contract', TEMPORARY: 'Temporary', INTERNSHIP: 'Internship', OTHER: 'Other' };
+const EMPLOYMENT = { FULL_TIME: 'Full time', PART_TIME: 'Part time', FULL_TIME_OR_PART_TIME: 'Full time or part time', FIXED_TERM: 'Fixed term', CONTRACT: 'Contract', TEMPORARY: 'Temporary', INTERNSHIP: 'Internship', OTHER: 'Other' };
+/** The currencies the API accepts (backend/src/modules/jobs/money.js). */
+const CURRENCIES = ['CAD', 'EUR'];
 const UNITS = { HOUR: 'per hour', MONTH: 'per month', YEAR: 'per year' };
 const QUESTION_TYPES = { YES_NO: 'Yes / no', SHORT_TEXT: 'Short text', LONG_TEXT: 'Long text', SINGLE_SELECT: 'Single choice' };
 
@@ -278,7 +280,7 @@ const EMPTY = {
   employmentType: 'PART_TIME',
   schedule: '',
   weeklyHours: '',
-  compensation: { currency: 'CAD', amount: '', unit: 'HOUR', gross: true },
+  compensation: { currency: 'EUR', amount: '', unit: 'HOUR', gross: true },
   description: '',
   responsibilities: [''],
   requirements: [''],
@@ -299,7 +301,7 @@ function fromContent(content, slug) {
     employmentType: content.employmentType ?? '',
     schedule: content.schedule ?? '',
     weeklyHours: content.weeklyHours ?? '',
-    compensation: { currency: content.compensation.currency ?? 'CAD', amount: content.compensation.amountMinor === null ? '' : (content.compensation.amountMinor / 100).toFixed(2), unit: content.compensation.unit ?? 'HOUR', gross: content.compensation.gross ?? true },
+    compensation: { currency: content.compensation.currency ?? 'EUR', amount: content.compensation.amountMinor === null ? '' : (content.compensation.amountMinor / 100).toFixed(2), unit: content.compensation.unit ?? 'HOUR', gross: content.compensation.gross ?? true },
     description: content.description ?? '',
     responsibilities: content.responsibilities.length ? content.responsibilities : [''],
     requirements: content.requirements.length ? content.requirements : [''],
@@ -483,7 +485,18 @@ export function JobEditorPage() {
         <fieldset className={styles.fieldset}>
           <legend className={styles.legend}>Compensation</legend>
           <div className={styles.formRow}>
-            <Field label="Amount (CAD)" error={fieldError('compensation')}>
+            <Field label="Currency">
+              {(props) => (
+                <select {...props} className={styles.select} value={value.compensation.currency} onChange={(e) => set({ compensation: { ...value.compensation, currency: e.target.value } })}>
+                  {CURRENCIES.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <Field label={`Amount (${value.compensation.currency})`} error={fieldError('compensation')}>
               {(props) => <TextInput {...props} type="number" min="0" step="0.01" value={value.compensation.amount} onChange={(e) => set({ compensation: { ...value.compensation, amount: e.target.value } })} />}
             </Field>
             <Field label="Per">

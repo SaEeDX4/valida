@@ -92,6 +92,8 @@ export const ORGANIZATION_LOGO_PATH = '/brand/valida-logo-approved-dark-1254.png
 export const EMPLOYMENT_TYPE_MAP = Object.freeze({
   FULL_TIME: 'FULL_TIME',
   PART_TIME: 'PART_TIME',
+  // One posting offering both: Google accepts an array of values.
+  FULL_TIME_OR_PART_TIME: Object.freeze(['FULL_TIME', 'PART_TIME']),
   TEMPORARY: 'TEMPORARY',
   INTERNSHIP: 'INTERN',
   OTHER: 'OTHER',
@@ -190,7 +192,7 @@ export function jobPostingProperties(job, { siteOrigin } = {}) {
   };
   if (formatJobDeadline(job.closesAt)) properties.validThrough = job.closesAt;
   const employmentType = EMPLOYMENT_TYPE_MAP[job.employmentType];
-  if (employmentType) properties.employmentType = employmentType;
+  if (employmentType) properties.employmentType = Array.isArray(employmentType) ? [...employmentType] : employmentType;
   properties.hiringOrganization = {
     '@type': 'Organization',
     // The name the page shows under the title. No sameAs: no official profile

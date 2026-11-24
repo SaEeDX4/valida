@@ -551,6 +551,30 @@ describe('Job — lifecycle safety net on save (Doc 10 sections 58-59, 64)', () 
   });
 });
 
+describe('Job — one posting offering full time or part time (owner decision 2026-11-24)', () => {
+  const both = (overrides) => {
+    const job = persistedJob({ employmentType: 'FULL_TIME_OR_PART_TIME', schedule: 'Part-time and full-time arrangements available', weeklyHours: null, ...overrides });
+    job.status = 'PUBLISHED';
+    job.publishedAt = new Date();
+    return job;
+  };
+
+  it('publishes with a schedule and no weekly figure', async () => {
+    expect(await validate(both())).toBeNull();
+  });
+
+  it('cannot publish without the schedule, or with one weekly figure that would misstate an arrangement', async () => {
+    expect(await errorsOf(both({ schedule: null }))).toContain('schedule');
+    expect(await errorsOf(both({ weeklyHours: 30 }))).toContain('status');
+  });
+
+  it('every other employment type still needs weekly hours', async () => {
+    for (const employmentType of ['FULL_TIME', 'PART_TIME', 'OTHER']) {
+      expect(await errorsOf(both({ employmentType }))).toContain('weeklyHours');
+    }
+  });
+});
+
 describe('Job — weeklyHours bounds (Doc 10 section 32)', () => {
   it.each([[0.5, true], [30, true], [168, true], [0, false], [-1, false], [168.5, false]])(
     'weeklyHours %s valid: %s',

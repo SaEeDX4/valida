@@ -57,9 +57,10 @@ const INTERNAL_MARKERS = [
 ];
 
 describe('money conversion (Doc 10 sections 13-15)', () => {
-  it('uses the ISO 4217 exponent of the only source-established currency, CAD', () => {
-    expect(CURRENCY_MINOR_UNIT_EXPONENTS).toEqual({ CAD: 2 });
+  it('uses the ISO 4217 exponents of the source-established currencies, CAD and EUR', () => {
+    expect(CURRENCY_MINOR_UNIT_EXPONENTS).toEqual({ CAD: 2, EUR: 2 });
     expect(isSupportedCurrency('CAD')).toBe(true);
+    expect(isSupportedCurrency('EUR')).toBe(true);
   });
 
   it.each([
@@ -74,7 +75,7 @@ describe('money conversion (Doc 10 sections 13-15)', () => {
     expect(JSON.stringify(minorToMajor(minor, 'CAD'))).toBe(String(major));
   });
 
-  it.each(['USD', 'EUR', 'JPY', 'KWD', 'cad', '', null, undefined, 'hasOwnProperty', '__proto__'])(
+  it.each(['USD', 'JPY', 'KWD', 'cad', '', null, undefined, 'hasOwnProperty', '__proto__'])(
     'refuses currency %s rather than guessing its exponent',
     (currency) => {
       expect(isSupportedCurrency(currency)).toBe(false);
@@ -102,6 +103,12 @@ describe('public compensation DTO', () => {
     expect(toPublicCompensation({ currency: 'CAD', amountMinor: null, unit: 'HOUR', gross: true })).toBeNull();
     expect(toPublicCompensation({ currency: 'CAD', amountMinor: 3500, unit: null, gross: true })).toBeNull();
     expect(toPublicCompensation({ currency: 'CAD', amountMinor: 3500, unit: 'HOUR', gross: null })).toBeNull();
+  });
+
+  it('converts EUR minor units exactly (3000 -> 30)', () => {
+    expect(toPublicCompensation({ currency: 'EUR', amountMinor: 3000, unit: 'HOUR', gross: true })).toEqual({
+      currency: 'EUR', amount: 30, unit: 'HOUR', gross: true,
+    });
   });
 
   it('fails closed on an unsupported currency instead of publishing a wrong wage', () => {

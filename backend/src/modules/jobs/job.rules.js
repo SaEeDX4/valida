@@ -14,6 +14,9 @@ export const ALLOWED_TRANSITIONS = {
   ARCHIVED: [],
 };
 
+/** One posting open to both full-time and part-time arrangements. */
+export const FULL_TIME_OR_PART_TIME = 'FULL_TIME_OR_PART_TIME';
+
 /** Doc 10 section 64 — fields that must be complete before publication. */
 export function checkPublishReadiness(job) {
   const missing = [];
@@ -30,7 +33,14 @@ export function checkPublishReadiness(job) {
   // Section 64 — "schedule and/or adequate schedule information": either the
   // human-readable schedule or weeklyHours satisfies it, but not neither.
   require(Boolean(job.schedule) || typeof job.weeklyHours === 'number', 'schedule or weeklyHours');
-  require(typeof job.weeklyHours === 'number' && job.weeklyHours > 0, 'weeklyHours');
+  if (job.employmentType === FULL_TIME_OR_PART_TIME) {
+    // Owner decision 2026-11-24: a posting offering both arrangements states
+    // them in `schedule`, and one weekly figure would misstate one of them.
+    require(Boolean(job.schedule), 'schedule');
+    require(job.weeklyHours === null || job.weeklyHours === undefined, 'weeklyHours (must be empty when both arrangements are offered)');
+  } else {
+    require(typeof job.weeklyHours === 'number' && job.weeklyHours > 0, 'weeklyHours');
+  }
   require(
     Boolean(job.compensation?.currency) &&
       Number.isInteger(job.compensation?.amountMinor) &&

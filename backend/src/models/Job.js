@@ -32,8 +32,13 @@ import {
  */
 
 export const WORK_ARRANGEMENTS = ['FULLY_REMOTE', 'HYBRID', 'ON_SITE'];
+/*
+ * Doc 10 section 30, plus FULL_TIME_OR_PART_TIME (owner decision 2026-11-24):
+ * one posting that offers both arrangements. No single weekly figure is true
+ * of such a posting, so its hours are described by `schedule` (job.rules.js).
+ */
 export const EMPLOYMENT_TYPES = [
-  'FULL_TIME', 'PART_TIME', 'FIXED_TERM', 'CONTRACT', 'TEMPORARY', 'INTERNSHIP', 'OTHER',
+  'FULL_TIME', 'PART_TIME', 'FULL_TIME_OR_PART_TIME', 'FIXED_TERM', 'CONTRACT', 'TEMPORARY', 'INTERNSHIP', 'OTHER',
 ];
 export const COMPENSATION_UNITS = ['HOUR', 'MONTH', 'YEAR'];
 export const JOB_STATUSES = ['DRAFT', 'PUBLISHED', 'CLOSED', 'ARCHIVED'];

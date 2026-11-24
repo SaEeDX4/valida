@@ -308,15 +308,17 @@ export function checkNotificationSettings(settings, { isProduction }) {
     if (!settings.fromAddress) {
       problems.push({ variable: 'TRANSACTIONAL_FROM_ADDRESS', rule: 'ACKNOWLEDGEMENT_REQUIRES_FROM' });
     }
-    // B7 — gate G-SUP (Doc 14 section 120; OD-2026-10-26-01 D2a; OD-2026-11-02-03
-    // item 5): production candidate acknowledgements stay disabled until the
-    // recipient-suppression check exists and has passed its acceptance tests.
-    // There is no suppression check in this build, so production refuses the
-    // switch outright (fail closed, Doc 13 section 235). This is the minimal
-    // form of the design's start-up refusal (RECIPIENT_SUPPRESSION_DESIGN.md
-    // section 3.2); it chooses none of that design's PROPOSED details.
-    if (isProduction) {
-      problems.push({ variable: 'APPLICATION_ACKNOWLEDGEMENT_ENABLED', rule: 'ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP' });
+    // B7 — gate G-SUP (Doc 14 section 120; RECIPIENT_SUPPRESSION_DESIGN.md
+    // sections 3.2 and 4.4). Production starts with acknowledgements on only
+    // when the suppression key, its id and the operator tokens are configured.
+    // Anything missing refuses the start (fail closed, Doc 13 section 235). The
+    // key itself is verified against its registered check value on EVERY send
+    // attempt, which fails closed (SUPPRESSION_COVERAGE_INCOMPLETE).
+    if (isProduction && settings.suppressionKeyConfigured !== true) {
+      problems.push({ variable: 'SUPPRESSION_HMAC_KEY', rule: 'ACKNOWLEDGEMENT_REQUIRES_SUPPRESSION_KEY' });
+    }
+    if (isProduction && settings.suppressionOperatorsConfigured !== true) {
+      problems.push({ variable: 'SUPPRESSION_OPERATOR_IDS', rule: 'ACKNOWLEDGEMENT_REQUIRES_SUPPRESSION_OPERATORS' });
     }
   }
   if (realProvider) {
@@ -699,9 +701,10 @@ const RULE_TEXT = {
   SUPPRESSION_OPERATOR_IDS: 'must be a comma-separated list of 1-20 distinct operator tokens (2-40 characters: lowercase letters, digits, ".", "_", "-"; never an email address)',
   SUPPRESSION_OPERATOR_IDS_INVALID: 'must be a comma-separated list of 1-20 distinct operator tokens (2-40 characters: lowercase letters, digits, ".", "_", "-"; never an email address)',
   SUPPRESSION_LOOKUP_TIMEOUT_MS: 'must be an integer between 100 and 10000 (milliseconds)',
-  ACKNOWLEDGEMENT_BLOCKED_BY_G_SUP:
-    'must be "false" in production: candidate acknowledgements stay disabled until recipient ' +
-    'suppression is implemented and accepted (gate G-SUP)',
+  ACKNOWLEDGEMENT_REQUIRES_SUPPRESSION_KEY:
+    'and SUPPRESSION_HMAC_KEY_ID are required in production when candidate acknowledgements are enabled (gate G-SUP)',
+  ACKNOWLEDGEMENT_REQUIRES_SUPPRESSION_OPERATORS:
+    'is required in production when candidate acknowledgements are enabled (gate G-SUP)',
   PROVIDER_REQUIRES_API_KEY: 'is required when a transactional email provider is configured',
   PROVIDER_REQUIRES_FROM: 'is required when a transactional email provider is configured',
   PROVIDER_REQUIRES_RECIPIENT:
@@ -1050,6 +1053,11 @@ export function loadConfig(env = process.env) {
     acknowledgementEnabled: config.APPLICATION_ACKNOWLEDGEMENT_ENABLED ?? false,
     recipientAllowlist: config.EMAIL_RECIPIENT_ALLOWLIST ?? null,
   };
+  // G-SUP — presence only; the key's shape is checked below and never echoed.
+  const suppressionSettings = {
+    suppressionKeyConfigured: config.SUPPRESSION_HMAC_KEY !== undefined && config.SUPPRESSION_HMAC_KEY_ID !== undefined,
+    suppressionOperatorsConfigured: (config.SUPPRESSION_OPERATOR_IDS ?? []).length > 0,
+  };
   // r4 — SMTP: presence only for the password (the rules never see the secret).
   const smtpSettings = {
     smtpHost: config.SMTP_HOST ?? null,
@@ -1058,7 +1066,7 @@ export function loadConfig(env = process.env) {
     smtpUsername: config.SMTP_USERNAME ?? null,
     smtpPasswordSet: Boolean(config.SMTP_PASSWORD),
   };
-  for (const problem of checkNotificationSettings({ ...notificationSettings, ...smtpSettings }, { isProduction })) {
+  for (const problem of checkNotificationSettings({ ...notificationSettings, ...smtpSettings, ...suppressionSettings }, { isProduction })) {
     missing.push({ variable: problem.variable, rule: RULE_TEXT[problem.rule] });
   }
   /*

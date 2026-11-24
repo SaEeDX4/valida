@@ -1,4 +1,5 @@
 import { ABOUT_META } from '../pages/AboutPage.content.js';
+import { CONTACT_META } from '../pages/ContactPage.content.js';
 import { CAREERS_META } from '../pages/CareersPage.content.js';
 import { HOME_META } from '../pages/HomePage.content.js';
 import { LEGAL_META } from '../pages/LegalPage.content.js';
@@ -25,13 +26,14 @@ import { ROBOTS } from './head.js';
  * the other Document 16 SEO requirements still apply.
  */
 
-/** The five indexable static routes (Doc 16 section 78). */
+/** The six indexable static routes (Doc 16 section 78; Contact: owner approval A-4, 2026-11-24). */
 export const STATIC_HEADS = Object.freeze({
   HOME: Object.freeze({ ...HOME_META, path: ROUTES.HOME }),
   ABOUT: Object.freeze({ ...ABOUT_META, path: ROUTES.ABOUT }),
   CAREERS: Object.freeze({ ...CAREERS_META, path: ROUTES.CAREERS }),
   PRIVACY: Object.freeze({ ...PRIVACY_META, path: ROUTES.PRIVACY }),
   LEGAL: Object.freeze({ ...LEGAL_META, path: ROUTES.LEGAL }),
+  CONTACT: Object.freeze({ ...CONTACT_META, path: ROUTES.CONTACT }),
 });
 
 export const STATIC_HEAD_BY_PATH = Object.freeze({
@@ -40,6 +42,7 @@ export const STATIC_HEAD_BY_PATH = Object.freeze({
   [ROUTES.CAREERS]: STATIC_HEADS.CAREERS,
   [ROUTES.PRIVACY]: STATIC_HEADS.PRIVACY,
   [ROUTES.LEGAL]: STATIC_HEADS.LEGAL,
+  [ROUTES.CONTACT]: STATIC_HEADS.CONTACT,
 });
 
 /** Unknown route, and an unknown / Draft / Archived Job (Doc 16 sections 115-120). */

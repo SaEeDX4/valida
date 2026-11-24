@@ -174,6 +174,7 @@ const STATIC = [
   ['/careers', 'Careers at Valida | Open Technology & Cybersecurity Roles'],
   ['/privacy', 'Privacy Notice | Valida'],
   ['/legal', 'Legal Information | Valida'],
+  ['/contact', 'Contact | Valida'],
 ];
 
 // ================================================================= cases ==
@@ -283,7 +284,7 @@ test('C4-02 sitemap.xml and robots.txt from the live open Jobs', async () => {
   // (loopback) is listed and sees the open Jobs on their own pages. The
   // public-mode listing of open Jobs, and its lifecycle (SEO-012), are checked
   // by the C6-T2 stack check (e2e/c6/c6-t2-stack.mjs, E3 and E6).
-  expect(sitemap.locs).toEqual([`${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`]);
+  expect(sitemap.locs).toEqual([`${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`, `${SITE}/contact`]);
   const testerPage = await fetch(`${SEO_INDEXED_ORIGIN}/careers/qa-c4-open-remote`, { redirect: 'manual' });
   await testerPage.text();
   expect([testerPage.status, testerPage.headers.get('x-valida-audience')]).toEqual([200, 'tester']);

@@ -69,7 +69,7 @@ export const MAPPING = Object.freeze([
 
 const PRIVATE = 'private, no-store';
 const RECRUITMENT_PATHS = (job) => ['/careers', ...(job ? [`/careers/${job}`, `/careers/${job}/apply`] : [])];
-const STATIC_PAGES = ['/', '/about', '/careers', '/privacy', '/legal'];
+const STATIC_PAGES = ['/', '/about', '/careers', '/privacy', '/legal', '/contact'];
 const CACHE_HIT = (h) => /hit/i.test(h['cf-cache-status'] ?? '') || /hit/i.test(h['x-cache'] ?? '') || /hit/i.test(h['x-render-cache'] ?? '') || (h.age !== undefined && Number(h.age) > 0);
 const KEPT_HEADERS = ['cache-control', 'etag', 'last-modified', 'x-valida-release', 'x-valida-audience', 'content-type', 'content-security-policy', 'content-security-policy-report-only', 'x-robots-tag', 'location', 'content-encoding', 'age', 'cf-cache-status', 'x-cache', 'x-render-cache', 'access-control-allow-origin', 'retry-after', 'x-content-type-options', 'referrer-policy', 'x-frame-options', 'permissions-policy', 'strict-transport-security'];
 

@@ -10,6 +10,7 @@ import JobDetailPage from '../pages/JobDetailPage.jsx';
 import ApplyPage from '../pages/ApplyPage.jsx';
 import PrivacyPage from '../pages/PrivacyPage.jsx';
 import LegalPage from '../pages/LegalPage.jsx';
+import ContactPage from '../pages/ContactPage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
 import { ROUTES } from './paths.js';
 
@@ -26,7 +27,7 @@ export const ADMIN_ROUTE = '/admin/*';
  *
  * Two shells, matching the Doc 08 route hierarchy:
  *
- *   PublicLayout — Home, About, Careers, Job Detail, Privacy, Legal, 404
+ *   PublicLayout — Home, About, Careers, Job Detail, Privacy, Legal, Contact, 404
  *   ApplyLayout  — Apply only
  *
  * Apply gets its own simplified shell (Doc 08 section 23) so a candidate
@@ -79,6 +80,7 @@ export function AppRoutes() {
         <Route path={ROUTES.JOB_DETAIL} element={<JobDetailPage />} />
         <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
         <Route path={ROUTES.LEGAL} element={<LegalPage />} />
+        <Route path={ROUTES.CONTACT} element={<ContactPage />} />
         <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
       </Route>
 

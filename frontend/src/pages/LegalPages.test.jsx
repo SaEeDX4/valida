@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { AppRoutes } from '../routes/AppRouter.jsx';
 import { findAccessibilityViolations } from '../test/axe.js';
@@ -48,14 +48,11 @@ describe('Privacy Notice', () => {
     ].forEach((required) => expect(headings).toContain(required));
   });
 
-  it('omits Questions or Requests while no approved contact mechanism exists', () => {
+  it('points privacy questions at the published contact method, with no email of its own (Doc 06 section 167)', () => {
     const { container } = renderAt('/privacy');
-    const main = container.querySelector('main');
-    // The canonical section points readers at a published contact method that
-    // does not exist. Showing it partially would either mislead or leak
-    // internal roadmap wording, so the whole section is withheld.
-    expect(main.textContent).not.toMatch(/Questions or Requests/);
-    expect(screen.queryByRole('heading', { name: 'Questions or Requests' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'Questions or Requests' })).toBeTruthy();
+    expect(container.querySelector('main').textContent).toMatch(/use the current official contact method published on the Valida website/);
+    expect(container.querySelector('footer a[href="/contact"]')).toBeTruthy();
   });
 
   it('exposes no internal roadmap or implementation language to visitors', () => {
@@ -68,14 +65,6 @@ describe('Privacy Notice', () => {
     ].forEach((pattern) => expect(text).not.toMatch(pattern));
   });
 
-  it('offers no fake contact method in place of the omitted section', () => {
-    const { container } = renderAt('/privacy');
-    const main = container.querySelector('main');
-    expect(main.textContent).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
-    expect(main.textContent).not.toMatch(/\bcontact us\b/i);
-    expect(within(main).queryByRole('link', { name: /contact/i })).toBeNull();
-  });
-
   it('invents no provider, retention period, compliance claim or privacy contact', () => {
     const { container } = renderAt('/privacy');
     const text = container.querySelector('main').textContent;
@@ -86,15 +75,6 @@ describe('Privacy Notice', () => {
       /\b\d+\s*(days|months|years)\b/i, /\bdata residency\b/i, /\bsubprocessor/i,
       /[\w.+-]+@[\w-]+\.[\w.]+/,
     ].forEach((pattern) => expect(text).not.toMatch(pattern));
-  });
-
-  it('omits the unsupported published-contact-method sentence', () => {
-    const { container } = renderAt('/privacy');
-    // No official contact method is published yet, so directing a data subject
-    // to one would be untrue (Doc 06 section 169).
-    expect(container.querySelector('main').textContent).not.toMatch(
-      /use the current official contact method published/i,
-    );
   });
 
   it('uses a constrained reading measure, not full-width legal text', () => {
@@ -177,6 +157,35 @@ describe('Legal Information', () => {
 
   it('has no axe violations', async () => {
     const { container } = renderAt('/legal');
+    expect(await findAccessibilityViolations(container)).toEqual([]);
+  });
+});
+
+describe('Contact', () => {
+  it('publishes exactly the approved email and address, with no apartment number', () => {
+    const { container } = renderAt('/contact');
+    expect(screen.getByRole('heading', { level: 1, name: 'Contact' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'careers@cybervalida.com' }).getAttribute('href')).toBe('mailto:careers@cybervalida.com');
+    expect([...container.querySelectorAll('address span')].map((line) => line.textContent)).toEqual([
+      'Valida MB',
+      'Arkos g. 1',
+      'Avižienių sen.',
+      'LT-14180 Klevinės k.',
+      'Lithuania',
+    ]);
+    const text = container.querySelector('main').textContent;
+    expect(text).not.toMatch(/\b(apt|apartment|butas|flat|unit)\b/i);
+    expect(text).not.toMatch(/\+\d{6,}/);
+  });
+
+  it('carries no address in its page metadata', () => {
+    renderAt('/contact');
+    expect(document.title).toBe('Contact | Valida');
+    expect(document.querySelector('meta[name="description"]').getAttribute('content')).not.toMatch(/Arkos|14180/);
+  });
+
+  it('has no axe violations', async () => {
+    const { container } = renderAt('/contact');
     expect(await findAccessibilityViolations(container)).toEqual([]);
   });
 });

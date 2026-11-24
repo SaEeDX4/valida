@@ -29,6 +29,7 @@ const ROUTES = [
   ['About', '/about', () => {}],
   ['Privacy', '/privacy', () => {}],
   ['Legal', '/legal', () => {}],
+  ['Contact', '/contact', () => {}],
   ['404', '/no-such-route', () => {}],
   ['Careers — jobs', '/careers', () => installJobsService({ getPublishedJobs: async () => ({ items: [OPEN_JOB()] }) })],
   ['Careers — empty', '/careers', () => installJobsService({ getPublishedJobs: async () => ({ items: [] }) })],

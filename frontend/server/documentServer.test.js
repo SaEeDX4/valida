@@ -154,6 +154,7 @@ describe('documents: status and head in the initial HTML (Doc 16 sections 114-12
     ['/careers', 200, 'Careers at Valida | Open Technology &amp; Cybersecurity Roles', `${SITE}/careers`],
     ['/privacy', 200, 'Privacy Notice | Valida', `${SITE}/privacy`],
     ['/legal', 200, 'Legal Information | Valida', `${SITE}/legal`],
+    ['/contact', 200, 'Contact | Valida', `${SITE}/contact`],
   ])('%s -> %i, its own title and canonical, no robots', async (pathname, status, title, href) => {
     const response = await get(indexed, pathname);
     const html = await response.text();
@@ -496,14 +497,14 @@ describe('URL conventions (Doc 04 sections 47-49)', () => {
 });
 
 describe('sitemap.xml and robots.txt (Doc 16 sections 103-113)', () => {
-  it('the sitemap walks every page of open Jobs (53 over 2 pages) after the five static routes', async () => {
+  it('the sitemap walks every page of open Jobs (53 over 2 pages) after the six static routes', async () => {
     const response = await get(indexed, '/sitemap.xml');
     const xml = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-    expect(locs.slice(0, 5)).toEqual([`${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`]);
-    expect(locs.slice(5)).toEqual(OPEN_LIST.map((slug) => `${SITE}/careers/${slug}`));
+    expect(locs.slice(0, 6)).toEqual([`${SITE}/`, `${SITE}/about`, `${SITE}/careers`, `${SITE}/privacy`, `${SITE}/legal`, `${SITE}/contact`]);
+    expect(locs.slice(6)).toEqual(OPEN_LIST.map((slug) => `${SITE}/careers/${slug}`));
     expect(xml).not.toMatch(/qa-closed|lastmod|apply/);
   });
 

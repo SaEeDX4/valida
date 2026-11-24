@@ -6,3 +6,10 @@
 
 /* Legal opens straight into a fact list, which needs a little more air. */
 .headingWide { margin-block-end: var(--space-9); }
+
+/* Contact: one address line per row, upright. */
+.address {
+  display: grid;
+  font-style: normal;
+  color: var(--color-text-secondary);
+}

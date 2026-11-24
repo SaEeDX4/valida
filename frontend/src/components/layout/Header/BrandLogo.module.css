@@ -9,7 +9,7 @@
 }
 
 .logo {
-  /* Intrinsic 1009x230 is declared on the element so the browser reserves the
+  /* Intrinsic 500x114 is declared on the element so the browser reserves the
      correct box and the header does not shift as the asset loads. Height is
      fixed and width follows, preserving the approved aspect ratio exactly. */
   block-size: 34px;

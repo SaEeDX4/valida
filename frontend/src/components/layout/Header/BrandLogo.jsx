@@ -8,14 +8,15 @@ import styles from './BrandLogo.module.css';
  * modules, because Vite does not hash or transform them and the documented
  * pattern is a plain absolute URL.
  */
-const LOGO_HORIZONTAL = '/brand/valida-logo-horizontal-transparent.png';
+const LOGO_HORIZONTAL = '/brand/valida-logo-horizontal-transparent-500.png';
 
 /**
  * BrandLogo — the approved Valida identity in the global header.
  *
  * Uses the approved asset pack at frontend/public/brand/ unmodified. The brand
  * README names valida-logo-horizontal-transparent.png as the preferred
- * header/navbar lockup on dark surfaces, which is exactly this context.
+ * header/navbar lockup on dark surfaces, which is exactly this context; the
+ * 500 px file is that lockup, resampled only (sharp at 38 px on 3x screens).
  *
  * The mark is never redrawn, recoloured, distorted or approximated in SVG
  * (brand pack rules 1-2, and the A3 authorization). Aspect ratio is preserved
@@ -38,8 +39,8 @@ export default function BrandLogo({ className = '' }) {
         className={styles.logo}
         src={LOGO_HORIZONTAL}
         alt=""
-        width="1009"
-        height="230"
+        width="500"
+        height="114"
         decoding="async"
         // The header lockup is above the fold and is part of the initial
         // identity, so it is not lazy-loaded (Doc 08 section 150).

@@ -1,9 +1,9 @@
 /**
- * Canonical Privacy copy — 06_CONTENT_COPY_DECK.md sections 155-168. Verbatim.
+ * Canonical Privacy copy — 06_CONTENT_COPY_DECK.md sections 155-168, plus the
+ * recruitment wording approved by the owner on 2026-11-24.
  *
- * Recruitment wording (2026-11-24): the contact and retention texts are owner-
- * approved; the legal-basis and provider texts need the owner's approval before
- * merge. Providers and transfers come from their published terms. No retention
+ * The contact, retention, legal-basis and provider texts are owner-approved.
+ * Providers and transfers come from their published terms. No retention
  * duration, DPO, certification or compliance claim is made, and Doc 06 section
  * 169 forbids adding one to make the notice look stronger.
  */

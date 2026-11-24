@@ -8,6 +8,7 @@ Approved identity: shield + stylized V + metallic silver/white + electric blue o
 
 ## Production-use variants
 - `valida-logo-horizontal-transparent.png` — preferred header/navbar lockup on dark surfaces.
+- `valida-logo-horizontal-transparent-500.png` — the same lockup, resampled only to 500 x 114 px, used by the website header.
 - `valida-mark-transparent-512.png` — symbol-only transparent mark.
 - `valida-logo-full-transparent-cropped.png` — full stacked lockup with transparent background.
 - `valida-app-icon-512.png`, `valida-app-icon-192.png` — PWA/app icons.

@@ -182,10 +182,10 @@ describe('header navigation', () => {
   it('renders the approved brand asset, not a redrawn mark', () => {
     renderAt('/');
     const logo = screen.getByRole('link', { name: 'Valida — Home' }).querySelector('img');
-    expect(logo.getAttribute('src')).toContain('/brand/valida-logo-horizontal-transparent.png');
+    expect(logo.getAttribute('src')).toContain('/brand/valida-logo-horizontal-transparent-500.png');
     // Aspect ratio is declared so the approved proportions cannot be distorted.
-    expect(logo.getAttribute('width')).toBe('1009');
-    expect(logo.getAttribute('height')).toBe('230');
+    expect(logo.getAttribute('width')).toBe('500');
+    expect(logo.getAttribute('height')).toBe('114');
   });
 });
 

@@ -89,7 +89,7 @@ const htmlGzip = existsSync(html) ? gzipSync(readFileSync(html)).length : 0;
 const brandDir = join(DIST, 'brand');
 const brandSize = (name) => (existsSync(join(brandDir, name)) ? statSync(join(brandDir, name)).size : 0);
 const eagerBrand =
-  brandSize('valida-logo-horizontal-transparent.png') +
+  brandSize('valida-logo-horizontal-transparent-500.png') +
   brandSize('favicon.ico') +
   brandSize('valida-app-icon-32.png') +
   brandSize('valida-app-icon-16.png');
